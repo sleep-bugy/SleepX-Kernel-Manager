@@ -52,14 +52,15 @@ dependencies {
     implementation(libs.androidx.material3)
 
     // Navigation untuk Bottom Navbar
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.navigation:navigation-compose:2.9.2")
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
 
     // Blur/Glass effect (Haze)
-    implementation("dev.chrisbanes.haze:haze:0.3.0")
+    implementation("dev.chrisbanes.haze:haze:1.6.9")
 
     // Root access (LibSU)
-    implementation("com.github.topjohnwu.libsu:core:5.0.4")
-    implementation("com.github.topjohnwu.libsu:io:5.0.4")
+    implementation("com.github.topjohnwu.libsu:core:6.0.0")
+    implementation("com.github.topjohnwu.libsu:io:6.0.0")
 
     // ViewModel untuk MVVM
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -75,5 +76,5 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
     // Coroutines untuk async (CPU usage, terminal output)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 }
