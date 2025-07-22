@@ -31,9 +31,9 @@ fun XtraKernelManagerTheme(
         colorScheme = colorScheme,
         typography = MaterialTheme.typography.copy(
             titleLarge = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold), // Toolbar
-            titleMedium = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium), // Header Card
-            bodyMedium = TextStyle(fontSize = 14.sp), // Teks biasa
-            bodySmall = TextStyle(fontSize = 12.sp) // Label kecil (toggle, badge)
+            titleMedium = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium), // Card Header
+            bodyMedium = TextStyle(fontSize = 14.sp), // Regular text
+            bodySmall = TextStyle(fontSize = 12.sp) // Small label (status, badge)
         ),
         shapes = MaterialTheme.shapes.copy(
             large = androidx.compose.foundation.shape.RoundedCornerShape(16.dp) // Card radius
