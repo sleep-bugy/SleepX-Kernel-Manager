@@ -1,44 +1,62 @@
 package id.xms.xtrakernelmanager.ui.screens
 
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import id.xms.xtrakernelmanager.util.RootUtils
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import id.xms.xtrakernelmanager.ui.components.BatteryCard
+import id.xms.xtrakernelmanager.ui.components.CpuClusterCard
+import id.xms.xtrakernelmanager.ui.components.RootStatusCard
+import id.xms.xtrakernelmanager.ui.components.SystemCard
+import id.xms.xtrakernelmanager.viewmodel.HomeViewModel
 
 @Composable
 fun HomeScreen(
     paddingValues: PaddingValues,
     modifier: Modifier = Modifier
 ) {
-    var isRooted by remember { mutableStateOf(false) }
-    isRooted = RootUtils.isDeviceRooted() // Cek status root saat composable di-render
+    val context = LocalContext.current
+    val homeViewModel: HomeViewModel = viewModel()
+    val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+
+    // Inisialisasi ViewModel dengan Context saat pertama kali
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        homeViewModel.initialize(context)
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = "Root Status",
-            style = MaterialTheme.typography.titleMedium
+        RootStatusCard(
+            isRooted = uiState.isRooted,
+            showEasterEgg = uiState.showEasterEgg,
+            onClick = homeViewModel::onRootStatusClick
         )
-        Text(
-            text = "Device is ${if (isRooted) "Rooted" else "Not Rooted"}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isRooted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+        BatteryCard(batteryLevel = uiState.batteryLevel)
+        CpuClusterCard(
+            coreCount = uiState.cpuCores,
+            maxFreq = uiState.maxFreq,
+            minFreq = uiState.minFreq
+        )
+        SystemCard(
+            kernelVersion = uiState.kernelVersion,
+            usedRam = uiState.usedRam
         )
     }
 }
