@@ -15,7 +15,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -66,29 +65,21 @@ fun MainScreen(
             startDestination = "home",
             modifier = Modifier.fillMaxSize()
         ) {
-            composable("home") { PlaceholderScreen("Home Screen", paddingValues = paddingValues) }
-            composable("tuning") { PlaceholderScreen("Tuning Screen", paddingValues = paddingValues) }
-            composable("terminal") { PlaceholderScreen("Terminal Screen", paddingValues = paddingValues) }
-            composable("info") { PlaceholderScreen("Info Screen", paddingValues = paddingValues) }
+            composable("home") { HomeScreen(paddingValues = paddingValues) }
+            // Placeholder untuk tab lain (akan diimplementasi nanti)
+            composable("tuning") { EmptyScreen(paddingValues) }
+            composable("terminal") { EmptyScreen(paddingValues) }
+            composable("info") { EmptyScreen(paddingValues) }
         }
     }
 }
 
 @Composable
-fun PlaceholderScreen(screenName: String, paddingValues: PaddingValues = PaddingValues(0.dp)) {
+fun EmptyScreen(paddingValues: PaddingValues) {
     androidx.compose.material3.Surface(
         modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues),
         color = MaterialTheme.colorScheme.background
-    ) {
-        Text(
-            text = "Placeholder: $screenName (Under Development)",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            textAlign = TextAlign.Center
-        )
-    }
+    ) {}
 }
