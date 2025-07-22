@@ -6,24 +6,14 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.HazeStyle
-import id.xms.xtrakernelmanager.R
 
 @Composable
 fun BottomNavBar(
@@ -31,89 +21,35 @@ fun BottomNavBar(
     modifier: Modifier = Modifier
 ) {
     val currentRoute by navController.currentBackStackEntryAsState()
-    val selectedRoute = currentRoute?.destination?.route ?: "home" // Default ke home kalau null
+    val selectedRoute = currentRoute?.destination?.route ?: "home"
 
     NavigationBar(
-        modifier = modifier.haze(
-            state = TODO()
-        )
-            .hazeChild(
-                state = TODO(),
-                style = HazeStyle(
-                    tint = null, // Explicitly provide null for the tint parameter
-                    backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                    blurRadius = 10.dp
-                ))
-        ,
-        containerColor = Color.Transparent // Biar haze dominan
+        modifier = modifier,
+        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
     ) {
         NavigationBarItem(
             selected = selectedRoute == "home",
-            onClick = {
-                navController.navigate("home") {
-                    popUpTo(navController.graph.startDestinationId)
-                    launchSingleTop = true
-                }
-            },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Home,
-                    contentDescription = "Home",
-                    modifier = Modifier.semantics { contentDescription = "Home Tab" }
-                )
-            },
-            label = { Text("Home", style = MaterialTheme.typography.bodySmall) }
+            onClick = { navController.navigate("home") { launchSingleTop = true } },
+            icon = { Icon(imageVector = Icons.Default.Home, contentDescription = "Home") },
+            label = { Text("Home", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
         )
         NavigationBarItem(
             selected = selectedRoute == "tuning",
-            onClick = {
-                navController.navigate("tuning") {
-                    popUpTo(navController.graph.startDestinationId)
-                    launchSingleTop = true
-                }
-            },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Tuning",
-                    modifier = Modifier.semantics { contentDescription = "Tuning Tab" }
-                )
-            },
-            label = { Text("Tuning", style = MaterialTheme.typography.bodySmall) }
+            onClick = { navController.navigate("tuning") { launchSingleTop = true } },
+            icon = { Icon(imageVector = Icons.Default.Settings, contentDescription = "Tuning") },
+            label = { Text("Tuning", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
         )
         NavigationBarItem(
             selected = selectedRoute == "terminal",
-            onClick = {
-                navController.navigate("terminal") {
-                    popUpTo(navController.graph.startDestinationId)
-                    launchSingleTop = true
-                }
-            },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Terminal,
-                    contentDescription = "Terminal",
-                    modifier = Modifier.semantics { contentDescription = "Terminal Tab" }
-                )
-            },
-            label = { Text("Terminal", style = MaterialTheme.typography.bodySmall) }
+            onClick = { navController.navigate("terminal") { launchSingleTop = true } },
+            icon = { Icon(imageVector = Icons.Default.Terminal, contentDescription = "Terminal") },
+            label = { Text("Terminal", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
         )
         NavigationBarItem(
             selected = selectedRoute == "info",
-            onClick = {
-                navController.navigate("info") {
-                    popUpTo(navController.graph.startDestinationId)
-                    launchSingleTop = true
-                }
-            },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = "Info",
-                    modifier = Modifier.semantics { contentDescription = "Info Tab" }
-                )
-            },
-            label = { Text("Info", style = MaterialTheme.typography.bodySmall) }
+            onClick = { navController.navigate("info") { launchSingleTop = true } },
+            icon = { Icon(imageVector = Icons.Default.Info, contentDescription = "Info") },
+            label = { Text("Info", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
         )
     }
 }
