@@ -1,4 +1,9 @@
 package id.xms.xtrakernelmanager.data.model
+import kotlinx.serialization.Serializable
 
-class KernelInfo {
-}
+@Serializable
+data class KernelInfo(
+    val version: String,
+    val gkiType: String,
+    val scheduler: String
+)
