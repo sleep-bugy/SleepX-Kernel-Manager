@@ -30,52 +30,21 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val items = listOf("Home", "Tuning", "Terminal", "Info")
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun MainScreen(
-    navController: NavHostController = rememberNavController()
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Xtra Kernel Manager",
-                        style = MaterialTheme.typography.titleLarge,
-                        textAlign = TextAlign.Start
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        },
-        bottomBar = {
-            BottomNavBar(navController = navController)
-        },
-        modifier = Modifier.fillMaxSize()
-    ) { paddingValues ->
-        NavHost(
-            navController = navController,
-            startDestination = "home",
-            modifier = Modifier.fillMaxSize()
-        ) {
-            composable("home") { HomeScreen(paddingValues = paddingValues) }
-            // Placeholder untuk tab lain (akan diimplementasi nanti)
-            composable("tuning") { EmptyScreen(paddingValues) }
-            composable("terminal") { EmptyScreen(paddingValues) }
-            composable("info") { EmptyScreen(paddingValues) }
+                Scaffold(
+                    bottomBar = { BottomNavBar(navController, items) }
+                ) { innerPadding ->
+                    NavHost(
+                        navController = navController,
+                        startDestination = "home",
+                        modifier = Modifier.padding(innerPadding)
+                    ) {
+                        composable("home") { HomeScreen() }
+                        composable("tuning") { TuningScreen() }
+                        composable("terminal") { TerminalScreen() }
+                        composable("info") { InfoScreen() }
+                    }
+                }
+            }
         }
     }
-}
-
-@Composable
-fun EmptyScreen(paddingValues: PaddingValues) {
-    androidx.compose.material3.Surface(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues),
-        color = MaterialTheme.colorScheme.background
-    ) {}
 }
