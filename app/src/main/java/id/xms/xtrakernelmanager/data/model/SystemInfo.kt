@@ -1,4 +1,11 @@
 package id.xms.xtrakernelmanager.data.model
+import kotlinx.serialization.Serializable
 
-class SystemInfo {
-}
+@Serializable
+data class SystemInfo(
+    val model: String,
+    val codename: String,
+    val androidVersion: String,
+    val sdk: Int,
+    val buildNumber: String
+)

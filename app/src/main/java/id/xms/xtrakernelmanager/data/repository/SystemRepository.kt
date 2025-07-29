@@ -1,71 +1,113 @@
 package id.xms.xtrakernelmanager.data.repository
 
-import android.util.Log
-import id.xms.xtrakernelmanager.util.RootUtils
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import id.xms.xtrakernelmanager.data.model.*
+import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object SystemRepository {
-    fun getKernelVersion(): String {
-        if (!RootUtils.isDeviceRooted()) return "N/A"
-        try {
-            val process = Runtime.getRuntime().exec("su")
-            val output = BufferedReader(InputStreamReader(process.inputStream))
-            process.outputStream.use { it.write("cat /proc/version\n".toByteArray()) }
-            process.outputStream.flush()
-            val result = output.readLine()?.split(" ")?.getOrNull(2) ?: "N/A"
-            Log.d("SystemRepository", "Kernel version: $result")
-            return result
-        } catch (e: Exception) {
-            Log.e("SystemRepository", "Error getting kernel version: ${e.message}")
-            return "N/A"
-        }
+@Singleton
+class SystemRepository @Inject constructor(
+    private val context: Context
+) {
+
+    /* ---------- Helper safe read ---------- */
+    private fun safeRead(path: String, default: String = "0"): String =
+        runCatching { File(path).readText().trim() }.getOrDefault(default)
+
+    /* ---------- Battery (fallback ke API jika sysfs gagal) ---------- */
+    fun getBatteryInfo(): BatteryInfo {
+        val dir = "/sys/class/power_supply/battery"
+
+        val level = safeRead("$dir/capacity", "-1").toIntOrNull()
+            ?: getBatteryLevelFromApi()
+
+        val temp = safeRead("$dir/temp", "0").toFloatOrNull()?.div(10) ?: 0f
+
+        val health = safeRead("$dir/health", "0").toIntOrNull()
+            ?: BatteryManager.BATTERY_HEALTH_UNKNOWN
+
+        val cycles = safeRead("$dir/cycle_count", "0").toIntOrNull() ?: 0
+
+        val capacity = safeRead("$dir/charge_full_design", "0").toIntOrNull()
+            ?.div(1000) ?: 0
+
+        return BatteryInfo(level, temp, health, cycles, capacity)
     }
 
-    fun getUsedRam(): String {
-        if (!RootUtils.isDeviceRooted()) {
-            Log.d("SystemRepository", "Not rooted, returning N/A")
-            return "N/A"
-        }
-        try {
-            val process = Runtime.getRuntime().exec("su")
-            val output = BufferedReader(InputStreamReader(process.inputStream))
-            process.outputStream.use { it.write("cat /proc/meminfo\n".toByteArray()) }
-            process.outputStream.flush()
+    private fun getBatteryLevelFromApi(): Int {
+        val i = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        return i?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    }
 
-            var totalRam = 0L
-            var availableRam = 0L
-            output.useLines { lines ->
-                lines.forEach { line ->
-                    Log.d("SystemRepository", "Processing line: $line")
-                    when {
-                        line.startsWith("MemTotal:") -> {
-                            val rawValue = line.substringAfter("MemTotal:").trim()
-                            Log.d("SystemRepository", "Raw MemTotal value: '$rawValue'")
-                            totalRam = rawValue.split(" ")[0].toLongOrNull() ?: 0L
-                            Log.d("SystemRepository", "Parsed MemTotal: $totalRam KB")
-                        }
-                        line.startsWith("MemAvailable:") -> {
-                            val rawValue = line.substringAfter("MemAvailable:").trim()
-                            Log.d("SystemRepository", "Raw MemAvailable value: '$rawValue'")
-                            availableRam = rawValue.split(" ")[0].toLongOrNull() ?: 0L
-                            Log.d("SystemRepository", "Parsed MemAvailable: $availableRam KB")
-                        }
-                    }
+    /* ---------- CPU clusters ---------- */
+    fun getCpuClusters(): List<CpuCluster> {
+        val list = mutableListOf<CpuCluster>()
+        File("/sys/devices/system/cpu/policy")
+            .listFiles()
+            ?.sortedBy { it.name }
+            ?.forEachIndexed { idx, f ->
+                val name = when (idx) {
+                    0 -> "Little"
+                    1 -> "Big"
+                    2 -> "Prime"
+                    else -> "Cluster$idx"
                 }
+                val gov = safeRead("${f.path}/scaling_governor", "unknown")
+                val min = safeRead("${f.path}/cpuinfo_min_freq", "0").toIntOrNull() ?: 0
+                val max = safeRead("${f.path}/cpuinfo_max_freq", "0").toIntOrNull() ?: 0
+                val avGov = safeRead("${f.path}/scaling_available_governors", "")
+                    .split(" ").filter { it.isNotBlank() }
+                list += CpuCluster(name, min, max, gov, avGov)
             }
-            Log.d("SystemRepository", "Total: $totalRam KB, Available: $availableRam KB")
-            if (totalRam > 0 && availableRam > 0) {
-                val usedRam = (totalRam - availableRam) / 1024 // Konversi ke MB
-                Log.d("SystemRepository", "Used RAM: $usedRam MB")
-                return "${usedRam} MB"
-            } else {
-                Log.d("SystemRepository", "Invalid RAM data, returning N/A. Total: $totalRam, Available: $availableRam")
-                return "N/A"
-            }
-        } catch (e: Exception) {
-            Log.e("SystemRepository", "Error getting used RAM: ${e.message}")
-            return "N/A"
-        }
+        return list
     }
+
+    /* ---------- System info ---------- */
+    fun getSystemInfo(): SystemInfo = SystemInfo(
+        model = android.os.Build.MODEL,
+        codename = android.os.Build.DEVICE,
+        androidVersion = android.os.Build.VERSION.RELEASE,
+        sdk = android.os.Build.VERSION.SDK_INT,
+        buildNumber = android.os.Build.DISPLAY
+    )
+
+    /* ---------- Kernel info ---------- */
+    fun getKernelInfo(): KernelInfo {
+        val ver = safeRead("/proc/version")
+        return KernelInfo(
+            version = ver.substringBefore("\n").trim(),
+            gkiType = if (ver.contains("android12-")) "GKI 2.0" else "GKI 1.0",
+            scheduler = safeRead("/sys/block/sda/queue/scheduler")
+                .substringAfter("[")
+                .substringBefore("]")
+                .trim()
+        )
+    }
+
+    /* ---------- GPU info ---------- */
+    fun getGpuInfo(): GpuInfo {
+        val dir = "/sys/class/kgsl/kgsl-3d0/devfreq"
+        return GpuInfo(
+            renderer = getProp("ro.hardware.egl", "Unknown"),
+            glEsVersion = getProp("ro.opengles.version", "3.2"),
+            governor = safeRead("$dir/governor", "unknown"),
+            availableGovernors = safeRead("$dir/available_governors", "")
+                .split(" ").filter { it.isNotBlank() },
+            minFreq = safeRead("$dir/min_freq", "0").toIntOrNull() ?: 0,
+            maxFreq = safeRead("$dir/max_freq", "0").toIntOrNull() ?: 0
+        )
+    }
+
+    /* ---------- Reflection helper ---------- */
+    @Suppress("DiscouragedPrivateApi")
+    private fun getProp(key: String, default: String = ""): String =
+        runCatching {
+            Class.forName("android.os.SystemProperties")
+                .getMethod("get", String::class.java, String::class.java)
+                .invoke(null, key, default) as String
+        }.getOrDefault(default)
 }
