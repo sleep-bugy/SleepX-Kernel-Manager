@@ -1,5 +1,7 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-
-    <style name="Theme.XtraKernelManager" parent="android:Theme.Material.Light.NoActionBar" />
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme -->
+    <style name="Theme.XtraKernelManager" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- opsional warna -->
+        <item name="android:colorPrimary">#65558F</item>
+    </style>
 </resources>
