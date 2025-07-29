@@ -1,4 +1,11 @@
 package id.xms.xtrakernelmanager.data.model
+import kotlinx.serialization.Serializable
 
-class CpuCluster {
-}
+@Serializable
+data class CpuCluster(
+    val name: String,
+    val minFreq: Int,
+    val maxFreq: Int,
+    val governor: String,
+    val availableGovernors: List<String>
+)
