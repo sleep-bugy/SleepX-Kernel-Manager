@@ -1,4 +1,12 @@
 package id.xms.xtrakernelmanager.data.model
+import kotlinx.serialization.Serializable
 
-class GpuInfo {
-}
+@Serializable
+data class GpuInfo(
+    val renderer: String,
+    val glEsVersion: String,
+    val governor: String,
+    val availableGovernors: List<String>,
+    val minFreq: Int,
+    val maxFreq: Int
+)
