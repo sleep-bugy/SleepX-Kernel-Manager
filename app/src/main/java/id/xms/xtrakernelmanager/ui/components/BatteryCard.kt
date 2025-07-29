@@ -31,6 +31,7 @@ fun BatteryCard(
                 text = "Level: ${"%.0f".format(batteryLevel)}%",
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
             )
+fun BatteryCard(info: BatteryInfo) {
         }
     }
 }
