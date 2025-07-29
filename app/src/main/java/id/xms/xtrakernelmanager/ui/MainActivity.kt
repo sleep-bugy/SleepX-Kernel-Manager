@@ -3,36 +3,32 @@ package id.xms.xtrakernelmanager.ui
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.*
+import dagger.hilt.android.AndroidEntryPoint
 import id.xms.xtrakernelmanager.ui.components.BottomNavBar
-import id.xms.xtrakernelmanager.ui.screens.HomeScreen
-import id.xms.xtrakernelmanager.ui.theme.XtraKernelManagerTheme
+import id.xms.xtrakernelmanager.ui.screens.*
+import id.xms.xtrakernelmanager.ui.theme.XtraTheme
+import id.xms.xtrakernelmanager.util.RootUtils
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var rootUtils: RootUtils
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        rootUtils.init(this)
+
         setContent {
-            XtraKernelManagerTheme {
-                MainScreen()
-            }
-        }
-    }
-}
+            XtraTheme {
+                val navController = rememberNavController()
+                val items = listOf("Home", "Tuning", "Terminal", "Info")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
