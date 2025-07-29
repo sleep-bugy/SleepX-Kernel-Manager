@@ -1,27 +1,16 @@
 package id.xms.xtrakernelmanager.ui.components
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 
 @Composable
-fun BottomNavBar(
-    navController: NavHostController,
-    modifier: Modifier = Modifier
-) {
-    val currentRoute by navController.currentBackStackEntryAsState()
-    val selectedRoute = currentRoute?.destination?.route ?: "home"
+fun BottomNavBar(navController: NavHostController, items: List<String>) {
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val current = navBackStackEntry?.destination?.route
 
     NavigationBar(
         modifier = modifier,
