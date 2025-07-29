@@ -1,26 +1,27 @@
 package id.xms.xtrakernelmanager.util
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import id.xms.xtrakernelmanager.data.repository.RootRepository
+import javax.inject.Inject
 
-object EasterEggUtils {
-    var clickCount by mutableStateOf(0)
-    const val MAX_CLICKS = 5
-    var isEggTriggered by mutableStateOf(false)
+class EasterEggUtils @Inject constructor(
+    private val rootRepo: RootRepository
+) {
+    fun showIfForcedNonRoot(ctx: Context) {
+        if (!rootRepo.isRooted()) {
+            AlertDialog.Builder(ctx)
+                .setTitle("System UI Destroyed")
+                .setMessage("App will exit in 3 seconds")
+                .setCancelable(false)
+                .show()
 
-    fun resetClickCount() {
-        clickCount = 0
-        isEggTriggered = false
-    }
-
-    fun onClick(): Boolean {
-        clickCount++
-        if (clickCount >= MAX_CLICKS) {
-            isEggTriggered = true
-            clickCount = 0
-            return true
+            Handler(Looper.getMainLooper()).postDelayed({
+                (ctx as Activity).finishAffinity()
+            }, 3000)
         }
-        return false
     }
 }
