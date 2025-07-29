@@ -40,5 +40,15 @@ fun BottomNavBar(navController: NavHostController, items: List<String>) {
             icon = { Icon(imageVector = Icons.Default.Info, contentDescription = "Info") },
             label = { Text("Info", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
         )
+    NavigationBar {
+        items.forEach { screen ->
+            val icon = when (screen) {
+                "Home"   -> Icons.Default.Home
+                "Tuning" -> Icons.Default.Build
+                "Terminal" -> Icons.Default.Settings
+                "Info"   -> Icons.Default.Info
+                else     -> Icons.Default.Home
+            }
+            NavigationBarItem(
     }
 }
