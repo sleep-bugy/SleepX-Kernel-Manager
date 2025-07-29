@@ -12,34 +12,6 @@ fun BottomNavBar(navController: NavHostController, items: List<String>) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val current = navBackStackEntry?.destination?.route
 
-    NavigationBar(
-        modifier = modifier,
-        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-    ) {
-        NavigationBarItem(
-            selected = selectedRoute == "home",
-            onClick = { navController.navigate("home") { launchSingleTop = true } },
-            icon = { Icon(imageVector = Icons.Default.Home, contentDescription = "Home") },
-            label = { Text("Home", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
-        )
-        NavigationBarItem(
-            selected = selectedRoute == "tuning",
-            onClick = { navController.navigate("tuning") { launchSingleTop = true } },
-            icon = { Icon(imageVector = Icons.Default.Settings, contentDescription = "Tuning") },
-            label = { Text("Tuning", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
-        )
-        NavigationBarItem(
-            selected = selectedRoute == "terminal",
-            onClick = { navController.navigate("terminal") { launchSingleTop = true } },
-            icon = { Icon(imageVector = Icons.Default.Terminal, contentDescription = "Terminal") },
-            label = { Text("Terminal", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
-        )
-        NavigationBarItem(
-            selected = selectedRoute == "info",
-            onClick = { navController.navigate("info") { launchSingleTop = true } },
-            icon = { Icon(imageVector = Icons.Default.Info, contentDescription = "Info") },
-            label = { Text("Info", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
-        )
     NavigationBar {
         items.forEach { screen ->
             val icon = when (screen) {
@@ -50,5 +22,17 @@ fun BottomNavBar(navController: NavHostController, items: List<String>) {
                 else     -> Icons.Default.Home
             }
             NavigationBarItem(
+                icon = { Icon(icon, contentDescription = screen) },
+                label = { Text(screen) },
+                selected = current == screen.lowercase(),
+                onClick = {
+                    navController.navigate(screen.lowercase()) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
+        }
     }
 }
