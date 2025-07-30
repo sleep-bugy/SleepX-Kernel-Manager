@@ -4,10 +4,18 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.util.Log
+import androidx.compose.ui.geometry.isEmpty
+import androidx.compose.ui.graphics.vector.path
 import id.xms.xtrakernelmanager.data.model.*
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.io.InputStreamReader
+import java.io.BufferedReader
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.io.path.inputStream
 
 @Singleton
 class SystemRepository @Inject constructor(
@@ -17,6 +25,83 @@ class SystemRepository @Inject constructor(
     /* ---------- Helper safe read ---------- */
     private fun safeRead(path: String, default: String = "0"): String =
         runCatching { File(path).readText().trim() }.getOrDefault(default)
+    companion object {
+        private const val TAG = "SystemRepository"
+        private const val VALUE_NOT_AVAILABLE = "N/A"
+        private const val VALUE_UNKNOWN = "Unknown"
+        private const val TARGET_CYCLES_FOR_80_PERCENT_HEALTH = 500
+        private const val TARGET_HEALTH_AT_TARGET_CYCLES = 80
+        // Persentase kehilangan per siklus
+        private const val DEGRADATION_PERCENT_PER_CYCLE =
+            (100.0 - TARGET_HEALTH_AT_TARGET_CYCLES) / TARGET_CYCLES_FOR_80_PERCENT_HEALTH
+    }
+
+    // --- Fungsi Helper Inti untuk Membaca File dengan Fallback 'su' ---
+    private fun readFileToString(filePath: String, fileDescription: String, attemptSu: Boolean = true): String? {
+        val file = File(filePath)
+        Log.d(TAG, "Membaca '$fileDescription' dari: $filePath (Attempt SU: $attemptSu)")
+        try {
+            if (file.exists() && file.canRead()) {
+                val content = file.readText().trim()
+                if (content.isNotBlank()) {
+                    Log.d(TAG, "'$fileDescription': Konten mentah (langsung) = '$content'")
+                    return content
+                } else {
+                    Log.w(TAG, "'$fileDescription': File kosong (langsung). Path: $filePath")
+                    if (!attemptSu) return null
+                }
+            } else {
+                Log.w(TAG, "'$fileDescription': File tidak ada/baca (langsung). Path: $filePath. Exists: ${file.exists()}, CanRead: ${file.canRead()}")
+            }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "'$fileDescription': SecurityException (langsung). Path: $filePath. Mencoba SU.", e)
+        } catch (e: FileNotFoundException) {
+            Log.w(TAG, "'$fileDescription': FileNotFoundException (langsung). Path: $filePath. Mencoba SU.", e)
+        } catch (e: IOException) {
+            Log.e(TAG, "'$fileDescription': IOException (langsung). Path: $filePath.", e)
+            return null
+        } catch (e: Exception) {
+            Log.e(TAG, "'$fileDescription': Exception tidak diketahui (langsung). Path: $filePath.", e)
+            return null
+        }
+        if (attemptSu) {
+            Log.i(TAG, "'$fileDescription': Mencoba membaca $filePath menggunakan 'su cat'")
+            var process: Process? = null
+            try {
+                process = Runtime.getRuntime().exec(arrayOf("su", "-c", "cat \"$filePath\""))
+                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                val errorReader = BufferedReader(InputStreamReader(process.errorStream))
+                val output = StringBuilder()
+                var line: String?
+
+                while (reader.readLine().also { line = it } != null) {
+                    output.append(line).append("\n")
+                }
+                val exitCode = process.waitFor()
+                val errorOutput = StringBuilder()
+                while (errorReader.readLine().also { line = it } != null) {
+                    errorOutput.append(line).append("\n")
+                }
+
+                if (errorOutput.isNotBlank()) {
+                    Log.w(TAG, "'$fileDescription': Error stream dari 'su cat \"$filePath\"' (exit: $exitCode):\n${errorOutput.toString().trim()}")
+                }
+
+                if (exitCode == 0) {
+                    val contentSu = output.toString().trim()
+                    if (contentSu.isNotBlank()) {
+                        Log.i(TAG, "'$fileDescription': Konten mentah (via SU) = '$contentSu'")
+                        return contentSu
+                    } else {
+                        Log.w(TAG, "'$fileDescription': File kosong (via SU). Path: $filePath")
+                        return null
+                    }
+                } else {
+                    Log.e(TAG, "'$fileDescription': Perintah 'su cat \"$filePath\"' gagal dengan exit code $exitCode.")
+                    if (output.isNotBlank()) {
+                        Log.w(TAG, "'$fileDescription': Output stdout dari 'su cat' saat gagal:\n${output.toString().trim()}")
+                    }
+                }
 
     /* ---------- Battery (fallback ke API jika sysfs gagal) ---------- */
     fun getBatteryInfo(): BatteryInfo {
