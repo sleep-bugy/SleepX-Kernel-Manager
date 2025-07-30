@@ -22,9 +22,6 @@ class SystemRepository @Inject constructor(
     private val context: Context
 ) {
 
-    /* ---------- Helper safe read ---------- */
-    private fun safeRead(path: String, default: String = "0"): String =
-        runCatching { File(path).readText().trim() }.getOrDefault(default)
     companion object {
         private const val TAG = "SystemRepository"
         private const val VALUE_NOT_AVAILABLE = "N/A"
@@ -102,6 +99,33 @@ class SystemRepository @Inject constructor(
                         Log.w(TAG, "'$fileDescription': Output stdout dari 'su cat' saat gagal:\n${output.toString().trim()}")
                     }
                 }
+            } catch (e: IOException) {
+                Log.e(TAG, "'$fileDescription': IOException saat menjalankan 'su cat \"$filePath\"'", e)
+            } catch (e: InterruptedException) {
+                Log.e(TAG, "'$fileDescription': InterruptedException saat 'su cat \"$filePath\"'", e)
+                Thread.currentThread().interrupt()
+            } catch (e: Exception) {
+                Log.e(TAG, "'$fileDescription': Error tidak diketahui saat 'su cat \"$filePath\"'", e)
+            } finally {
+                process?.destroy()
+            }
+        } else {
+            Log.d(TAG, "'$fileDescription': Tidak mencoba membaca $filePath via SU (attemptSu false atau baca langsung gagal tanpa SecurityException).")
+        }
+
+        Log.e(TAG, "'$fileDescription': GAGAL membaca dari $filePath setelah semua percobaan.")
+        return null
+    }
+
+    private var lastCpuRealtimeUpdate = 0L
+    private var cachedCpuRealtimeInfo: RealtimeCpuInfo? = null
+
+    fun getCpuRealtime(): RealtimeCpuInfo {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastCpuRealtimeUpdate < 5000 && cachedCpuRealtimeInfo != null) {
+            return cachedCpuRealtimeInfo!!
+        }
+        Log.d(TAG, "Memperbarui RealtimeCpuInfo...")
 
     /* ---------- Battery (fallback ke API jika sysfs gagal) ---------- */
     fun getBatteryInfo(): BatteryInfo {
