@@ -168,7 +168,48 @@ class SystemRepository @Inject constructor(
         }
     }
     fun getBatteryInfo(): BatteryInfo {
-        val dir = "/sys/class/power_supply/battery"
+        Log.d(TAG, "Memulai pengambilan BatteryInfo (struktur BatteryInfo.kt dipertahankan)...")
+        val batteryDir = "/sys/class/power_supply/battery"
+        val batteryLevelStr = readFileToString("$batteryDir/capacity", "Battery Level Percent from File")
+        val currentLevelFromFile = batteryLevelStr?.toIntOrNull()
+        val finalLevel = currentLevelFromFile ?: run {
+            Log.i(TAG, "Level baterai dari file tidak valid, menggunakan API.")
+            getBatteryLevelFromApi()
+        }.let { if (it == -1) 0 else it }
+        Log.d(TAG, "Final Level Baterai (untuk BatteryInfo.level): $finalLevel%")
+
+        var tempStr = readFileToString("$batteryDir/temp", "Battery Temperature")
+        var tempSource = "$batteryDir/temp"
+        if (tempStr == null) {
+            Log.w(TAG, "Gagal baca suhu dari '$tempSource', mencoba path alternatif...")
+            val thermalZoneDirs = File("/sys/class/thermal/").listFiles { dir, name ->
+                dir.isDirectory && name.startsWith("thermal_zone")
+            }
+            var foundTempInThermalZone = false
+            thermalZoneDirs?.sortedBy { it.name }?.forEach { zoneDir ->
+                val type = readFileToString("${zoneDir.path}/type", "Thermal Zone Type (${zoneDir.name})", attemptSu = false)
+                if (type != null && (type.contains("battery", ignoreCase = true) || type.contains("แบตเตอรี่") || type.contains("case_therm", ignoreCase = true) || type.contains("ibat_therm", ignoreCase = true))) {
+                    tempStr = readFileToString("${zoneDir.path}/temp", "Battery Temperature from ${zoneDir.name} ($type)")
+                    if (tempStr != null) {
+                        tempSource = "${zoneDir.path}/temp (type: $type)"
+                        foundTempInThermalZone = true
+                        return@forEach
+                    }
+                }
+            }
+            if (!foundTempInThermalZone) {
+                Log.w(TAG, "Tidak menemukan file suhu baterai yang valid di thermal_zones.")
+            }
+        }
+        val finalTemperature = tempStr?.toFloatOrNull()?.let { rawTemp ->
+            if (tempSource.startsWith("/sys/class/thermal/thermal_zone")) rawTemp / 1000 else rawTemp / 10
+        } ?: 0f
+        Log.d(TAG, "Final Suhu Baterai (untuk BatteryInfo.temp): $finalTemperature°C (mentah: '$tempStr' dari $tempSource)")
+
+
+        val cycleCountStr = readFileToString("$batteryDir/cycle_count", "Battery Cycle Count")
+        val finalCyclesForInfo = cycleCountStr?.toIntOrNull() ?: 0 // 0 jika tidak tersedia
+        Log.d(TAG, "Jumlah siklus baterai (untuk BatteryInfo.cycles): $finalCyclesForInfo (mentah: '$cycleCountStr')")
 
         val level = safeRead("$dir/capacity", "-1").toIntOrNull()
             ?: getBatteryLevelFromApi()
