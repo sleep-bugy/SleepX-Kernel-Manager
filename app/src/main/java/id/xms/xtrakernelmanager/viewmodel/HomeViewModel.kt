@@ -19,8 +19,8 @@ class HomeViewModel @Inject constructor(
     private val rootRepo: RootRepository
 ) : ViewModel() {
 
-    val clusters = flow { emit(repo.getCpuClusters()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
+    private val _cpuInfo = MutableStateFlow(RealtimeCpuInfo(0, "", emptyList(), 0f))
+    val cpuInfo: StateFlow<RealtimeCpuInfo> = _cpuInfo
 
     val battery = flow { emit(repo.getBatteryInfo()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), null)
@@ -28,9 +28,6 @@ class HomeViewModel @Inject constructor(
     val system = flow { emit(repo.getSystemInfo()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), null)
 
-    val gpu = flow { emit(repo.getGpuInfo()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), null)
-
-    val kernel = flow { emit(repo.getKernelInfo()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), null)
+    private val _deepSleep = MutableStateFlow(repo.getDeepSleepInfo())
+    val deepSleep: StateFlow<DeepSleepInfo> = _deepSleep
 }
