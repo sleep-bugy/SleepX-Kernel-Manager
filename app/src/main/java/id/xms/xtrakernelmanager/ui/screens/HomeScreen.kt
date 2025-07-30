@@ -29,22 +29,57 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
     val version = vm.appVersion
     var blurOn by rememberSaveable { mutableStateOf(true) }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(clusters) { cluster ->
-            CpuClusterCard(cluster)
+    Scaffold(
+        topBar = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .height(32.dp)
+            ) {
+
+                TopAppBar(
+                    title = { Text("Xtra Kernel Manager") },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = if (blurOn) Color.Transparent else MaterialTheme.colorScheme.surface
+                    ),
+                    actions = {
+                        IconToggleButton(
+                            checked = blurOn,
+                            onCheckedChange = { blurOn = it },
+                            modifier = Modifier.align(Alignment.CenterVertically)
+                        ) {
+                            Icon(
+                                imageVector = if (blurOn) Icons.Default.BlurOn else Icons.Default.BlurOff,
+                                contentDescription = "Toggle blur"
+                            )
+                        }
+                    }
+                )
+            }
         }
-        gpu?.let { gpuInfo ->
-            item { GpuCard(gpuInfo) }
-        }
-        battery?.let { bat ->
-            item { BatteryCard(bat) }
-        }
-        system?.let { sys ->
-            item { SystemCard(sys) }
+    ) { padding ->
+
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+
+            /* 1. CPU */
+            CpuCard(cpuInfo, blurOn)
+
+            /* 2. Merged card */
+            MergedSystemCard(battery, deepSleep, root, version, blurOn, memory)
+
+            /* 3. Kernel */
+            KernelCard(kernel, blurOn)
+
+            /* 4. About */
+            AboutCard(blurOn)
         }
     }
 }
