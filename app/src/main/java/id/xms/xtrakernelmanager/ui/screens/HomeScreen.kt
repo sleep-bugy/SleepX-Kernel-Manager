@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.Color
 // import androidx.compose.ui.graphics.Brush // Tidak digunakan secara langsung di file ini
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import id.xms.xtrakernelmanager.data.model.GpuInfo
 import id.xms.xtrakernelmanager.ui.components.*
 import id.xms.xtrakernelmanager.viewmodel.HomeViewModel
 
