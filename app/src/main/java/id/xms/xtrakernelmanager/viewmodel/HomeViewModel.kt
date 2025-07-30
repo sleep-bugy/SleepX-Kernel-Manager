@@ -22,11 +22,21 @@ class HomeViewModel @Inject constructor(
     private val _cpuInfo = MutableStateFlow(RealtimeCpuInfo(0, "", emptyList(), 0f))
     val cpuInfo: StateFlow<RealtimeCpuInfo> = _cpuInfo
 
-    val battery = flow { emit(repo.getBatteryInfo()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), null)
+    init {
+        viewModelScope.launch {
+            while (isActive) {
+                _cpuInfo.value = repo.getCpuRealtime()
+                delay(1000L)
+            }
+        }
+    }
 
-    val system = flow { emit(repo.getSystemInfo()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), null)
+    val batteryInfo = repo.getBatteryInfo()
+    val memoryInfo  = repo.getMemoryInfo()
+    val kernelInfo  = repo.getKernelInfo()
+    val rootStatus  = rootRepo.isRooted()
+    val appVersion  = context.packageManager
+        .getPackageInfo(context.packageName, 0).versionName ?: "1.0"
 
     private val _deepSleep = MutableStateFlow(repo.getDeepSleepInfo())
     val deepSleep: StateFlow<DeepSleepInfo> = _deepSleep
