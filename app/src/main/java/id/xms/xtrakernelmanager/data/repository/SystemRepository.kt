@@ -127,7 +127,46 @@ class SystemRepository @Inject constructor(
         }
         Log.d(TAG, "Memperbarui RealtimeCpuInfo...")
 
-    /* ---------- Battery (fallback ke API jika sysfs gagal) ---------- */
+        val cores = Runtime.getRuntime().availableProcessors()
+        val governor = readFileToString("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "CPU0 Governor") ?: VALUE_UNKNOWN
+
+        val frequencies = List(cores) { coreIndex ->
+            val freqStr = readFileToString("/sys/devices/system/cpu/cpu$coreIndex/cpufreq/scaling_cur_freq", "CPU$coreIndex Current Freq")
+            (freqStr?.toLongOrNull()?.div(1000))?.toInt() ?: 0
+        }
+
+        val tempStr = readFileToString("/sys/class/thermal/thermal_zone0/temp", "Thermal Zone0 Temp")
+        val temperature = (tempStr?.toFloatOrNull()?.div(1000)) ?: 0f
+
+        cachedCpuRealtimeInfo = RealtimeCpuInfo(cores, governor, frequencies, temperature)
+        lastCpuRealtimeUpdate = currentTime
+        Log.d(TAG, "RealtimeCpuInfo diperbarui: $cachedCpuRealtimeInfo")
+        return cachedCpuRealtimeInfo!!
+    }
+
+
+    // --- Battery Info ---
+    private fun getBatteryLevelFromApi(): Int {
+        val intentFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        val batteryStatusIntent = context.registerReceiver(null, intentFilter)
+
+        if (batteryStatusIntent == null) {
+            Log.w(TAG, "Gagal mendapatkan BatteryStatusIntent (context bermasalah?).")
+            return -1
+        }
+
+        val level = batteryStatusIntent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = batteryStatusIntent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+
+        return if (level != -1 && scale != -1 && scale != 0) {
+            val batteryPct = (level / scale.toFloat() * 100).toInt()
+            Log.d(TAG, "Level baterai dari API: $batteryPct%")
+            batteryPct
+        } else {
+            Log.w(TAG, "Gagal mendapatkan level baterai valid dari API: level=$level, scale=$scale")
+            -1
+        }
+    }
     fun getBatteryInfo(): BatteryInfo {
         val dir = "/sys/class/power_supply/battery"
 
