@@ -12,18 +12,17 @@ import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
 
 @Composable
 fun TuningScreen(vm: TuningViewModel = hiltViewModel()) {
-    val clusters by vm.clusters.collectAsState()
+    val clusters by remember { derivedStateOf { vm.clusters } }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        clusters.forEach { cluster ->
-            item {
-                TuningClusterCard(cluster) { gov ->
-                    vm.applyCpuGov(cluster.name, gov)
-                }
+        items(clusters.size) { idx ->
+            val cluster = clusters[idx]
+            TuningClusterCard(cluster) { gov ->
+                vm.applyCpuGov(cluster.name, gov)
             }
         }
         item { ThermalCard { vm.setThermal(it) } }
