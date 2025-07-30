@@ -211,8 +211,71 @@ class SystemRepository @Inject constructor(
         val finalCyclesForInfo = cycleCountStr?.toIntOrNull() ?: 0 // 0 jika tidak tersedia
         Log.d(TAG, "Jumlah siklus baterai (untuk BatteryInfo.cycles): $finalCyclesForInfo (mentah: '$cycleCountStr')")
 
-        val level = safeRead("$dir/capacity", "-1").toIntOrNull()
-            ?: getBatteryLevelFromApi()
+        val designCapacityUahStr = readFileToString("$batteryDir/charge_full_design", "Battery Design Capacity (uAh)")
+        val designCapacityUah = designCapacityUahStr?.toLongOrNull()
+        val finalDesignCapacityMah = if (designCapacityUah != null && designCapacityUah > 0) (designCapacityUah / 1000).toInt() else 0
+        if (finalDesignCapacityMah == 0) {
+            Log.w(TAG, "Kapasitas desain ('charge_full_design') tidak ditemukan atau tidak valid. BatteryInfo.capacity akan 0. Perhitungan kesehatan SoH tidak mungkin.")
+        }
+        Log.d(TAG, "Desain kapasitas (untuk BatteryInfo.capacity): $finalDesignCapacityMah mAh (dari uAh: $designCapacityUah, mentah: '$designCapacityUahStr')")
+
+
+        var calculatedSohPercentage: Int = BatteryManager.BATTERY_HEALTH_UNKNOWN
+        if (finalDesignCapacityMah > 0) {
+            var currentFullUahStr = readFileToString("$batteryDir/charge_full", "Battery Current Full Capacity (uAh)")
+            var currentFullUahSource = "$batteryDir/charge_full"
+
+            if (currentFullUahStr == null) {
+                Log.w(TAG, "File '$currentFullUahSource' tidak ditemukan, SoH mungkin tidak akurat atau menggunakan fallback.")
+            }
+
+            val currentFullUah = currentFullUahStr?.toLongOrNull()
+
+            if (currentFullUah != null && currentFullUah > 0) {
+                val currentFullMah = (currentFullUah / 1000).toInt()
+                Log.i(TAG, "Kapasitas Penuh Saat Ini (dari '$currentFullUahSource'): $currentFullMah mAh (mentah uAh: $currentFullUah)")
+
+                val soh = (currentFullUah.toDouble() / designCapacityUah!!.toDouble()) * 100.0
+                calculatedSohPercentage = soh.toInt().coerceIn(0, 100)
+                Log.i(TAG, "Estimasi Kesehatan Baterai (SoH dari kapasitas untuk BatteryInfo.health): $calculatedSohPercentage% (Current: $currentFullMah mAh, Design: $finalDesignCapacityMah mAh)")
+            } else {
+                Log.w(TAG, "Tidak dapat membaca kapasitas penuh saat ini ('$currentFullUahSource' atau fallback) atau nilainya tidak valid. SoH tidak dapat dihitung dengan metode kapasitas.")
+            }
+        } else {
+            Log.e(TAG, "Kapasitas desain adalah 0, tidak mungkin menghitung SoH. BatteryInfo.health akan default.")
+        }
+
+        val qualitativeHealthString = readFileToString("$batteryDir/health", "Battery Qualitative Health String")
+        val result = BatteryInfo(
+            level = finalLevel,
+            temp = finalTemperature,
+            health = calculatedSohPercentage,
+            cycles = finalCyclesForInfo,
+            capacity = finalDesignCapacityMah
+        )
+        Log.i(TAG, "BatteryInfo hasil akhir (struktur dipertahankan): $result")
+        return result
+    }
+
+    fun getMemoryInfo(): MemoryInfo {
+        Log.d(TAG, "Mengambil MemoryInfo...")
+        return try {
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val memoryInfo = android.app.ActivityManager.MemoryInfo()
+            activityManager.getMemoryInfo(memoryInfo)
+            MemoryInfo(
+                used = memoryInfo.totalMem - memoryInfo.availMem,
+                total = memoryInfo.totalMem,
+                free = memoryInfo.availMem
+            ).also { Log.d(TAG, "MemoryInfo: $it") }
+        } catch (e: Exception) {
+            Log.e(TAG, "Gagal mengambil MemoryInfo", e)
+            MemoryInfo(0, 0, 0)
+        }
+    }
+
+    fun getKernelInfo(): KernelInfo {
+        Log.d(TAG, "Memulai pengambilan KernelInfo...")
 
         val temp = safeRead("$dir/temp", "0").toFloatOrNull()?.div(10) ?: 0f
 
