@@ -277,89 +277,137 @@ class SystemRepository @Inject constructor(
     fun getKernelInfo(): KernelInfo {
         Log.d(TAG, "Memulai pengambilan KernelInfo...")
 
-        val temp = safeRead("$dir/temp", "0").toFloatOrNull()?.div(10) ?: 0f
+        val rawKernelVersionOutput = readFileToString("/proc/version", "Full Kernel Version String")
 
-        val health = safeRead("$dir/health", "0").toIntOrNull()
-            ?: BatteryManager.BATTERY_HEALTH_UNKNOWN
+        val parsedVersion = if (!rawKernelVersionOutput.isNullOrBlank()) {
+            rawKernelVersionOutput.substringBefore("\n").trim().ifEmpty { VALUE_NOT_AVAILABLE }
+        } else {
+            VALUE_NOT_AVAILABLE
+        }
+        Log.d(TAG, "Versi Kernel (baris pertama terparsir): $parsedVersion")
 
-        val cycles = safeRead("$dir/cycle_count", "0").toIntOrNull() ?: 0
+        val gkiType: String
+        if (rawKernelVersionOutput == null || parsedVersion == VALUE_NOT_AVAILABLE) {
+            gkiType = VALUE_NOT_AVAILABLE
+            Log.w(TAG, "Tidak bisa menentukan GKI Type karena rawKernelVersionOutput null atau versi tidak tersedia.")
+        } else {
+            val kernelVersionRegex = "Linux version (\\d+\\.\\d+)".toRegex()
+            val matchResult = kernelVersionRegex.find(rawKernelVersionOutput)
+            val linuxKernelBaseVersion = matchResult?.groups?.get(1)?.value
 
-        val capacity = safeRead("$dir/charge_full_design", "0").toIntOrNull()
-            ?.div(1000) ?: 0
+            Log.d(TAG, "Ekstraksi Versi Linux Kernel dari raw: $linuxKernelBaseVersion (Full raw: '$rawKernelVersionOutput')")
 
-        return BatteryInfo(level, temp, health, cycles, capacity)
+            gkiType = when (linuxKernelBaseVersion) {
+                "6.1" -> "GKI 2.0 (6.1)"
+                "5.15" -> "GKI 2.0 (5.15)"
+                "5.10" -> "GKI 2.0 (5.10)"
+                "5.4" -> "GKI 2.0 (5.4)"
+                "4.19" -> "GKI 1.0 (4.19)"
+                "4.14" -> "GKI 1.0 (4.14)"
+                else -> {
+                    when {
+                        rawKernelVersionOutput.contains("android14-") -> "GKI 2.0 (Android 14 based)"
+                        rawKernelVersionOutput.contains("android13-") -> "GKI 2.0 (Android 13 based)"
+                        rawKernelVersionOutput.contains("android12-") -> "GKI 2.0 (Android 12 based)"
+                        rawKernelVersionOutput.contains("android11-") -> "GKI 1.0 (Android 11 based)"
+                        else -> {
+                            Log.d(TAG, "Tidak ada pola GKI yang cocok untuk versi Linux '$linuxKernelBaseVersion' atau string 'androidXX-'. Menganggap Non-GKI atau Unknown.")
+                            if (linuxKernelBaseVersion != null) "Non-GKI ($linuxKernelBaseVersion)" else VALUE_UNKNOWN
+                        }
+                    }
+                }
+            }
+        }
+        Log.d(TAG, "Tipe GKI Terdeteksi: $gkiType")
+
+        val schedulerPath = "/sys/block/sda/queue/scheduler"
+        val rawSchedulerOutput = readFileToString(schedulerPath, "I/O Scheduler String")
+        val parsedScheduler = if (rawSchedulerOutput != null && rawSchedulerOutput != "0" && rawSchedulerOutput.isNotBlank()) {
+            rawSchedulerOutput.substringAfterLast("[").substringBefore("]").trim().ifEmpty { VALUE_NOT_AVAILABLE }
+        } else {
+            val altSchedulerPath = "/sys/block/mmcblk0/queue/scheduler"
+            val altRawScheduler = readFileToString(altSchedulerPath, "Alt I/O Scheduler (mmcblk0)")
+            if (altRawScheduler != null && altRawScheduler != "0" && altRawScheduler.isNotBlank()) {
+                altRawScheduler.substringAfterLast("[").substringBefore("]").trim().ifEmpty { VALUE_NOT_AVAILABLE }
+            } else {
+                VALUE_NOT_AVAILABLE
+            }
+        }
+        Log.d(TAG, "Scheduler I/O Terparsir: $parsedScheduler (mentah utama: '$rawSchedulerOutput')")
+
+        val result = KernelInfo(
+            version = parsedVersion,
+            gkiType = gkiType,
+            scheduler = parsedScheduler
+        )
+        Log.i(TAG, "KernelInfo hasil akhir: $result")
+        return result
     }
 
-    private fun getBatteryLevelFromApi(): Int {
-        val i = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        return i?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    fun getDeepSleepInfo(): DeepSleepInfo {
+        Log.d(TAG, "Mengambil DeepSleepInfo...")
+        val uptime = android.os.SystemClock.elapsedRealtime()
+        val awakeTime = android.os.SystemClock.uptimeMillis()
+        val deepSleepTime = uptime - awakeTime
+        return DeepSleepInfo(uptime, deepSleepTime).also { Log.d(TAG, "DeepSleepInfo: $it") }
     }
 
-    /* ---------- CPU clusters ---------- */
     fun getCpuClusters(): List<CpuCluster> {
-        val list = mutableListOf<CpuCluster>()
-        File("/sys/devices/system/cpu/policy")
-            .listFiles()
-            ?.sortedBy { it.name }
-            ?.forEachIndexed { idx, f ->
-                val name = when (idx) {
+        Log.d(TAG, "Memulai pengambilan CPU Clusters...")
+        val cpuPolicyDir = File("/sys/devices/system/cpu/policy")
+        val clusters = mutableListOf<CpuCluster>()
+
+        if (!cpuPolicyDir.exists() || !cpuPolicyDir.isDirectory) {
+            Log.w(TAG, "Direktori CPU policy tidak ditemukan: ${cpuPolicyDir.path}")
+            return emptyList()
+        }
+
+        cpuPolicyDir.listFiles()
+            ?.filter { it.isDirectory && it.name.startsWith("policy") && it.name.length > "policy".length && it.name.substring("policy".length).toIntOrNull() != null }
+            ?.sortedBy { it.name.removePrefix("policy").toInt() }
+            ?.forEachIndexed { index, policyFile ->
+                val policyNum = policyFile.name.removePrefix("policy")
+                val policyDesc = "Policy$policyNum"
+                Log.d(TAG, "Memproses CPU Cluster: $policyDesc (${policyFile.path})")
+
+                val relatedCpus = readFileToString("${policyFile.path}/related_cpus", "$policyDesc Related CPUs", attemptSu = false)?.trim()
+                val firstCpuInCluster = relatedCpus?.split(" ")?.firstOrNull()?.toIntOrNull()
+
+                val clusterName = when (index) {
                     0 -> "Little"
                     1 -> "Big"
                     2 -> "Prime"
-                    else -> "Cluster$idx"
-                }
-                val gov = safeRead("${f.path}/scaling_governor", "unknown")
-                val min = safeRead("${f.path}/cpuinfo_min_freq", "0").toIntOrNull() ?: 0
-                val max = safeRead("${f.path}/cpuinfo_max_freq", "0").toIntOrNull() ?: 0
-                val avGov = safeRead("${f.path}/scaling_available_governors", "")
-                    .split(" ").filter { it.isNotBlank() }
-                list += CpuCluster(name, min, max, gov, avGov)
+                    else -> "Cluster ${index + 1}"
+                } + (if (firstCpuInCluster != null) " (CPU$firstCpuInCluster+)" else " ($policyDesc)")
+
+                val governor = readFileToString("${policyFile.path}/scaling_governor", "$policyDesc Governor") ?: VALUE_UNKNOWN
+                val minFreqStr = readFileToString("${policyFile.path}/cpuinfo_min_freq", "$policyDesc Min Freq")
+                val minFreq = minFreqStr?.toIntOrNull()?.div(1000) ?: 0
+                val maxFreqStr = readFileToString("${policyFile.path}/cpuinfo_max_freq", "$policyDesc Max Freq")
+                val maxFreq = maxFreqStr?.toIntOrNull()?.div(1000) ?: 0
+
+                val availableGovernorsStr = readFileToString("${policyFile.path}/scaling_available_governors", "$policyDesc Available Governors")
+                val availableGovernors = availableGovernorsStr?.split(Regex("\\s+"))?.filter { it.isNotBlank() } ?: emptyList()
+
+                clusters.add(CpuCluster(clusterName, minFreq, maxFreq, governor, availableGovernors))
+                Log.d(TAG, "Cluster '$clusterName': Gov=$governor, Min=${minFreq}MHz, Max=${maxFreq}MHz, AvailGov=$availableGovernors")
             }
-        return list
+
+        if (clusters.isEmpty()) {
+            Log.w(TAG, "Tidak ada CPU cluster yang terdeteksi atau dapat diproses di ${cpuPolicyDir.path}")
+        }
+        Log.i(TAG, "CPU Clusters hasil akhir: $clusters")
+        return clusters
     }
 
-    /* ---------- System info ---------- */
-    fun getSystemInfo(): SystemInfo = SystemInfo(
-        model = android.os.Build.MODEL,
-        codename = android.os.Build.DEVICE,
-        androidVersion = android.os.Build.VERSION.RELEASE,
-        sdk = android.os.Build.VERSION.SDK_INT,
-        buildNumber = android.os.Build.DISPLAY
-    )
-
-    /* ---------- Kernel info ---------- */
-    fun getKernelInfo(): KernelInfo {
-        val ver = safeRead("/proc/version")
-        return KernelInfo(
-            version = ver.substringBefore("\n").trim(),
-            gkiType = if (ver.contains("android12-")) "GKI 2.0" else "GKI 1.0",
-            scheduler = safeRead("/sys/block/sda/queue/scheduler")
-                .substringAfter("[")
-                .substringBefore("]")
-                .trim()
-        )
+    fun getSystemInfo(): SystemInfo {
+        Log.d(TAG, "Mengambil SystemInfo (API based)...")
+        return SystemInfo(
+            model = android.os.Build.MODEL,
+            codename = android.os.Build.DEVICE,
+            androidVersion = android.os.Build.VERSION.RELEASE,
+            sdk = android.os.Build.VERSION.SDK_INT,
+            buildNumber = android.os.Build.DISPLAY
+        ).also { Log.d(TAG, "SystemInfo: $it") }
     }
-
-    /* ---------- GPU info ---------- */
-    fun getGpuInfo(): GpuInfo {
-        val dir = "/sys/class/kgsl/kgsl-3d0/devfreq"
-        return GpuInfo(
-            renderer = getProp("ro.hardware.egl", "Unknown"),
-            glEsVersion = getProp("ro.opengles.version", "3.2"),
-            governor = safeRead("$dir/governor", "unknown"),
-            availableGovernors = safeRead("$dir/available_governors", "")
-                .split(" ").filter { it.isNotBlank() },
-            minFreq = safeRead("$dir/min_freq", "0").toIntOrNull() ?: 0,
-            maxFreq = safeRead("$dir/max_freq", "0").toIntOrNull() ?: 0
-        )
-    }
-
-    /* ---------- Reflection helper ---------- */
-    @Suppress("DiscouragedPrivateApi")
-    private fun getProp(key: String, default: String = ""): String =
-        runCatching {
-            Class.forName("android.os.SystemProperties")
-                .getMethod("get", String::class.java, String::class.java)
-                .invoke(null, key, default) as String
-        }.getOrDefault(default)
 }
