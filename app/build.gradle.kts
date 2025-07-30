@@ -4,6 +4,7 @@ plugins {
     id("kotlin-kapt")
     id("com.google.dagger.hilt.android")
     id("kotlinx-serialization")
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -14,7 +15,7 @@ android {
         minSdk = 29
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "1.0.-AlphaBuild"
     }
     buildTypes {
         release {
@@ -26,7 +27,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    kotlin {
+        compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
+    }
     buildFeatures { compose = true }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
@@ -41,6 +44,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended:1.6.8")
 
     // Versi yang aman untuk Kotlin 1.9.24
     implementation("androidx.navigation:navigation-compose:2.7.7")
@@ -54,6 +58,10 @@ dependencies {
     implementation(libs.androidx.material3.android)
     kapt("com.google.dagger:hilt-compiler:2.51.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation("androidx.hilt:hilt-work:1.0.0")
+    testImplementation("com.google.dagger:hilt-android-testing:2.51.1")
+    kaptTest("com.google.dagger:hilt-compiler:2.51.1")
+
 
     // LibSu & Coil
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
