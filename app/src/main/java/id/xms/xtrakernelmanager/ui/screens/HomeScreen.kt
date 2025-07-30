@@ -83,17 +83,3 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
         }
     }
 }
-
-/* -------------- PLACEHOLDER agar tidak merah -------------- */
-@Composable
-fun GpuCard(info: GpuInfo) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Text("GPU", style = MaterialTheme.typography.titleMedium)
-            Text("Renderer: ${info.renderer}")
-            Text("OpenGL ES: ${info.glEsVersion}")
-        }
-    }
-}
