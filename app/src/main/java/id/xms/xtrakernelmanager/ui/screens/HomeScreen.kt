@@ -18,12 +18,17 @@ import id.xms.xtrakernelmanager.data.model.GpuInfo
 import id.xms.xtrakernelmanager.ui.components.*
 import id.xms.xtrakernelmanager.viewmodel.HomeViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
-    val clusters by vm.clusters.collectAsState()
-    val battery by vm.battery.collectAsState()
-    val system by vm.system.collectAsState()
-    val gpu by vm.gpu.collectAsState()
+    val cpuInfo by vm.cpuInfo.collectAsState()
+    val battery = vm.batteryInfo
+    val memory = vm.memoryInfo
+    val deepSleep by vm.deepSleep.collectAsState()
+    val root = vm.rootStatus
+    val kernel = vm.kernelInfo
+    val version = vm.appVersion
+    var blurOn by rememberSaveable { mutableStateOf(true) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
