@@ -123,7 +123,7 @@ class SystemRepository @Inject constructor(
 
     fun getCpuRealtime(): RealtimeCpuInfo {
         val currentTime = System.currentTimeMillis()
-        if (currentTime - lastCpuRealtimeUpdate < 5000 && cachedCpuRealtimeInfo != null) {
+        if (currentTime - lastCpuRealtimeUpdate < 2000 && cachedCpuRealtimeInfo != null) {
             return cachedCpuRealtimeInfo!!
         }
         Log.d(TAG, "Memperbarui RealtimeCpuInfo...")
