@@ -17,7 +17,7 @@ fun BottomNavBar(navController: NavHostController, items: List<String>) {
             val icon = when (screen) {
                 "Home"   -> Icons.Default.Home
                 "Tuning" -> Icons.Default.Build
-                "Terminal" -> Icons.Default.Settings
+                "Terminal" -> Icons.Default.Terminal
                 "Info"   -> Icons.Default.Info
                 else     -> Icons.Default.Home
             }
