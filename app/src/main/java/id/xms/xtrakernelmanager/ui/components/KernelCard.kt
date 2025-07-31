@@ -7,9 +7,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import id.xms.xtrakernelmanager.R
 import id.xms.xtrakernelmanager.data.model.KernelInfo
 
 @Composable
@@ -35,10 +37,11 @@ fun KernelCard(
                         .fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Kernel Info", style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.kernel_information), style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Version: ${k.version}", textAlign = TextAlign.Center)
-                    Text("Type: ${k.gkiType}", textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.kernel_version, k.version), textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.kernel_type, k.gkiType), textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.sched, k.scheduler))
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = { showDialog = false }) {
                         Text("Close")
@@ -50,17 +53,30 @@ fun KernelCard(
 
     GlassCard(blur, modifier) {
         Row(
-            Modifier.fillMaxWidth().padding(16.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Kernel", style = MaterialTheme.typography.titleLarge)
-                Text("Version: ${k.version.take(30)}…")
-                Text("Type: ${k.gkiType}")
-            }
-            IconButton(onClick = { showDialog = true }) {
-                Icon(Icons.Filled.Info, contentDescription = "Show kernel info")
+            Column(
+                modifier = Modifier.weight(1f), // Allow Column to take available space
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.kernel), style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.width(8.dp)) // Space between text and icon
+                    IconButton(onClick = { showDialog = true }, modifier = Modifier.size(18.dp)) { // Adjust size as needed
+                        Icon(
+                            Icons.Filled.Info,
+                            contentDescription = stringResource(R.string.kernel),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+                Text(stringResource(R.string.version, k.version.take(120)))
+                Text(stringResource(R.string.kernel_type, k.gkiType))
+                Text(stringResource(R.string.sched, k.scheduler.take(30)))
             }
         }
     }
