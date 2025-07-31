@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -22,7 +23,9 @@ import id.xms.xtrakernelmanager.R
 @Composable
 fun AboutCard(
     blur: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    githubLink: String = stringResource(R.string.github_link),
+    telegramLink: String = stringResource(R.string.telegram_link),
 ) {
     var showCreditsDialog by remember { mutableStateOf(false) }
     GlassCard(blur, modifier) {
@@ -34,11 +37,12 @@ fun AboutCard(
         ) {
             Text(stringResource(id = R.string.about), style = MaterialTheme.typography.titleLarge)
             Text(stringResource(id = R.string.desc_about))
+            val uriHandler = LocalUriHandler.current
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                IconButton(onClick = { /* open Telegram */ }) {
+                IconButton(onClick = { uriHandler.openUri(telegramLink) }) {
                     Icon(Icons.AutoMirrored.Filled.Send, stringResource(id = R.string.telegram))
                 }
-                IconButton(onClick = { /* open GitHub */ }) {
+                IconButton(onClick = { uriHandler.openUri(githubLink) }) {
                     Icon(Icons.Default.Code, stringResource(id = R.string.github))
                 }
                 IconButton(onClick = { showCreditsDialog = true }) {
