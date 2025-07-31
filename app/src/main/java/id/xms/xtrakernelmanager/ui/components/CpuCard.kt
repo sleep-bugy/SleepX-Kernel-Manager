@@ -22,11 +22,11 @@ fun CpuCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text("CPU", style = MaterialTheme.typography.titleMedium)
-            Text("Cores: ${info.cores}")
-            Text("Governor: ${info.governor}")
-            Text("Temp: ${"%.1f".format(info.temp)}°C")
-            Text("Freq: ${info.freqs.joinToString { "$it MHz" }}")
+            Text("Central Proccessing Unit (CPU)", style = MaterialTheme.typography.titleLarge)
+            Text("${info.freqs.joinToString { "$it MHz" }}")
+            Text("CPU Cores: ${info.cores} Core")
+            Text("CPU Governor: ${info.governor}")
+            Text("Temperature: ${"%.1f".format(info.temp)}°C")
         }
     }
 }
