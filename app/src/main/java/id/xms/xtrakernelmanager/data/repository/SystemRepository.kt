@@ -17,6 +17,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.io.path.inputStream
 
+@Suppress("UNREACHABLE_CODE")
 @Singleton
 class SystemRepository @Inject constructor(
     private val context: Context
@@ -324,16 +325,29 @@ class SystemRepository @Inject constructor(
 
         val schedulerPath = "/sys/block/sda/queue/scheduler"
         val rawSchedulerOutput = readFileToString(schedulerPath, "I/O Scheduler String")
-        val parsedScheduler = if (rawSchedulerOutput != null && rawSchedulerOutput != "0" && rawSchedulerOutput.isNotBlank()) {
-            rawSchedulerOutput.substringAfterLast("[").substringBefore("]").trim().ifEmpty { VALUE_NOT_AVAILABLE }
+        var parsedSchedulerName = if (rawSchedulerOutput != null && rawSchedulerOutput != "0" && rawSchedulerOutput.isNotBlank()) {
+            rawSchedulerOutput.substringAfterLast("[").substringBefore("]").trim()
         } else {
             val altSchedulerPath = "/sys/block/mmcblk0/queue/scheduler"
             val altRawScheduler = readFileToString(altSchedulerPath, "Alt I/O Scheduler (mmcblk0)")
             if (altRawScheduler != null && altRawScheduler != "0" && altRawScheduler.isNotBlank()) {
-                altRawScheduler.substringAfterLast("[").substringBefore("]").trim().ifEmpty { VALUE_NOT_AVAILABLE }
+                altRawScheduler.substringAfterLast("[").substringBefore("]").trim()
             } else {
                 VALUE_NOT_AVAILABLE
             }
+        }
+        if (parsedSchedulerName.isEmpty()) parsedSchedulerName = VALUE_NOT_AVAILABLE
+
+        val parsedScheduler = when (parsedSchedulerName.lowercase()) {
+            "bfq" -> {
+                "BFQ (Budget Fair Queueing)"
+            }
+            "cfq" -> {
+                "CFQ (Completely Fair Queuing)"
+            }
+            else ->
+                if (parsedSchedulerName != VALUE_NOT_AVAILABLE) parsedSchedulerName else VALUE_NOT_AVAILABLE
+
         }
         Log.d(TAG, "Scheduler I/O Terparsir: $parsedScheduler (mentah utama: '$rawSchedulerOutput')")
 
