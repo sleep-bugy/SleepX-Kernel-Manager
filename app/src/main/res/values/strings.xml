@@ -1,8 +1,12 @@
 <resources>
     <string name="app_name">Xtra Kernel Manager</string>
     <string name="app_version">1.0.0-Alpha</string>
-    <string name="desc_about">Open-source kernel manager for rooted devices, I Just Want To Say KONTOL</string>
+    <string name="welcome_message">Welcome to Xtra Kernel Manager!</string>
+    <string name="desc_about">Thank you for choosing Xtra Kernel Manager. We hope you enjoy the experience!</string>
     <string name="about">About</string>
     <string name="telegram">Telegram</string>
     <string name="github">Github</string>
+    <string name="credits">Developer Xtra Kernel Manager</string>
+    <string name="credits_author">1. Gustyx-Power : Founder &amp; Developer\n2. Pavellc : Ui Supports</string>
+
 </resources>
