@@ -11,7 +11,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import id.xms.xtrakernelmanager.R
 
 @Composable
 fun AboutCard(
@@ -25,14 +27,14 @@ fun AboutCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text("About", style = MaterialTheme.typography.titleMedium)
-            Text("Open-source kernel manager for rooted devices, I Just Want To Say KONTOL")
+            Text(stringResource(id = R.string.about), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(id = R.string.desc_about))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 IconButton(onClick = { /* open Telegram */ }) {
-                    Icon(Icons.AutoMirrored.Filled.Send, "Telegram")
+                    Icon(Icons.AutoMirrored.Filled.Send, stringResource(id = R.string.telegram))
                 }
                 IconButton(onClick = { /* open GitHub */ }) {
-                    Icon(Icons.Default.Code, "GitHub")
+                    Icon(Icons.Default.Code, stringResource(id = R.string.github))
                 }
             }
         }
