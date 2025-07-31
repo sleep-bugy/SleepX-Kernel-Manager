@@ -304,12 +304,14 @@ class SystemRepository @Inject constructor(
                 "5.4" -> "GKI 2.0 (5.4)"
                 "4.19" -> "GKI 1.0 (4.19)"
                 "4.14" -> "GKI 1.0 (4.14)"
+                "4.9" -> "EAS (4.9)"
                 else -> {
                     when {
                         rawKernelVersionOutput.contains("android14-") -> "GKI 2.0 (Android 14 based)"
                         rawKernelVersionOutput.contains("android13-") -> "GKI 2.0 (Android 13 based)"
                         rawKernelVersionOutput.contains("android12-") -> "GKI 2.0 (Android 12 based)"
                         rawKernelVersionOutput.contains("android11-") -> "GKI 1.0 (Android 11 based)"
+                        rawKernelVersionOutput.contains("perf-")-> "EAS (Perf-based)"
                         else -> {
                             Log.d(TAG, "Tidak ada pola GKI yang cocok untuk versi Linux '$linuxKernelBaseVersion' atau string 'androidXX-'. Menganggap Non-GKI atau Unknown.")
                             if (linuxKernelBaseVersion != null) "Non-GKI ($linuxKernelBaseVersion)" else VALUE_UNKNOWN
