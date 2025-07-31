@@ -4,8 +4,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import id.xms.xtrakernelmanager.R
 
 @Composable
 fun BottomNavBar(navController: NavHostController, items: List<String>) {
@@ -15,10 +17,10 @@ fun BottomNavBar(navController: NavHostController, items: List<String>) {
     NavigationBar {
         items.forEach { screen ->
             val icon = when (screen) {
-                "Home"   -> Icons.Default.Home
-                "Tuning" -> Icons.Default.Build
-                "Terminal" -> Icons.Default.Terminal
-                "Info"   -> Icons.Default.Info
+                stringResource(R.string.home)   -> Icons.Default.Home
+                stringResource(R.string.tuning) -> Icons.Default.Build
+                stringResource(R.string.terminal) -> Icons.Default.Terminal
+                stringResource(R.string.info)   -> Icons.Default.Info
                 else     -> Icons.Default.Home
             }
             NavigationBarItem(
