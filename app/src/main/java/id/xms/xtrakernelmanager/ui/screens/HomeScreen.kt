@@ -34,11 +34,16 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .height(32.dp)
+                    .height(53.dp)
             ) {
 
                 TopAppBar(
-                    title = { Text("Xtra Kernel Manager") },
+                    title = {
+                        Text(
+                            "Xtra Kernel Manager",
+                            style = MaterialTheme.typography.headlineLarge
+                        )
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = if (blurOn) Color.Transparent else MaterialTheme.colorScheme.surface
                     ),
@@ -64,8 +69,8 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
             /* 1. CPU */
