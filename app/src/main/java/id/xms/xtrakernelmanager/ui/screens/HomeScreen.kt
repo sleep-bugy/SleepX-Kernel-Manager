@@ -13,9 +13,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -45,7 +45,7 @@ fun FadeInEffect(
     val visibleState = remember { MutableTransitionState(false) }
     visibleState.targetState = true // Trigger the animation
 
-    val transition = updateTransition(visibleState, label = "FadeInTransition")
+    val transition = rememberTransition(visibleState, label = "FadeInTransition")
     val alpha by transition.animateFloat(
         transitionSpec = { tween(durationMillis = 500) },
         label = "alpha"
@@ -87,6 +87,25 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
     val kernel = vm.kernelInfo
     val version = vm.appVersion
     var blurOn by rememberSaveable { mutableStateOf(true) }
+
+    // Shimmer animation for TopAppBar
+    val shimmerColors = listOf(
+        Color.White.copy(alpha = 0.0f),
+        Color.White.copy(alpha = 0.5f),
+        Color.White.copy(alpha = 0.0f)
+    )
+    val infiniteTransition = rememberInfiniteTransition(label = "topAppBarShimmer")
+    val translateAnim by infiniteTransition.animateFloat(
+        initialValue = -100f, // Start off-screen to the left
+        targetValue = 1000f, // End off-screen to the right (adjust based on title width)
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ), label = "topAppBarShimmerTranslate"
+    )
+    val shimmerBrush = Brush.linearGradient(
+        colors = shimmerColors,
+    )
     val fullTitle = stringResource(R.string.xtra_kernel_manager)
     var displayedTitle by remember { mutableStateOf("") }
 
@@ -109,15 +128,26 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .height(53.dp)
+                    .height(56.dp) // Standard TopAppBar height
             ) {
-
                 TopAppBar(
                     title = {
-                        Text(
-                            text = displayedTitle,
-                            style = MaterialTheme.typography.headlineLarge
-                        )
+                        Box {
+                            Text(
+                                text = displayedTitle,
+                                style = MaterialTheme.typography.headlineLarge
+                            )
+                            // Apply shimmer effect over the text
+                            androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
+                                drawIntoCanvas {
+                                    drawRect(
+                                        brush = shimmerBrush,
+                                        topLeft = androidx.compose.ui.geometry.Offset(translateAnim, 0f),
+                                        size = androidx.compose.ui.geometry.Size(100f, size.height) // Adjust width of shimmer
+                                    )
+                                }
+                            }
+                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = if (blurOn) Color.Transparent else MaterialTheme.colorScheme.surface
