@@ -13,15 +13,15 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFFEADDFF),
-    secondary = Color(0xFFD0BCFF),
-    tertiary = Color(0xFFB69DF8)
+    primary = Color(0xFF40C4FF), // Light Blue A200
+    secondary = Color(0xFF00B0FF), // Light Blue A400
+    tertiary = Color(0xFF0091EA)  // Light Blue A700
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF65558F),
-    secondary = Color(0xFF625B71),
-    tertiary = Color(0xFF7D5260)
+    primary = Color(0xFF0277BD), // Light Blue 800
+    secondary = Color(0xFF0288D1), // Light Blue 700
+    tertiary = Color(0xFF039BE5)  // Light Blue 600
 )
 
 @Composable
