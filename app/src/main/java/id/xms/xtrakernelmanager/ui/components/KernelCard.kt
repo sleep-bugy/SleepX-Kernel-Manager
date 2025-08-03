@@ -7,7 +7,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -66,11 +68,18 @@ fun KernelCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.kernel), style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.width(8.dp)) // Space between text and icon
+                    Icon(
+                        contentDescription = stringResource(R.string.kernel),
+                        painter = painterResource(id = R.drawable.kernel),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp) // Increased size
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     IconButton(onClick = { showDialog = true }, modifier = Modifier.size(18.dp)) { // Adjust size as needed
                         Icon(
                             Icons.Filled.Info,
-                            contentDescription = stringResource(R.string.kernel),
-                            tint = MaterialTheme.colorScheme.onSurface
+                            contentDescription = stringResource(R.string.kernel_information),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
