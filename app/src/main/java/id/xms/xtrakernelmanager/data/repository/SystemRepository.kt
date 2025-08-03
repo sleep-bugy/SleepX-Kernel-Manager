@@ -418,6 +418,41 @@ class SystemRepository @Inject constructor(
 
     fun getSystemInfo(): SystemInfo {
         Log.d(TAG, "Mengambil SystemInfo (API based)...")
+
+        // Mencoba mendapatkan SOC dari properti sistem jika tersedia
+        var socName = VALUE_UNKNOWN
+        try {
+            val process = Runtime.getRuntime().exec("getprop ro.soc.manufacturer")
+            val manufacturer = BufferedReader(InputStreamReader(process.inputStream)).readLine()?.trim()
+            process.waitFor()
+            process.destroy()
+
+            val processModel = Runtime.getRuntime().exec("getprop ro.soc.model")
+            val model = BufferedReader(InputStreamReader(processModel.inputStream)).readLine()?.trim()
+            processModel.waitFor()
+            processModel.destroy()
+
+            if (!manufacturer.isNullOrBlank() && !model.isNullOrBlank()) {
+                // Penyesuaian khusus untuk model QTI SM7475
+                if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM7475", ignoreCase = true)) {
+                    socName = "Qualcomm® Snapdragon™ 7+ Gen 2"
+                // Penyesuaian khusus untuk model QTI SM8650
+                } else if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM8650", ignoreCase = true)) {
+                    socName = "Qualcomm® Snapdragon™ 8 Gen 3"
+                // Penyesuaian khusus untuk model QTI SM8635
+                } else if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM8635", ignoreCase = true)) {
+                    socName = "Qualcomm® Snapdragon™ 8s Gen 3"
+                // Penyesuaian khusus untuk model QTI SDM845
+                } else if (manufacturer.equals("QTI", ignoreCase = true) && (model.equals("SDM845", ignoreCase = true) || model.equals("sdm845", ignoreCase = true) )) {
+                    socName = "Qualcomm® Snapdragon™ 845"
+                } else {
+                    socName = "$manufacturer $model"
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Gagal mendapatkan info SOC dari getprop", e)
+        }
+
         return SystemInfo(
             model = android.os.Build.MODEL,
             codename = android.os.Build.DEVICE,
