@@ -5,8 +5,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.util.Log
-import androidx.compose.ui.geometry.isEmpty
-import androidx.compose.ui.graphics.vector.path
 import id.xms.xtrakernelmanager.data.model.*
 import java.io.File
 import java.io.FileNotFoundException
@@ -15,7 +13,7 @@ import java.io.InputStreamReader
 import java.io.BufferedReader
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.io.path.inputStream
+
 
 @Suppress("UNREACHABLE_CODE")
 @Singleton
@@ -458,7 +456,8 @@ class SystemRepository @Inject constructor(
             codename = android.os.Build.DEVICE,
             androidVersion = android.os.Build.VERSION.RELEASE,
             sdk = android.os.Build.VERSION.SDK_INT,
-            buildNumber = android.os.Build.DISPLAY
+            fingerprint = android.os.Build.FINGERPRINT,
+            soc = socName
         ).also { Log.d(TAG, "SystemInfo: $it") }
     }
 }
