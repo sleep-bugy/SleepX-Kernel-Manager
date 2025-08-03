@@ -20,7 +20,7 @@ fun InfoScreen(vm: InfoViewModel = hiltViewModel()) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        kernel?.let { item { InfoCard(it) } }
-        system?.let { item { SystemCard(it) } }
+        kernel?.let { item { InfoCard(it, blur = true ) } }
+        system?.let { item { SystemCard(it, blur = true ) } }
     }
 }
