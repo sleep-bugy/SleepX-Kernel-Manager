@@ -7,5 +7,7 @@ data class SystemInfo(
     val codename: String,
     val androidVersion: String,
     val sdk: Int,
-    val buildNumber: String
+    val soc: String,
+    val fingerprint: String,
+
 )
