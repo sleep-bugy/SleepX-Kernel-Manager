@@ -1,18 +1,21 @@
 package id.xms.xtrakernelmanager.ui.components
 
 import android.os.Build
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 
 @Composable
@@ -26,6 +29,7 @@ fun GlassCard(
 ) {
     val finalBackgroundColor: Color
     val backgroundBrush: Brush
+    val strokeColor = Color(0xFFADD8E6) // Soft blue color
 
     if (isGlassEffectEnabled) {
         finalBackgroundColor = Color.Transparent
@@ -50,7 +54,8 @@ fun GlassCard(
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = finalBackgroundColor
-        )
+        ),
+        border = BorderStroke(2.dp, strokeColor)
     ) {
         Box(
             modifier = Modifier
