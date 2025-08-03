@@ -1,6 +1,9 @@
 package id.xms.xtrakernelmanager.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,11 +15,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import id.xms.xtrakernelmanager.R
@@ -87,6 +92,7 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
     val kernel = vm.kernelInfo
     val version = vm.appVersion
     var blurOn by rememberSaveable { mutableStateOf(true) }
+    var showFabMenu by remember { mutableStateOf(false) }
 
     // Shimmer animation for TopAppBar
     val shimmerColors = listOf(
@@ -123,6 +129,119 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
     }
 
     Scaffold(
+        floatingActionButton = {
+            Column(horizontalAlignment = Alignment.End) {
+                AnimatedVisibility(visible = showFabMenu) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Card(
+                                shape = MaterialTheme.shapes.medium,
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f))
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.reboot_system),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            SmallFloatingActionButton(onClick = { Runtime.getRuntime().exec(arrayOf("su", "-c", "reboot")) }) {
+                                Icon(Icons.Filled.Refresh, "Reboot System")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Card(
+                                shape = MaterialTheme.shapes.medium,
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f))
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.reboot_systemui),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            SmallFloatingActionButton(onClick = { Runtime.getRuntime().exec(arrayOf("su", "-c", "killall com.android.systemui")) }) {
+                                Icon(Icons.Filled.SettingsApplications, "Reboot SystemUI")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Card(
+                                shape = MaterialTheme.shapes.medium,
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f))
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.reboot_bootloader),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            SmallFloatingActionButton(onClick = { Runtime.getRuntime().exec(arrayOf("su", "-c", "reboot bootloader")) }) {
+                                Icon(Icons.Filled.Build, "Reboot Bootloader")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Card(
+                                shape = MaterialTheme.shapes.medium,
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f))
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.reboot_recovery),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            SmallFloatingActionButton(onClick = { Runtime.getRuntime().exec(arrayOf("su", "-c", "reboot recovery")) }) {
+                                Icon(Icons.Filled.SettingsBackupRestore, "Reboot Recovery")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Card(
+                                shape = MaterialTheme.shapes.medium,
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f))
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.power_off),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            SmallFloatingActionButton(onClick = { Runtime.getRuntime().exec(arrayOf("su", "-c", "reboot -p")) }) {
+                                Icon(Icons.Filled.PowerSettingsNew, "Power Off")
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                FloatingActionButton(
+                    onClick = { showFabMenu = !showFabMenu },
+                ) {
+                    val iconRotation by animateFloatAsState(
+                        targetValue = if (showFabMenu) 180f else 0f,
+                        animationSpec = tween(durationMillis = 300), label = "fabIconRotation"
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.PowerOff,
+                        contentDescription = "Toggle FAB Menu",
+                        modifier = Modifier.graphicsLayer(rotationZ = iconRotation)
+                    )
+                }
+            }
+        },
+        floatingActionButtonPosition = FabPosition.End,
+
         topBar = {
             Box(
                 modifier = Modifier
@@ -135,7 +254,10 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
                         Box {
                             Text(
                                 text = displayedTitle,
-                                style = MaterialTheme.typography.headlineLarge
+                                style = MaterialTheme.typography.headlineLarge,
+                                modifier = Modifier
+                                    .background(Color(0xFF1E777F).copy(alpha = 0.7f), shape = MaterialTheme.shapes.small) // Warna biru tua
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                             // Apply shimmer effect over the text
                             androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
