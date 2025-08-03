@@ -8,12 +8,16 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import id.xms.xtrakernelmanager.data.model.BatteryInfo
 import id.xms.xtrakernelmanager.data.model.DeepSleepInfo
 import id.xms.xtrakernelmanager.data.model.MemoryInfo
+import id.xms.xtrakernelmanager.R
 
 @Composable
 fun MergedSystemCard(
@@ -37,9 +41,15 @@ fun MergedSystemCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("System Info", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("System Info", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    if (!expanded){
+                        Badge { Text(if (rooted) "Phone Is Rooted" else "Unrooted Phone", style = MaterialTheme.typography.labelMedium) }
+                    }
+                }
                 Icon(
                     imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = if (expanded) "Collapse" else "Expand"
@@ -48,7 +58,10 @@ fun MergedSystemCard(
 
             AnimatedVisibility(visible = expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Battery Status", style = MaterialTheme.typography.titleMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Battery Status", style = MaterialTheme.typography.titleMedium)
+                        Icon(painterResource(id = R.drawable.battery), contentDescription = "Battery Icon")
+                    }
 
                     // Battery
                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -76,13 +89,51 @@ fun MergedSystemCard(
                     Divider(Modifier.padding(vertical = 8.dp))
 
                     // RAM
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("RAM Used:"); Text("${mem.used / 1_000_000} MB")
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("RAM Usage", style = MaterialTheme.typography.titleMedium)
+                        //Icon(painterResource(id = R.drawable.memory_chip), contentDescription = "RAM Icon")
                     }
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("RAM Total:"); Text("${mem.total / 1_000_000} MB")
-                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val usedPercentage = (mem.used.toFloat() / mem.total.toFloat() * 100).toInt()
+                        val freePercentage = ((mem.total - mem.used).toFloat() / mem.total.toFloat() * 100).toInt()
 
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("Used: ${mem.used / 1_000_000} MB", style = MaterialTheme.typography.labelSmall)
+                            Badge(
+                                containerColor = when {
+                                    usedPercentage > 75 -> MaterialTheme.colorScheme.errorContainer
+                                    usedPercentage > 50 -> MaterialTheme.colorScheme.tertiaryContainer
+                                    else -> MaterialTheme.colorScheme.primaryContainer
+                                }
+                            ) { Text("$usedPercentage%", style = MaterialTheme.typography.labelSmall) }
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("Free: ${(mem.total - mem.used) / 1_000_000} MB", style = MaterialTheme.typography.labelSmall)
+                            Badge(
+                                containerColor = when {
+                                    freePercentage < 25 -> MaterialTheme.colorScheme.errorContainer
+                                    freePercentage < 50 -> MaterialTheme.colorScheme.tertiaryContainer
+                                    else -> MaterialTheme.colorScheme.primaryContainer
+                                }
+                            ) { Text("$freePercentage%", style = MaterialTheme.typography.labelSmall) }
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("Total: ${mem.total / 1_000_000} MB", style = MaterialTheme.typography.labelSmall)
+                            Badge(containerColor = MaterialTheme.colorScheme.secondaryContainer) { Text("100%", style = MaterialTheme.typography.labelSmall) }
+                        }
+                    }
                     Divider(Modifier.padding(vertical = 8.dp))
 
                     // Root & Version
