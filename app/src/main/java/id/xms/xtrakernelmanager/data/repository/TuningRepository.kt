@@ -13,10 +13,27 @@ import javax.inject.Singleton
 class TuningRepository @Inject constructor() {
 
     private val thermalSysfsNode = "/sys/class/thermal/thermal_message/sconfig"
-    private val defaultThermalNodePermissions = "0664"
-    private val temporaryWritablePermissions = "0666"
+    private val defaultThermalNodePermissions = "0644"
+    private val temporaryWritablePermissions = "0777"
 
-    /* ---------- Thermal Control (Strategi FKM) ---------- */
+    private val cpuBaseSysfsPath = "/sys/devices/system/cpu"
+
+    private val gpuBaseSysfsPath = "/sys/class/kgsl/kgsl-3d0"
+    private val gpuGovPath = "$gpuBaseSysfsPath/devfreq/governor"
+    private val gpuAvailableGovsPath = "$gpuBaseSysfsPath/devfreq/available_governors"
+    private val gpuMinFreqPath = "$gpuBaseSysfsPath/devfreq/min_freq"
+    private val gpuMaxFreqPath = "$gpuBaseSysfsPath/devfreq/max_freq"
+    private val gpuAvailableFreqsPath = "$gpuBaseSysfsPath/devfreq/available_frequencies"
+
+    private val gpuCurrentPowerLevelPath = "$gpuBaseSysfsPath/default_pwrlevel"
+    private val gpuMinPowerLevelPath = "$gpuBaseSysfsPath/min_pwrlevel"
+    private val gpuMaxPowerLevelPath = "$gpuBaseSysfsPath/max_pwrlevel"
+    private val defaultPowerLevelNodePermissions = "0644"
+    private val temporaryWritablePowerLevelPermissions = "0777"
+
+    private val swappinessPath = "/proc/sys/vm/swappiness"
+
+
 
     fun setThermalModeIndex(modeIndex: Int): Flow<Boolean> = flow {
         val commands = listOf(
@@ -24,242 +41,358 @@ class TuningRepository @Inject constructor() {
             "echo $modeIndex > $thermalSysfsNode",
             "chmod $defaultThermalNodePermissions $thermalSysfsNode"
         )
-
-        Log.d("TuningRepository", "[R/W] Attempting to set thermal mode index to $modeIndex using FKM strategy.")
-        Log.d("TuningRepository", "[R/W] Commands: \n${commands.joinToString("\n")}")
-
+        Log.d("TuningRepo_Thermal", "Set thermal index to $modeIndex")
         try {
-            val chmodWritableResult = Shell.cmd(commands[0]).exec()
-            if (!chmodWritableResult.isSuccess) {
-                Log.e(
-                    "TuningRepository",
-                    "[R/W] Failed at chmod writable step. Cmd: '${commands[0]}'. Code: ${chmodWritableResult.code}. Err: ${chmodWritableResult.err.joinToString("\n")}. Out: ${chmodWritableResult.out.joinToString("\n")}"
-                )
-                emit(false)
-                return@flow
+            Shell.cmd(commands[0]).exec().let {
+                if (!it.isSuccess) {
+                    Log.e("TuningRepo_Thermal", "Chmod writable failed: ${it.err.joinToString()}")
+                    emit(false); return@flow
+                }
             }
-            Log.i("TuningRepository", "[R/W] Chmod writable success: ${commands[0]}")
-
             val echoResult = Shell.cmd(commands[1]).exec()
-            var valueSuccessfullySet = false
+            var success = false
             if (echoResult.isSuccess) {
-                // Verifikasi nilai
-                val verificationResult = Shell.cmd("cat $thermalSysfsNode").exec()
-                val currentValue = verificationResult.out.firstOrNull()?.trim()
-                if (verificationResult.isSuccess && currentValue == modeIndex.toString()) {
-                    Log.i("TuningRepository", "[R/W] Successfully wrote and verified value $modeIndex. Cmd: '${commands[1]}'")
-                    valueSuccessfullySet = true
+                val verifyResult = Shell.cmd("cat $thermalSysfsNode").exec()
+                if (verifyResult.isSuccess && verifyResult.out.firstOrNull()?.trim() == modeIndex.toString()) {
+                    success = true
                 } else {
-                    Log.w(
-                        "TuningRepository",
-                        "[R/W sconfig] Echo command '${commands[1]}' reported success (code ${echoResult.code}), but verification failed. Current value: '$currentValue', Expected: '$modeIndex'. Echo Err: ${echoResult.err.joinToString("\n")}. Echo Out: ${echoResult.out.joinToString("\n")}. Cat Err: ${verificationResult.err.joinToString("\n")}"
-                    )
+                    Log.w("TuningRepo_Thermal", "Verification failed. Current: ${verifyResult.out.firstOrNull()}, Expected: $modeIndex")
                 }
             } else {
-                Log.e(
-                    "TuningRepository",
-                    "[R/W sconfig] Failed at echo step. Cmd: '${commands[1]}'. Code: ${echoResult.code}. Err: ${echoResult.err.joinToString("\n")}. Out: ${echoResult.out.joinToString("\n")}"
-                )
+                Log.e("TuningRepo_Thermal", "Echo failed: ${echoResult.err.joinToString()}")
             }
-
-            // Selalu coba kembalikan izin, bahkan jika echo gagal, untuk keamanan.
-            val chmodRestoreResult = Shell.cmd(commands[2]).exec()
-            if (!chmodRestoreResult.isSuccess) {
-                Log.w(
-                    "TuningRepository",
-                    "[Thermal FKM Style] Failed to restore permissions. Cmd: '${commands[2]}'. Code: ${chmodRestoreResult.code}. Err: ${chmodRestoreResult.err.joinToString("\n")}. Out: ${chmodRestoreResult.out.joinToString("\n")}"
-                )
-
-            } else {
-                Log.i("TuningRepository", "[R/W] Restored permissions success: ${commands[2]}")
+            Shell.cmd(commands[2]).exec().let {
+                if (!it.isSuccess) Log.w("TuningRepo_Thermal", "Chmod restore failed: ${it.err.joinToString()}")
             }
-
-            emit(valueSuccessfullySet)
-
+            emit(success)
         } catch (e: Exception) {
-            Log.e("TuningRepository", "[R/W] ExceptionMthermal set: ${e.message}", e)
-            emit(false)
+            Log.e("TuningRepo_Thermal", "Exception: ${e.message}", e); emit(false)
         }
     }.flowOn(Dispatchers.IO)
 
-
     fun getCurrentThermalModeIndex(): Flow<Int> = flow {
-        val command = "cat $thermalSysfsNode"
-        Log.d("TuningRepository", "[Thermal Read] Attempting to read thermal mode index with libsu: '$command'")
+        Log.d("TuningRepo_Thermal", "Get current thermal index")
         try {
-            val result = Shell.cmd(command).exec()
+            val result = Shell.cmd("cat $thermalSysfsNode").exec()
             if (result.isSuccess && result.out.isNotEmpty()) {
-                val currentValueString = result.out.first().trim()
-                val currentValue = currentValueString.toIntOrNull()
-                if (currentValue != null) {
-                    emit(currentValue)
-                    Log.d("TuningRepository", "[Thermal Read] Current thermal mode index from $thermalSysfsNode: $currentValue")
-                } else {
-                    Log.e("TuningRepository", "[Thermal Read] Failed to parse thermal mode index from: '$currentValueString' at $thermalSysfsNode. Raw output: ${result.out.joinToString("\\n")}")
-                    emit(-1)
-                }
+                result.out.first().trim().toIntOrNull()?.let { emit(it) } ?: emit(-1)
             } else {
-                Log.e(
-                    "TuningRepository",
-                    "[Thermal Read] Failed to read current thermal mode index from $thermalSysfsNode. Command: '$command'. Code: ${result.code}. Error: ${result.err.joinToString("\n")}. Stdout: ${result.out.joinToString("\n")}"
-                )
+                Log.e("TuningRepo_Thermal", "Read failed. Code: ${result.code}, Err: ${result.err.joinToString()}")
                 emit(-1)
             }
         } catch (e: Exception) {
-            Log.e("TuningRepository", "[Thermal Read] Exception reading current thermal mode index from $thermalSysfsNode with command '$command': ${e.message}", e)
-            emit(-1)
+            Log.e("TuningRepo_Thermal", "Exception: ${e.message}", e); emit(-1)
         }
     }.flowOn(Dispatchers.IO)
 
-    fun setCpuGov(cluster: String, gov: String) =
-        runShellCommand("echo $gov > /sys/devices/system/cpu/$cluster/cpufreq/scaling_governor")
+
+    /* ---------- CPU Control ---------- */
+
+    fun setCpuGov(cluster: String, gov: String) {
+        runShellCommand("echo $gov > $cpuBaseSysfsPath/$cluster/cpufreq/scaling_governor")
+    }
 
     fun setCpuFreq(cluster: String, min: Int, max: Int) {
-        runShellCommand("echo $min > /sys/devices/system/cpu/$cluster/cpufreq/scaling_min_freq")
-        runShellCommand("echo $max > /sys/devices/system/cpu/$cluster/cpufreq/scaling_max_freq")
+        runShellCommand("echo $min > $cpuBaseSysfsPath/$cluster/cpufreq/scaling_min_freq")
+        runShellCommand("echo $max > $cpuBaseSysfsPath/$cluster/cpufreq/scaling_max_freq")
     }
 
     fun getCpuGov(cluster: String): Flow<String> = flow {
-        val result = readShellCommand("cat /sys/devices/system/cpu/$cluster/cpufreq/scaling_governor")
-        emit(result.trim())
+        emit(readShellCommand("cat $cpuBaseSysfsPath/$cluster/cpufreq/scaling_governor").trim())
     }.flowOn(Dispatchers.IO)
 
     fun getAvailableCpuGovernors(cluster: String): Flow<List<String>> = flow {
-        val path = "/sys/devices/system/cpu/$cluster/cpufreq/scaling_available_governors"
+        val path = "$cpuBaseSysfsPath/$cluster/cpufreq/scaling_available_governors"
         try {
-            val command = "cat $path"
-            val governorsString = readShellCommand(command).trim()
-            if (governorsString.isNotEmpty()) {
-                val governorsList = governorsString.split(" ").filter { it.isNotBlank() }.sorted()
-                emit(governorsList)
-            } else {
-                Log.w("TuningRepository", "No available CPU governors found or error reading for $cluster from $path.")
-                emit(emptyList())
-            }
+            val result = readShellCommand("cat $path").trim()
+            if (result.isNotEmpty()) emit(result.split(" ").filter { it.isNotBlank() }.sorted())
+            else emit(emptyList())
         } catch (e: Exception) {
-            Log.e("TuningRepository", "Exception reading available CPU governors for $cluster: ${e.message}", e)
-            emit(emptyList())
+            Log.e("TuningRepo_CPU", "Err getAvailableCpuGovernors $cluster: ${e.message}", e); emit(emptyList())
         }
     }.flowOn(Dispatchers.IO)
 
     fun getCpuFreq(cluster: String): Flow<Pair<Int, Int>> = flow {
-        val minPath = "/sys/devices/system/cpu/$cluster/cpufreq/scaling_min_freq"
-        val maxPath = "/sys/devices/system/cpu/$cluster/cpufreq/scaling_max_freq"
-        val min = readShellCommand("cat $minPath").trim().toIntOrNull() ?: 0
-        val max = readShellCommand("cat $maxPath").trim().toIntOrNull() ?: 0
+        val min = readShellCommand("cat $cpuBaseSysfsPath/$cluster/cpufreq/scaling_min_freq").trim().toIntOrNull() ?: 0
+        val max = readShellCommand("cat $cpuBaseSysfsPath/$cluster/cpufreq/scaling_max_freq").trim().toIntOrNull() ?: 0
         emit(min to max)
     }.flowOn(Dispatchers.IO)
 
     fun getAvailableCpuFrequencies(cluster: String): Flow<List<Int>> = flow {
-        val path = "/sys/devices/system/cpu/$cluster/cpufreq/scaling_available_frequencies"
+        val path = "$cpuBaseSysfsPath/$cluster/cpufreq/scaling_available_frequencies"
         try {
-            val command = "cat $path"
-            val frequenciesString = readShellCommand(command).trim()
-            if (frequenciesString.isNotEmpty()) {
-                val frequenciesList = frequenciesString.split(" ")
-                    .mapNotNull { it.toIntOrNull() }
-                    .sorted()
-                emit(frequenciesList)
-            } else {
-                Log.w("TuningRepository", "No available CPU frequencies found or error reading for $cluster from $path.")
-                emit(emptyList())
-            }
+            val result = readShellCommand("cat $path").trim()
+            if (result.isNotEmpty()) emit(result.split(" ").mapNotNull { it.toIntOrNull() }.sorted())
+            else emit(emptyList())
         } catch (e: Exception) {
-            Log.e("TuningRepository", "Exception reading available CPU frequencies for $cluster: ${e.message}", e)
-            emit(emptyList())
+            Log.e("TuningRepo_CPU", "Err getAvailableCpuFrequencies $cluster: ${e.message}", e); emit(emptyList())
         }
     }.flowOn(Dispatchers.IO)
 
 
-    fun setGpuGov(gov: String) =
-        runShellCommand("echo $gov > /sys/class/kgsl/kgsl-3d0/devfreq/governor")
+    /* ---------- GPU Control ---------- */
 
+    fun setGpuGov(gov: String) {
+        runShellCommand("echo $gov > $gpuGovPath")
+    }
+
+    @Deprecated("Use setGpuMinFreq and setGpuMaxFreq individually", ReplaceWith("setGpuMinFreq(min); setGpuMaxFreq(max)"))
     fun setGpuFreq(min: Int, max: Int) {
-        runShellCommand("echo $min > /sys/class/kgsl/kgsl-3d0/devfreq/min_freq")
-        runShellCommand("echo $max > /sys/class/kgsl/kgsl-3d0/devfreq/max_freq")
+        setGpuMinFreq(min)
+        setGpuMaxFreq(max)
+    }
+
+    fun setGpuMinFreq(freq: Int) {
+        runShellCommand("echo ${freq * 1000} > $gpuMinFreqPath")
+    }
+
+    fun setGpuMaxFreq(freq: Int) {
+        runShellCommand("echo ${freq * 1000} > $gpuMaxFreqPath")
     }
 
     fun getGpuGov(): Flow<String> = flow {
-        val result = readShellCommand("cat /sys/class/kgsl/kgsl-3d0/devfreq/governor")
-        emit(result.trim())
+        emit(readShellCommand("cat $gpuGovPath").trim())
     }.flowOn(Dispatchers.IO)
-
     fun getAvailableGpuGovernors(): Flow<List<String>> = flow {
-        val path = "/sys/class/kgsl/kgsl-3d0/devfreq/available_governors"
         try {
-            val command = "cat $path"
-            val governorsString = readShellCommand(command).trim()
-            if (governorsString.isNotEmpty()){
-                val governorsList = governorsString.split(" ").filter { it.isNotBlank() }.sorted()
-                emit(governorsList)
-            } else {
-                Log.w("TuningRepository", "No available GPU governors found or error reading from $path.")
+            val result = readShellCommand("cat $gpuAvailableGovsPath").trim()
+            if (result.isNotEmpty()) emit(result.split(" ").filter { it.isNotBlank() }.sorted()) //
+            else {
+                Log.w("TuningRepo_GPU", "No available GPU governors found or error reading from $gpuAvailableGovsPath.")
                 emit(emptyList())
             }
         } catch (e: Exception) {
-            Log.e("TuningRepository", "Exception reading available GPU governors: ${e.message}", e)
+            Log.e("TuningRepo_GPU", "Exception reading available GPU governors: ${e.message}", e)
             emit(emptyList())
         }
     }.flowOn(Dispatchers.IO)
 
     fun getGpuFreq(): Flow<Pair<Int, Int>> = flow {
-        val min = readShellCommand("cat /sys/class/kgsl/kgsl-3d0/devfreq/min_freq").trim().toIntOrNull() ?: 0
-        val max = readShellCommand("cat /sys/class/kgsl/kgsl-3d0/devfreq/max_freq").trim().toIntOrNull() ?: 0
-        emit(min to max)
+        val minKHz = readShellCommand("cat $gpuMinFreqPath").trim().toIntOrNull() ?: 0
+        val maxKHz = readShellCommand("cat $gpuMaxFreqPath").trim().toIntOrNull() ?: 0
+        emit((minKHz / 1000) to (maxKHz / 1000))
     }.flowOn(Dispatchers.IO)
 
+    fun getAvailableGpuFrequencies(): Flow<List<Int>> = flow {
+        try {
+            val command = "cat $gpuAvailableFreqsPath"
+            val frequenciesString = readShellCommand(command).trim()
+            if (frequenciesString.isNotEmpty()) {
+                val frequenciesList = frequenciesString.split(" ")
+                    .mapNotNull { it.trim().toIntOrNull() }
+                    .map { it / 1000 }
+                    .sorted()
+                emit(frequenciesList)
+            } else {
+                Log.w("TuningRepo_GPU", "No available GPU frequencies found or error reading from $gpuAvailableFreqsPath.")
+                emit(emptyList())
+            }
+        } catch (e: Exception) {
+            Log.e("TuningRepo_GPU", "Exception reading available GPU frequencies: ${e.message}", e)
+            emit(emptyList())
+        }
+    }.flowOn(Dispatchers.IO)
 
-    fun setSwappiness(value: Int) =
-        runShellCommand("echo $value > /proc/sys/vm/swappiness")
+    fun getGpuPowerLevelRange(): Flow<Pair<Float, Float>> = flow {
+            val min = readShellCommand("cat $gpuMinPowerLevelPath").trim().toFloatOrNull() ?: 0f
+            val max = readShellCommand("cat $gpuMaxPowerLevelPath").trim().toFloatOrNull() ?: 0f
+            if (max > min) emit(min to max) else emit (0f to 0f)
+
+
+            val levelsString = readShellCommand("cat /sys/class/kgsl/kgsl-3d0/default_pwrlevel").trim()
+            if (levelsString.isNotEmpty()) {
+                val levels = levelsString.split(" ").mapNotNull { it.toFloatOrNull() }.sorted()
+                if (levels.isNotEmpty()) emit(levels.first() to levels.last())
+                else emit(0f to 0f)
+            } else {
+                emit(0f to 0f)
+            }
+        Log.w("TuningRepo_GPU", "getGpuPowerLevelRange() is using a placeholder. VERIFY AND IMPLEMENT for your kernel.")
+
+        val knownMinLevel = 0f
+        val knownMaxLevel = 12f
+        if (knownMaxLevel > knownMinLevel) {
+            emit(knownMinLevel to knownMaxLevel)
+        } else {
+
+            val minPl = readShellCommand("cat $gpuMinPowerLevelPath").trim().toFloatOrNull()
+            val maxPl = readShellCommand("cat $gpuMaxPowerLevelPath").trim().toFloatOrNull()
+            if (minPl != null && maxPl != null && maxPl > minPl) {
+                emit(minPl to maxPl)
+            } else {
+                Log.w("TuningRepo_GPU", "Cannot determine GPU power level range from sysfs ($gpuMinPowerLevelPath, $gpuMaxPowerLevelPath) or hardcoded values. Emitting 0f to 0f.")
+                emit(0f to 0f)
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    fun getCurrentGpuPowerLevel(): Flow<Float> = flow {
+        try {
+            val command = "cat $gpuCurrentPowerLevelPath"
+            val levelString = readShellCommand(command).trim()
+            val level = levelString.toFloatOrNull()
+            if (level != null) {
+                emit(level)
+            } else {
+                Log.w("TuningRepo_GPU", "Failed to parse current GPU power level from '$levelString' at $gpuCurrentPowerLevelPath. Emitting 0f.")
+                emit(5f)
+            }
+        } catch (e: Exception) {
+            Log.e("TuningRepo_GPU", "Exception reading current GPU power level: ${e.message}", e)
+            emit(5f)
+        }
+    }.flowOn(Dispatchers.IO)
+
+    fun setGpuPowerLevel(level: Float) {
+        Log.d("TuningRepo_GPU", "Setting GPU power level to $level (raw float, kernel might need int)")
+        val valueToSet = level.toInt()
+        val commands = listOf(
+            "chmod $temporaryWritablePowerLevelPermissions $gpuCurrentPowerLevelPath",
+            "echo $valueToSet > $gpuCurrentPowerLevelPath",
+            "chmod $defaultPowerLevelNodePermissions $gpuCurrentPowerLevelPath"
+        )
+
+        try {
+            Shell.cmd(commands[0]).exec().let {
+                if (!it.isSuccess) Log.w("TuningRepo_GPU", "Chmod writable for power level failed: ${it.err.joinToString()}")
+            }
+            runShellCommand(commands[1])
+        } finally {
+            Shell.cmd(commands[2]).exec().let {
+                if (!it.isSuccess) Log.w("TuningRepo_GPU", "Chmod restore for power level failed: ${it.err.joinToString()}")
+            }
+        }
+    }
+
+
+    /* ---------- Swappiness ---------- */
+    fun setSwappiness(value: Int) {
+        runShellCommand("echo $value > $swappinessPath")
+    }
 
     fun getSwappiness(): Flow<Int> = flow {
         try {
-            val command = "cat /proc/sys/vm/swappiness"
-            val resultString = readShellCommand(command).trim()
-            val result = resultString.toIntOrNull()
-            if (result != null) {
-                emit(result)
-            } else {
-                Log.e("TuningRepository", "Failed to parse swappiness value from '$resultString'. Command: '$command'")
-                emit(60) // Emit default 60 jika gagal parse
-            }
+            val result = readShellCommand("cat $swappinessPath").trim().toIntOrNull()
+            if (result != null) emit(result)
+            else { Log.e("TuningRepo_VM", "Failed parse swappiness"); emit(60) }
         } catch (e: Exception) {
-            Log.e("TuningRepository", "Exception reading swappiness: ${e.message}", e)
-            emit(60) // Default value on error
+            Log.e("TuningRepo_VM", "Exception getSwappiness: ${e.message}", e); emit(60)
         }
     }.flowOn(Dispatchers.IO)
 
 
-    /* ---------- Private Shell Helpers (Berbasis libsu, digunakan untuk NON-THERMAL) ---------- */
+    /* ---------- OpenGLES Driver Info ---------- */
+    fun getOpenGlesDriver(): Flow<String> = flow {
+        Log.d("TuningRepo_GLES", "Attempting to get OpenGLES driver version using dumpsys SurfaceFlinger")
+        try {
+            val command = "dumpsys SurfaceFlinger | grep -i 'GLES:'"
+            val result = Shell.cmd(command).exec()
+            if (result.isSuccess && result.out.isNotEmpty()) {
+                val fullLine = result.out.firstOrNull()?.trim() ?: ""
+                val glesInfo = fullLine.substringAfter("GLES:").trim()
+                emit(glesInfo.ifEmpty { "N/A (Info not found in dumpsys)" })
+            } else {
+                Log.w("TuningRepo_GLES", "dumpsys SurfaceFlinger command failed or returned empty. Code: ${result.code}, Err: ${result.err.joinToString()}")
+                val propResult = readShellCommand("getprop ro.opengles.version").trim()
+                if (propResult.isNotEmpty()) emit("GLES API Version: $propResult (Driver specific info N/A)")
+                emit("N/A (Could not determine or access driver info)")
+            }
+        } catch (e: Exception) {
+            Log.e("TuningRepo_GLES", "Exception getting GLES Driver Version: ${e.message}", e)
+            emit("N/A (Error)")
+        }
+    }.flowOn(Dispatchers.IO)
 
+    /* ---------- GPU Renderer ---------- */
+    fun getGpuRenderer(): Flow<String> = flow {
+        Log.d("TuningRepo_GPU", "Getting current GPU renderer")
+        try {
+            val result = readShellCommand("getprop debug.hwui.renderer").trim()
+            emit(result.ifEmpty { "OpenGL" })
+        } catch (e: Exception) {
+            Log.e("TuningRepo_GPU", "Exception getting GPU renderer: ${e.message}", e)
+            emit("OpenGL")
+        }
+    }.flowOn(Dispatchers.IO)
+
+    fun setGpuRenderer(renderer: String): Flow<Boolean> = flow {
+        Log.d("TuningRepo_GPU", "Setting GPU renderer to $renderer")
+        val validRenderers = listOf("OpenGL", "Vulkan", "Angle", "OpenGL (Skia)", "Vulkan (Skia)")
+        if (renderer !in validRenderers) {
+            Log.e("TuningRepo_GPU", "Invalid renderer value: $renderer")
+            emit(false)
+            return@flow
+        }
+        try {
+            runShellCommand("setprop debug.hwui.renderer $renderer")
+            emit(true)
+        } catch (e: Exception) {
+            Log.e("TuningRepo_GPU", "Exception setting GPU renderer: ${e.message}", e)
+            emit(false)
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /* ---------- Vulkan API Version ---------- */
+    fun getVulkanApiVersion(): Flow<String> = flow {
+        Log.d("TuningRepo_Vulkan", "Attempting to get Vulkan API version using getprop")
+        try {
+            // Common property for Vulkan API level. OEMs might use different props.
+            val command = "getprop ro.hardware.vulkan.version"
+            val result = readShellCommand(command).trim()
+            if (result.isNotEmpty()) {
+                // The property value is usually a hex number (e.g., 0x401000 for Vulkan 1.1.0)
+                // For simplicity, we'll return it as is. UI can format it if needed.
+                emit("API Level: $result")
+            } else {
+                emit("N/A (Property not found)")
+            }
+        } catch (e: Exception) {
+            Log.e("TuningRepo_Vulkan", "Exception getting Vulkan API Version: ${e.message}", e)
+            emit("N/A (Error)")
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /* ---------- Private Shell Helpers ---------- */
     private fun runShellCommand(cmd: String) {
-        // ... (runShellCommand tidak berubah)
-        Log.d("TuningRepository", "[Helper LibSU] Attempting write command: '$cmd'")
+        Log.d("TuningRepository", "[Shell RW] Executing: '$cmd'")
         val result = Shell.cmd(cmd).exec()
         if (result.isSuccess) {
-            Log.i("TuningRepository", "[Helper LibSU] Command success (exit code ${result.code}): '$cmd'")
+            Log.i("TuningRepository", "[Shell RW] Success (code ${result.code}): '$cmd'")
         } else {
-            Log.e(
-                "TuningRepository",
-                "[Helper LibSU] Command failed: '$cmd'. Code: ${result.code}. Error: ${result.err.joinToString("\n")}. Stdout: ${result.out.joinToString("\n")}"
-            )
+            Log.e("TuningRepository", "[Shell RW] Failed (code ${result.code}): '$cmd'. Err: ${result.err.joinToString("\n")}. Out: ${result.out.joinToString("\n")}")
         }
     }
 
     private fun readShellCommand(cmd: String): String {
-        // ... (readShellCommand tidak berubah)
-        Log.d("TuningRepository", "[Helper LibSU] Attempting read command: '$cmd'")
+        Log.d("TuningRepository", "[Shell R] Executing: '$cmd'")
         val result = Shell.cmd(cmd).exec()
         return if (result.isSuccess) {
-            result.out.joinToString("\n").also {
-                if (it.isBlank() && cmd.startsWith("cat")) Log.w("TuningRepository", "[Helper LibSU] Command '$cmd' success but output is blank.")
+            val output = result.out.joinToString("\n")
+            if (output.isBlank() && cmd.startsWith("cat")) {
+                Log.w("TuningRepository", "[Shell R] Command '$cmd' success but output is blank.")
             }
+            output
         } else {
-            Log.e(
-                "TuningRepository",
-                "[Helper LibSU] Command failed: '$cmd'. Code: ${result.code}. Error: ${result.err.joinToString("\n")}. Stdout: ${result.out.joinToString("\n")}"
-            )
+            Log.e("TuningRepository", "[Shell R] Failed (code ${result.code}): '$cmd'. Err: ${result.err.joinToString("\n")}. Out: ${result.out.joinToString("\n")}")
             ""
         }
     }
+
+    /* ---------- Device Control ---------- */
+    fun rebootDevice(reason: String? = null): Flow<Boolean> = flow {
+        val command = if (reason.isNullOrBlank()) "reboot" else "reboot $reason"
+        Log.d("TuningRepository", "Attempting to reboot device. Reason: ${reason ?: "N/A"}")
+        try {
+            val result = Shell.cmd(command).exec()
+            if (result.isSuccess) {
+                emit(true)
+            } else {
+                Log.e("TuningRepository", "Reboot command failed. Code: ${result.code}, Err: ${result.err.joinToString("\n")}")
+                emit(false)
+            }
+        } catch (e: Exception) {
+            Log.e("TuningRepository", "Exception during reboot: ${e.message}", e)
+            emit(false)
+        }
+    }.flowOn(Dispatchers.IO)
 }
