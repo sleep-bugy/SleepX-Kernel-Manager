@@ -4,14 +4,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-// M3X: Pertimbangkan tween untuk exit jika spring terasa terlalu lambat
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically // M3X: Alternatif atau kombinasi untuk enter
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn // M3X: Untuk efek visual tambahan
-import androidx.compose.animation.scaleOut // M3X: Untuk efek visual tambahan
-import androidx.compose.animation.shrinkVertically // M3X: Alternatif atau kombinasi untuk exit
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
@@ -29,15 +28,12 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-// M3X: Pertimbangkan ikon yang lebih expressive jika sesuai
-// import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-// import androidx.compose.material3.IconButton // Tidak terpakai, bisa dihapus
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
@@ -55,10 +51,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip // M3X: Untuk rounded corner pada item clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin // M3X: Untuk scale animation
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,16 +69,18 @@ fun CpuGovernorCard(
 ) {
     val clusters = vm.cpuClusters
     val availableGovernors by vm.generalAvailableCpuGovernors.collectAsState()
+    val coreStates by vm.coreStates.collectAsState()
 
     var showGovernorDialogForCluster by remember { mutableStateOf<String?>(null) }
     var showFreqDialogForCluster by remember { mutableStateOf<String?>(null) }
+    var showCoreDialogForCluster by remember { mutableStateOf<String?>(null) }
 
     var isExpanded by remember { mutableStateOf(false) }
 
     val rotationAngle by animateFloatAsState(
-        targetValue = if (isExpanded) 0f else -180f, // Tetap -180 untuk rotasi penuh
+        targetValue = if (isExpanded) 0f else -180f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy, // Terlihat bagus untuk ikon
+            dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
         ),
         label = "DropdownRotation"
@@ -97,17 +95,15 @@ fun CpuGovernorCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.medium) // M3X: Menambahkan sedikit sentuhan
+                    .clip(MaterialTheme.shapes.medium)
                     .clickable { isExpanded = !isExpanded }
-                    .padding(vertical = 12.dp, horizontal = 8.dp), // Padding disesuaikan untuk clip
+                    .padding(vertical = 12.dp, horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     "CPU Control",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        // fontWeight = FontWeight.SemiBold // Bisa juga dari tema langsung
-                    ),
+                    style = MaterialTheme.typography.titleLarge,
                 )
                 Icon(
                     imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
@@ -116,16 +112,15 @@ fun CpuGovernorCard(
                 )
             }
 
-            // M3X: Animasi Visibility yang disempurnakan
             AnimatedVisibility(
                 visible = isExpanded,
                 enter = slideInVertically(
-                    initialOffsetY = { -it / 2 }, // Sedikit slide dari atas
+                    initialOffsetY = { -it / 2 },
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium // Sedikit lebih cepat dari MediumLow
+                        stiffness = Spring.StiffnessMedium
                     )
-                ) + expandVertically( // Membuatnya expand dari atas
+                ) + expandVertically(
                     expandFrom = Alignment.Top,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
@@ -133,8 +128,8 @@ fun CpuGovernorCard(
                     )
                 ) + fadeIn(
                     animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                ) + scaleIn( // M3X: Tambahan scale in
-                    transformOrigin = TransformOrigin(0.5f, 0f), // Scale dari tengah-atas
+                ) + scaleIn(
+                    transformOrigin = TransformOrigin(0.5f, 0f),
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMedium
@@ -142,19 +137,19 @@ fun CpuGovernorCard(
                 ),
                 exit = slideOutVertically(
                     targetOffsetY = { -it / 2 },
-                    animationSpec = spring( // Bisa juga tween untuk exit yang lebih direct
-                        dampingRatio = Spring.DampingRatioNoBouncy, // Lebih sedikit pantulan saat keluar
-                        stiffness = Spring.StiffnessMedium // Pastikan ini cukup cepat
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium
                     )
-                ) + shrinkVertically( // Membuatnya shrink ke atas
+                ) + shrinkVertically(
                     shrinkTowards = Alignment.Top,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMedium
                     )
                 ) + fadeOut(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium) // Atau tween(200)
-                ) + scaleOut( // M3X: Tambahan scale out
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                ) + scaleOut(
                     transformOrigin = TransformOrigin(0.5f, 0f),
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
@@ -162,10 +157,10 @@ fun CpuGovernorCard(
                     )
                 )
             ) {
-                Column(modifier = Modifier.padding(top = 4.dp)) { // Padding atas agar tidak terlalu mepet divider
+                Column(modifier = Modifier.padding(top = 4.dp)) {
                     HorizontalDivider(
-                        thickness = 0.5.dp, // M3X: konsisten tipis
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f) // M3X: Mungkin lebih transparan
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -181,14 +176,14 @@ fun CpuGovernorCard(
                         ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(28.dp),
-                                strokeWidth = 2.5.dp, // M3X: Mungkin sedikit lebih tipis
+                                strokeWidth = 2.5.dp,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
                                 "Loading CPU data...",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant // M3X: Warna teks yang lebih lembut
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     } else if (clusters.isNotEmpty()) {
@@ -201,7 +196,6 @@ fun CpuGovernorCard(
                                 text = clusterName.replaceFirstChar { it.titlecase() },
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     color = MaterialTheme.colorScheme.tertiary,
-                                    // fontWeight = FontWeight.Medium // Sudah default di titleMedium biasanya
                                 ),
                                 modifier = Modifier.padding(
                                     bottom = 8.dp,
@@ -214,12 +208,12 @@ fun CpuGovernorCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 4.dp) // M3X: Padding lebih rapat
-                                    .clip(MaterialTheme.shapes.small) // M3X: Interaksi lebih jelas
+                                    .padding(vertical = 4.dp)
+                                    .clip(MaterialTheme.shapes.small)
                                     .clickable(enabled = currentGovernor != "..." && currentGovernor != "Error" && availableGovernors.isNotEmpty()) {
                                         showGovernorDialogForCluster = clusterName
                                     }
-                                    .padding(horizontal = 8.dp, vertical = 8.dp) // Padding internal setelah clickable
+                                    .padding(horizontal = 8.dp, vertical = 8.dp)
                             ) {
                                 Text(
                                     text = "Governor",
@@ -229,7 +223,6 @@ fun CpuGovernorCard(
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.End
-                                    // Modifier .weight(1.5f) sudah tidak diperlukan di sini karena alignment diatur oleh Row induk dan weight pada Text "Governor"
                                 ) {
                                     Text(
                                         text = if (currentGovernor == "..." || currentGovernor == "Error") currentGovernor else currentGovernor,
@@ -238,17 +231,17 @@ fun CpuGovernorCard(
                                         ),
                                         color = MaterialTheme.colorScheme.primary
                                     )
-                                    Spacer(Modifier.width(6.dp)) // M3X: Spasi yang konsisten
+                                    Spacer(Modifier.width(6.dp))
                                     Icon(
                                         imageVector = Icons.Default.ArrowDropDown,
                                         contentDescription = "Change Governor for $clusterName",
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp) // M3X: Ukuran ikon yang pas
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                             }
 
-                            // Pengaturan Frekuensi
+
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
@@ -298,6 +291,44 @@ fun CpuGovernorCard(
                                 }
                             }
 
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clip(MaterialTheme.shapes.small)
+                                    .clickable {
+                                        showCoreDialogForCluster = clusterName
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = "Core Status",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    Text(
+                                        text = "${coreStates.count { it }}/${coreStates.size} Cores Online",
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Change Core Status for $clusterName",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+
                             if (showGovernorDialogForCluster == clusterName) {
                                 GovernorSelectionDialog(
                                     clusterName = clusterName,
@@ -315,7 +346,7 @@ fun CpuGovernorCard(
                                 val systemMinFreq = availableFrequenciesForCluster.firstOrNull() ?: currentFreqPair.first
                                 val systemMaxFreq = availableFrequenciesForCluster.lastOrNull() ?: currentFreqPair.second
 
-                                if (systemMinFreq < systemMaxFreq && systemMaxFreq > 0) { // Cek min < max bukan min in 0..<max
+                                if (systemMinFreq < systemMaxFreq && systemMaxFreq > 0) {
                                     FrequencySelectionDialog(
                                         clusterName = clusterName,
                                         currentMinFreq = currentFreqPair.first,
@@ -331,11 +362,21 @@ fun CpuGovernorCard(
                                     )
                                 } else {
                                     LaunchedEffect(clusterName) {
-                                        // Log yang lebih detail bisa membantu debugging
                                         println("CpuGovernorCard: Cannot show frequency dialog for $clusterName. Invalid system frequency range (SystemMin: $systemMinFreq, SystemMax: $systemMaxFreq). Current Freq Pair: ${currentFreqPair.first}-${currentFreqPair.second}. Available: ${availableFrequenciesForCluster.joinToString()}")
-                                        showFreqDialogForCluster = null // Pastikan ditutup jika data tidak valid
+                                        showFreqDialogForCluster = null
                                     }
                                 }
+                            }
+
+                            if (showCoreDialogForCluster == clusterName) {
+                                CoreStatusDialog(
+                                    clusterName = clusterName,
+                                    coreStates = coreStates,
+                                    onCoreToggled = { coreId ->
+                                        vm.toggleCore(coreId)
+                                    },
+                                    onDismiss = { showCoreDialogForCluster = null }
+                                )
                             }
 
                             if (index < clusters.size - 1) {
@@ -352,7 +393,7 @@ fun CpuGovernorCard(
                             modifier = Modifier.padding(vertical = 16.dp).fillMaxWidth(),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center // M3X: Teks tengah
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     } else {
                         Text(
@@ -360,7 +401,7 @@ fun CpuGovernorCard(
                             modifier = Modifier.padding(vertical = 16.dp).fillMaxWidth(),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center // M3X: Teks tengah
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
@@ -379,13 +420,12 @@ private fun GovernorSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        // icon = { Icon(Icons.Rounded.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) }, // M3X: Ikon yang lebih lembut
         title = { Text("Select Governor", style = MaterialTheme.typography.headlineSmall) },
         text = {
             Column {
                 Text(
                     clusterName.replaceFirstChar { it.titlecase() },
-                    style = MaterialTheme.typography.titleSmall, // M3X: Sedikit lebih kecil dari judul dialog
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 12.dp, top = 4.dp)
                 )
@@ -393,7 +433,7 @@ private fun GovernorSelectionDialog(
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.medium) // M3X: Bentuk yang lebih rounded untuk interaksi
+                            .clip(MaterialTheme.shapes.medium)
                             .clickable { onGovernorSelected(governor) }
                             .padding(vertical = 12.dp, horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -403,16 +443,13 @@ private fun GovernorSelectionDialog(
                             onClick = { onGovernorSelected(governor) },
                             colors = RadioButtonDefaults.colors(
                                 selectedColor = MaterialTheme.colorScheme.primary,
-                                unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                // disabledSelectedColor = MaterialTheme.colorScheme.primary.copy(alpha = ContentAlpha.disabled),
-                                // disabledUnselectedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ContentAlpha.disabled)
+                                unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         )
-                        Spacer(Modifier.width(16.dp)) // M3X: Spasi lebih jelas
+                        Spacer(Modifier.width(16.dp))
                         Text(
                             governor,
                             style = MaterialTheme.typography.bodyLarge,
-                            // M3X: Warna berbeda jika terpilih
                             color = if (governor == currentSelectedGovernor) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -424,7 +461,7 @@ private fun GovernorSelectionDialog(
                 onClick = onDismiss,
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
             ) {
-                Text("CANCEL", fontWeight = FontWeight.Medium) // M3X: Uppercase untuk tombol teks
+                Text("CANCEL", fontWeight = FontWeight.Medium)
             }
         }
     )
@@ -472,15 +509,14 @@ private fun FrequencySelectionDialog(
 
     val sliderColors = SliderDefaults.colors(
         thumbColor = MaterialTheme.colorScheme.primary,
-        activeTrackColor = MaterialTheme.colorScheme.primary, // M3X: Warna solid untuk active track
-        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant, // M3X: Warna standar M3
+        activeTrackColor = MaterialTheme.colorScheme.primary,
+        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
         activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f),
         inactiveTickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
     )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        // icon = { Icon(Icons.Rounded.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) },
         title = { Text("Set Frequency", style = MaterialTheme.typography.headlineSmall) },
         text = {
             Column {
@@ -488,7 +524,7 @@ private fun FrequencySelectionDialog(
                     clusterName.replaceFirstChar { it.titlecase() },
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp, top = 4.dp) // M3X: Spasi lebih
+                    modifier = Modifier.padding(bottom = 16.dp, top = 4.dp)
                 )
 
                 // Min Frequency
@@ -502,7 +538,7 @@ private fun FrequencySelectionDialog(
                         "${sliderMinValue.roundToInt() / 1000} MHz",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold // M3X: Menyorot nilai
+                        fontWeight = FontWeight.Bold
                     )
                 }
                 Slider(
@@ -516,9 +552,7 @@ private fun FrequencySelectionDialog(
                         sliderMinValue = findClosestFrequency(sliderMinValue.roundToInt(), allAvailableFrequencies).toFloat()
                         if (sliderMinValue > sliderMaxValue) sliderMinValue = sliderMaxValue
                     },
-                    colors = sliderColors,
-                    // M3X: Thumb yang lebih interaktif jika ada di library atau dibuat kustom
-                    // thumb = { ... }
+                    colors = sliderColors
                 )
                 Spacer(Modifier.height(24.dp))
 
@@ -533,7 +567,7 @@ private fun FrequencySelectionDialog(
                         "${sliderMaxValue.roundToInt() / 1000} MHz",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold // M3X: Menyorot nilai
+                        fontWeight = FontWeight.Bold
                     )
                 }
                 Slider(
@@ -560,20 +594,75 @@ private fun FrequencySelectionDialog(
                     if (finalMin <= finalMax) {
                         onFrequencySelected(finalMin, finalMax)
                     } else {
-                        onFrequencySelected(finalMin, finalMin) // Fallback jika min > max
+                        onFrequencySelected(finalMin, finalMin)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Text("APPLY") // M3X: Uppercase
+                Text("APPLY")
             }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.secondary) // M3X: Warna berbeda untuk dismiss
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.secondary)
             ) {
-                Text("CANCEL") // M3X: Uppercase
+                Text("CANCEL")
+            }
+        }
+    )
+}
+
+@Composable
+private fun CoreStatusDialog(
+    clusterName: String,
+    coreStates: List<Boolean>,
+    onCoreToggled: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Core Status", style = MaterialTheme.typography.headlineSmall) },
+        text = {
+            Column {
+                Text(
+                    clusterName.replaceFirstChar { it.titlecase() },
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp, top = 4.dp)
+                )
+                coreStates.forEachIndexed { index, isOnline ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onCoreToggled(index) }
+                            .padding(vertical = 8.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isOnline,
+                            onClick = { onCoreToggled(index) },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = MaterialTheme.colorScheme.primary,
+                                unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Text(
+                            text = "Core $index",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isOnline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text("DONE", fontWeight = FontWeight.Medium)
             }
         }
     )
@@ -581,7 +670,6 @@ private fun FrequencySelectionDialog(
 
 private fun findClosestFrequency(target: Int, availableFrequencies: List<Int>): Int {
     if (availableFrequencies.isEmpty()) return target.coerceAtLeast(0)
-    // Jika target persis ada di list, kembalikan itu
     if (target in availableFrequencies) return target
     return availableFrequencies.minByOrNull { abs(it - target) } ?: target.coerceAtLeast(0)
 }
