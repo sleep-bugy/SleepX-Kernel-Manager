@@ -62,8 +62,7 @@ fun TuningScreen(viewModel: TuningViewModel = hiltViewModel()) {
 
             /* 4. Swappiness */
             SwappinessCard(
-                value = swappiness,
-                onValueChange = viewModel::setSwappiness,
+                vm = viewModel,
                 blur = true
             )
         }
