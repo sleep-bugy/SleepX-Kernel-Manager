@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name">Xtra Kernel Manager</string>
-    <string name="app_version">1.0.0-Alpha</string>
     <string name="welcome_message">Welcome to Xtra Kernel Manager!</string>
     <string name="desc_about">Thank you for choosing Xtra Kernel Manager. We hope you enjoy the experience!</string>
     <string name="about">About Apps</string>
@@ -16,7 +15,7 @@
     <string name="xtra_kernel_manager">Xtra Kernel Manager</string>
     <string name="home">Home</string>
     <string name="tuning">Tuning</string>
-    <string name="terminal">Terminal</string>
+    <string name="misc">Misc</string>
     <string name="info">Info</string>
     <string name="central_proccessing_unit_cpu">Central Proccessing Unit</string>
     <string name="cpu_cores_core">CPU Cores: %1$d Core</string>
@@ -30,5 +29,6 @@
     <string name="reboot_bootloader">Reboot Bootloader</string>
     <string name="reboot_recovery">Reboot Recovery</string>
     <string name="power_off">Power Off</string>
+    <string name="offline">Off</string>
 
 </resources>
