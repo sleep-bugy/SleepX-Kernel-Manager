@@ -19,7 +19,7 @@ fun BottomNavBar(navController: NavHostController, items: List<String>) {
             val icon = when (screen) {
                 stringResource(R.string.home)   -> Icons.Default.Home
                 stringResource(R.string.tuning) -> Icons.Default.Build
-                stringResource(R.string.terminal) -> Icons.Default.Terminal
+                stringResource(R.string.misc) -> Icons.Default.MiscellaneousServices
                 stringResource(R.string.info)   -> Icons.Default.Info
                 else     -> Icons.Default.Home
             }
