@@ -1,20 +1,21 @@
-Changelogs For Xtra Kernel Manager Version 1.1
-Major Update :
-- Home: Revamped the home screen for a cleaner and more informative.
-- CPU Control: Added features to fine-tune CPU governors, frequencies, and core controls for optimized performance or battery life.
-- GPU Control: Implemented controls for adjusting GPU frequencies and governors to balance graphics performance and power consumption.
-- Added CPU Load Average reading feature with Graph
-- Tidying up the CPU Clockspeed Layout
-- Power: New power menu with options for rebooting, shutting down, and accessing recovery/bootloader.
+Changelogs For Xtra Kernel Manager Version 1.2
 
-Minor Update :
-- Change the card in the Info feature to be consistent with other cards.
-- Added Fingerprint and SOC Build Descriptions. For the POCO F5, the SOC section is described by its name, not by model.
-- Add Badge
-- Slowly implementing Material 3 Expressive (M3X)
+- Add CPU Core Control 
+- Add Ram Control
+- Dropped Terminal
+- Add Misc (Still Development)
+- Add Adjust Swap Size Feature (Coming soon)
 
 Info Feature System Card Update [Added SOC Model Registration in Info Feature] :
-- QTI SM7475 = Qualcomm® Snapdragon™ 7+ Gen 2
-- QTI SM8650 = Qualcomm® Snapdragon™ 8 Gen 3
-- QTI SM8635 = Qualcomm® Snapdragon™ 8s Gen 3
-- QTI SDM845 = Qualcomm® Snapdragon™ 845
+- Qualcomm® Snapdragon™ 7s Gen 2 (SM7435-AB, SM7435)
+- Qualcomm® Snapdragon™ 8s Gen 4 (SM8735, sm8735)
+- MediaTek Helio G95 (MT6785/CD, MT6785)
+- MediaTek Dimensity 1080 (MT6877V/TTZA, MT6877V)
+
+Zram Adjust Max Size:
+- 3GB : Max 1GB
+- 4GB : Max 2GB
+- 6GB : Max 4GB
+- 8GB : Max 9GB
+- 12GB : Max 14GB
+- 16GB : Max 18GB
