@@ -130,25 +130,33 @@ fun CpuCard(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically // Pusatkan vertikal
                             ) {
-                                pair.forEachIndexed { index, freq ->
+                                pair.forEachIndexed { _, freq ->
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
                                             .padding(2.dp) // Sedikit padding antar box
                                             .clip(MaterialTheme.shapes.small)
                                             .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f))
-                                            .padding(vertical = 4.dp, horizontal = 6.dp), // Padding dalam box
+                                            .padding(vertical = 6.dp, horizontal = 8.dp), // Padding dalam box sedikit diperbesar
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = "$freq MHz",
-                                            style = MaterialTheme.typography.bodyLarge.copy(
-                                                fontSize = 22.sp // Sesuaikan ukuran font jika perlu agar muat
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
+                                        if (freq.toLong() == 0L) {
+                                            Text(
+                                                text = stringResource(R.string.offline),
+                                                style = MaterialTheme.typography.bodyLarge.copy(
+                                                    fontSize = 18.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                ),
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f) // Warna sedikit redup
+                                            )
+                                        } else {
+                                            Text(
+                                                text = "$freq MHz",
+                                                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 20.sp), // Ukuran font normal untuk frekuensi
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
                                     }
-
                                 }
                                 if (pair.size == 1) {
                                     Spacer(Modifier.weight(1f))
@@ -158,7 +166,7 @@ fun CpuCard(
                         Spacer(modifier = Modifier.height(10.dp))
                     }
 
-                    // Info Tambahan (Governor, Cores, Temp)
+                    // (Governor, Cores, Temp)
                     val infoTextStyle = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = 20.sp
                     )
