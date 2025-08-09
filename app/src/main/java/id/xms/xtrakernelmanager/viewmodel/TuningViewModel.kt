@@ -23,21 +23,22 @@ class TuningViewModel @Inject constructor(
     private val thermalPrefs: SharedPreferences by lazy {
         application.getSharedPreferences("thermal_settings_prefs", Context.MODE_PRIVATE)
     }
-    @Suppress("PrivatePropertyName")
     private val KEY_LAST_APPLIED_THERMAL_INDEX = "last_applied_thermal_index"
 
     val cpuClusters = listOf("cpu0", "cpu4", "cpu7")
 
-    // --- CPU States ---
+    /* ---------------- CPU ---------------- */
+    private val _coreStates = MutableStateFlow(List(8) { true })
+    val coreStates: StateFlow<List<Boolean>> = _coreStates.asStateFlow()
+
     private val _generalAvailableCpuGovernors = MutableStateFlow<List<String>>(emptyList())
     val generalAvailableCpuGovernors: StateFlow<List<String>> = _generalAvailableCpuGovernors.asStateFlow()
 
     private val _availableCpuFrequenciesPerClusterMap = MutableStateFlow<Map<String, List<Int>>>(emptyMap())
-
     private val _currentCpuGovernors = mutableMapOf<String, MutableStateFlow<String>>()
     private val _currentCpuFrequencies = mutableMapOf<String, MutableStateFlow<Pair<Int, Int>>>()
 
-    // --- GPU States ---
+    /* ---------------- GPU ---------------- */
     private val _availableGpuGovernors = MutableStateFlow<List<String>>(emptyList())
     val availableGpuGovernors: StateFlow<List<String>> = _availableGpuGovernors.asStateFlow()
 
@@ -59,15 +60,13 @@ class TuningViewModel @Inject constructor(
     private val _currentGpuPowerLevel = MutableStateFlow(0f)
     val currentGpuPowerLevel: StateFlow<Float> = _currentGpuPowerLevel.asStateFlow()
 
-    // --- OpenGLES Driver ---
+    /* ---------------- OpenGL / Vulkan / Renderer ---------------- */
     private val _currentOpenGlesDriver = MutableStateFlow("Loading...")
     val currentOpenGlesDriver: StateFlow<String> = _currentOpenGlesDriver.asStateFlow()
 
-    // --- GPU Renderer ---
     private val _currentGpuRenderer = MutableStateFlow("Loading...")
     val currentGpuRenderer: StateFlow<String> = _currentGpuRenderer.asStateFlow()
 
-    // --- Vulkan API Version ---
     private val _vulkanApiVersion = MutableStateFlow("Loading...")
     val vulkanApiVersion: StateFlow<String> = _vulkanApiVersion.asStateFlow()
 
@@ -75,20 +74,49 @@ class TuningViewModel @Inject constructor(
         "Default", "OpenGL", "Vulkan", "ANGLE", "OpenGL (SKIA)", "Vulkan (SKIA)"
     )
 
-    // State untuk mengelola dialog konfirmasi reboot
+    /* ---------------- Reboot dialog ---------------- */
     private val _showRebootConfirmationDialog = MutableStateFlow(false)
     val showRebootConfirmationDialog: StateFlow<Boolean> = _showRebootConfirmationDialog.asStateFlow()
 
-    // Opsional: Untuk memberi tahu UI jika perintah reboot gagal (misalnya untuk menampilkan Snackbar)
-    private val _rebootCommandFeedback = MutableSharedFlow<String>() // String untuk pesan feedback
+    private val _rebootCommandFeedback = MutableSharedFlow<String>()
     val rebootCommandFeedback: SharedFlow<String> = _rebootCommandFeedback.asSharedFlow()
 
+    /* ---------------- RAM Control ---------------- */
+    private val _zramEnabled = MutableStateFlow(false)
+    val zramEnabled: StateFlow<Boolean> = _zramEnabled.asStateFlow()
 
-    // --- Swappiness State ---
+    private val _zramDisksize = MutableStateFlow(536870912L) // 512 MB default
+    val zramDisksize: StateFlow<Long> = _zramDisksize.asStateFlow()
+
+    private val _compressionAlgorithms = MutableStateFlow<List<String>>(emptyList())
+    val compressionAlgorithms: StateFlow<List<String>> = _compressionAlgorithms.asStateFlow()
+
+    private val _currentCompression = MutableStateFlow("")
+    val currentCompression: StateFlow<String> = _currentCompression.asStateFlow()
+
     private val _swappiness = MutableStateFlow(60)
     val swappiness: StateFlow<Int> = _swappiness.asStateFlow()
 
-    // --- Thermal States ---
+    private val _dirtyRatio = MutableStateFlow(20)
+    val dirtyRatio: StateFlow<Int> = _dirtyRatio.asStateFlow()
+
+    private val _dirtyBackgroundRatio = MutableStateFlow(10)
+    val dirtyBackgroundRatio: StateFlow<Int> = _dirtyBackgroundRatio.asStateFlow()
+
+    private val _dirtyWriteback = MutableStateFlow(30)
+    val dirtyWriteback: StateFlow<Int> = _dirtyWriteback.asStateFlow()
+
+    private val _dirtyExpireCentisecs = MutableStateFlow(300)
+    val dirtyExpireCentisecs: StateFlow<Int> = _dirtyExpireCentisecs.asStateFlow()
+
+    private val _minFreeMemory = MutableStateFlow(128)
+    val minFreeMemory: StateFlow<Int> = _minFreeMemory.asStateFlow()
+
+    /* Max ZRAM otomatis 6 GB untuk 8 GB RAM */
+    private val _maxZramSize = MutableStateFlow(repo.calculateMaxZramSize())
+    val maxZramSize: StateFlow<Long> = _maxZramSize.asStateFlow()
+
+    /* ---------------- Thermal ---------------- */
     val availableThermalProfiles = listOf(
         ThermalProfile("Disable", 0),
         ThermalProfile("Extreme", 2),
@@ -108,23 +136,25 @@ class TuningViewModel @Inject constructor(
     private val _currentThermalModeIndex = MutableStateFlow(-1)
     val currentThermalModeIndex: StateFlow<Int> = _currentThermalModeIndex.asStateFlow()
 
-    val currentThermalProfileName: StateFlow<String> = _currentThermalModeIndex.map { currentIndex ->
-        val profileName = availableThermalProfiles.find { it.index == currentIndex }?.displayName
-        when {
-            profileName != null -> profileName
-            currentIndex == -1 && _isThermalLoading.value -> "Loading..."
-            currentIndex == -1 -> "Disable"
-            else -> "Unknown ($currentIndex)"
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Loading...")
+    val currentThermalProfileName: StateFlow<String> =
+        _currentThermalModeIndex.map { idx ->
+            availableThermalProfiles.find { it.index == idx }?.displayName
+                ?: if (idx == -1 && _isThermalLoading.value) "Loading..."
+                else if (idx == -1) "Disable"
+                else "Unknown ($idx)"
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Loading...")
 
+    /* ---------------- Init ---------------- */
     init {
         Log.d("TuningVM_Init", "ViewModel initializing...")
         initializeCpuStateFlows()
         fetchAllInitialData()
+        refreshCoreStates()
+        fetchRamControlData()
         Log.d("TuningVM_Init", "ViewModel initialization complete.")
     }
 
+    /* ---------------- CPU ---------------- */
     private fun initializeCpuStateFlows() {
         Log.d("TuningVM_Init", "Initializing CPU StateFlows for clusters: $cpuClusters")
         cpuClusters.forEach { cluster ->
@@ -133,394 +163,227 @@ class TuningViewModel @Inject constructor(
         }
     }
 
-    private fun fetchAllInitialData() {
-        viewModelScope.launch {
-            launch(Dispatchers.IO) { fetchAllCpuData() }
-            launch(Dispatchers.IO) { fetchGpuData() }
-            launch(Dispatchers.IO) { fetchCurrentSwappiness() }
-            fetchCurrentThermalMode(isInitialLoad = true)
-            launch(Dispatchers.IO) { fetchOpenGlesDriver() }
-            launch(Dispatchers.IO) { fetchCurrentGpuRenderer() }
-            launch(Dispatchers.IO) { fetchVulkanApiVersion() }
-        }
-    }
-
-    // --- CPU Control Methods ---
     private suspend fun fetchAllCpuData() {
         Log.d("TuningVM_CPU", "Fetching all CPU data...")
-        val tempAvailableGovernorsMap = mutableMapOf<String, List<String>>()
-        val tempAvailableFrequenciesMap = mutableMapOf<String, List<Int>>()
+        val tempGovernors = mutableMapOf<String, List<String>>()
+        val tempFreqs = mutableMapOf<String, List<Int>>()
 
         cpuClusters.forEach { cluster ->
-            Log.d("TuningVM_CPU", "Fetching data for CPU cluster: $cluster")
             coroutineScope {
-                launch {
-                    repo.getCpuGov(cluster)
-                        .take(1)
-                        .catch { e -> Log.e("TuningVM_CPU", "Error current gov for $cluster", e); _currentCpuGovernors[cluster]?.value = "Error" }
-                        .collect { _currentCpuGovernors[cluster]?.value = it }
-                }
-                launch {
-                    repo.getCpuFreq(cluster)
-                        .take(1)
-                        .catch { e -> Log.e("TuningVM_CPU", "Error current freq for $cluster", e); _currentCpuFrequencies[cluster]?.value = (0 to -1) }
-                        .collect { _currentCpuFrequencies[cluster]?.value = it }
-                }
-                launch {
-                    repo.getAvailableCpuGovernors(cluster)
-                        .catch { e -> Log.e("TuningVM_CPU", "Error available governors for $cluster", e); emit(emptyList()) }
-                        .collect { tempAvailableGovernorsMap[cluster] = it }
-                }
-                launch {
-                    repo.getAvailableCpuFrequencies(cluster)
-                        .catch { e -> Log.e("TuningVM_CPU", "Error available frequencies for $cluster", e); emit(emptyList()) }
-                        .collect { tempAvailableFrequenciesMap[cluster] = it.sorted() }
-                }
+                launch { repo.getCpuGov(cluster).take(1).collect { _currentCpuGovernors[cluster]?.value = it } }
+                launch { repo.getCpuFreq(cluster).take(1).collect { _currentCpuFrequencies[cluster]?.value = it } }
+                launch { repo.getAvailableCpuGovernors(cluster).collect { tempGovernors[cluster] = it } }
+                launch { repo.getAvailableCpuFrequencies(cluster).collect { tempFreqs[cluster] = it } }
             }
         }
-        _availableCpuFrequenciesPerClusterMap.value = tempAvailableFrequenciesMap
-        if (tempAvailableGovernorsMap.isNotEmpty()) {
-            _generalAvailableCpuGovernors.value = tempAvailableGovernorsMap.values.flatten().distinct().sorted()
-        }
+        _availableCpuFrequenciesPerClusterMap.value = tempFreqs
+        if (tempGovernors.isNotEmpty()) _generalAvailableCpuGovernors.value = tempGovernors.values.flatten().distinct().sorted()
         Log.d("TuningVM_CPU", "Finished fetching all CPU data.")
     }
 
-    fun getCpuGov(cluster: String): StateFlow<String> =
-        _currentCpuGovernors.getOrPut(cluster) { MutableStateFlow("...") }.asStateFlow()
-
-    fun getCpuFreq(cluster: String): StateFlow<Pair<Int, Int>> =
-        _currentCpuFrequencies.getOrPut(cluster) { MutableStateFlow(0 to 0) }.asStateFlow()
-
-    fun getAvailableCpuFrequencies(clusterName: String): StateFlow<List<Int>> =
-        _availableCpuFrequenciesPerClusterMap.map { it[clusterName]?.sorted() ?: emptyList() }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+    fun getCpuGov(cluster: String): StateFlow<String> = _currentCpuGovernors.getOrPut(cluster) { MutableStateFlow("...") }.asStateFlow()
+    fun getCpuFreq(cluster: String): StateFlow<Pair<Int, Int>> = _currentCpuFrequencies.getOrPut(cluster) { MutableStateFlow(0 to 0) }.asStateFlow()
+    fun getAvailableCpuFrequencies(cluster: String): StateFlow<List<Int>> = _availableCpuFrequenciesPerClusterMap.map { it[cluster] ?: emptyList() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
     fun setCpuGov(cluster: String, gov: String) = viewModelScope.launch(Dispatchers.IO) {
-        Log.i("TuningVM_CPU_Set", "Set CPU gov $cluster to '$gov'")
-        try {
-            repo.setCpuGov(cluster, gov)
-            _currentCpuGovernors[cluster]?.value = gov
-        } catch (e: Exception) {
-            Log.e("TuningVM_CPU_Set", "Error set CPU gov for $cluster to '$gov'", e)
-            repo.getCpuGov(cluster).take(1).collect { _currentCpuGovernors[cluster]?.value = it }
-        }
+        repo.setCpuGov(cluster, gov)
     }
 
     fun setCpuFreq(cluster: String, min: Int, max: Int) = viewModelScope.launch(Dispatchers.IO) {
-        Log.i("TuningVM_CPU_Set", "Set CPU freq $cluster to Min: $min, Max: $max")
-        if (min <= 0 || max <= 0 || min > max) {
-            Log.e("TuningVM_CPU_Set", "Invalid freq values for $cluster. Min: $min, Max: $max.")
+        repo.setCpuFreq(cluster, min, max)
+    }
+
+    fun toggleCore(coreId: Int) = viewModelScope.launch(Dispatchers.IO) {
+        val newStates = _coreStates.value.toMutableList()
+        val newState = !newStates[coreId]
+        if (!newState && newStates.count { it } == 1) {
+            _rebootCommandFeedback.emit("Setidaknya 1 core harus tetap online")
             return@launch
         }
-        try {
-            repo.setCpuFreq(cluster, min, max)
-            _currentCpuFrequencies[cluster]?.value = min to max
-        } catch (e: Exception) {
-            Log.e("TuningVM_CPU_Set", "Error set CPU freq for $cluster to $min-$max", e)
-            repo.getCpuFreq(cluster).take(1).collect { _currentCpuFrequencies[cluster]?.value = it }
+        if (repo.setCoreOnline(coreId, newState)) {
+            newStates[coreId] = newState
+            _coreStates.value = newStates
+        } else {
+            Log.e("TuningVM_CPU", "Failed toggle core $coreId")
         }
     }
 
-    // --- GPU Control Methods ---
+    fun refreshCoreStates() = viewModelScope.launch(Dispatchers.IO) {
+        _coreStates.value = (0 until 8).map { repo.getCoreOnline(it) }
+    }
+
+    /* ---------------- GPU ---------------- */
     fun fetchGpuData() = viewModelScope.launch(Dispatchers.IO) {
-        Log.d("TuningVM_GPU", "Fetching all GPU data...")
-        try {
-            repo.getAvailableGpuGovernors()
-                .catch { e -> Log.e("TuningVM_GPU", "Error available GPU governors", e); emit(emptyList()) }
-                .collect { _availableGpuGovernors.value = it.sorted() }
-
-            repo.getGpuGov()
-                .take(1)
-                .catch { e -> Log.e("TuningVM_GPU", "Error current GPU gov", e); _currentGpuGovernor.value = "Error" }
-                .collect { _currentGpuGovernor.value = it }
-
-            repo.getAvailableGpuFrequencies()
-                .catch { e -> Log.e("TuningVM_GPU", "Error available GPU frequencies", e); emit(emptyList()) }
-                .collect { _availableGpuFrequencies.value = it.sorted() }
-
-            repo.getGpuFreq()
-                .take(1)
-                .catch { e -> Log.e("TuningVM_GPU", "Error current GPU min/max freq", e); _currentGpuMinFreq.value = 0; _currentGpuMaxFreq.value = 0 }
-                .collect { freqPair ->
-                    _currentGpuMinFreq.value = freqPair.first
-                    _currentGpuMaxFreq.value = freqPair.second
-                }
-
-            repo.getGpuPowerLevelRange()
-                .catch { e -> Log.e("TuningVM_GPU", "Error GPU power level range", e); emit(0f to 0f) }
-                .collect { _gpuPowerLevelRange.value = it }
-
-            repo.getCurrentGpuPowerLevel()
-                .catch { e -> Log.e("TuningVM_GPU", "Error current GPU power level", e); emit(0f) }
-                .collect { _currentGpuPowerLevel.value = it }
-
-        } catch (e: Exception) {
-            Log.e("TuningVM_GPU", "Unhandled error in fetchGpuData", e)
-        }
-        Log.d("TuningVM_GPU", "Finished fetching GPU data.")
+        _availableGpuGovernors.value = repo.getAvailableGpuGovernors().first()
+        _currentGpuGovernor.value = repo.getGpuGov().first()
+        _availableGpuFrequencies.value = repo.getAvailableGpuFrequencies().first()
+        val (min, max) = repo.getGpuFreq().first()
+        _currentGpuMinFreq.value = min
+        _currentGpuMaxFreq.value = max
+        _gpuPowerLevelRange.value = repo.getGpuPowerLevelRange().first()
+        _currentGpuPowerLevel.value = repo.getCurrentGpuPowerLevel().first()
     }
 
     fun setGpuGovernor(gov: String) = viewModelScope.launch(Dispatchers.IO) {
-        Log.i("TuningVM_GPU_Set", "Attempting to set GPU governor to '$gov'")
-        try {
-            repo.setGpuGov(gov)
-            _currentGpuGovernor.value = gov
-        } catch (e: Exception) {
-            Log.e("TuningVM_GPU_Set", "Error setting GPU governor to '$gov'", e)
-            fetchGpuData() // Revert atau refresh
-        }
+        repo.setGpuGov(gov)
     }
 
     fun setGpuMinFrequency(freqKHz: Int) = viewModelScope.launch(Dispatchers.IO) {
-        Log.i("TuningVM_GPU_Set", "Attempting to set GPU Min frequency to '$freqKHz' KHz")
-        if (freqKHz <= 0 || (_currentGpuMaxFreq.value > 0 && freqKHz > _currentGpuMaxFreq.value)) {
-            Log.w("TuningVM_GPU_Set", "Invalid Min GPU frequency: $freqKHz KHz. Max is ${_currentGpuMaxFreq.value} KHz")
-            return@launch
-        }
-        try {
-            repo.setGpuMinFreq(freqKHz) // Repo harus menerima KHz
-            _currentGpuMinFreq.value = freqKHz
-        } catch (e: Exception) {
-            Log.e("TuningVM_GPU_Set", "Error setting GPU Min frequency to '$freqKHz' KHz", e)
-            fetchGpuData()
-        }
+        repo.setGpuMinFreq(freqKHz)
     }
 
     fun setGpuMaxFrequency(freqKHz: Int) = viewModelScope.launch(Dispatchers.IO) {
-        Log.i("TuningVM_GPU_Set", "Attempting to set GPU Max frequency to '$freqKHz' KHz")
-        if (freqKHz <= 0 || freqKHz < _currentGpuMinFreq.value) {
-            Log.w("TuningVM_GPU_Set", "Invalid Max GPU frequency: $freqKHz KHz. Min is ${_currentGpuMinFreq.value} KHz")
-            return@launch
-        }
-        try {
-            repo.setGpuMaxFreq(freqKHz) // Repo harus menerima KHz
-            _currentGpuMaxFreq.value = freqKHz
-        } catch (e: Exception) {
-            Log.e("TuningVM_GPU_Set", "Error setting GPU Max frequency to '$freqKHz' KHz", e)
-            fetchGpuData()
-        }
+        repo.setGpuMaxFreq(freqKHz)
     }
 
     fun setGpuPowerLevel(level: Float) = viewModelScope.launch(Dispatchers.IO) {
-        Log.i("TuningVM_GPU_Set", "Attempting to set GPU Power Level to '$level'")
-        val range = _gpuPowerLevelRange.value
-        if (level < range.first || level > range.second) {
-            Log.w("TuningVM_GPU_Set", "Invalid GPU Power Level: $level. Range is $range")
-            return@launch
-        }
-        try {
-            repo.setGpuPowerLevel(level)
-            _currentGpuPowerLevel.value = level
-        } catch (e: Exception) {
-            Log.e("TuningVM_GPU_Set", "Error setting GPU Power Level to '$level'", e)
-            fetchGpuData()
-        }
+        repo.setGpuPowerLevel(level)
     }
 
-    // --- OpenGLES Driver Methods ---
-    internal fun fetchOpenGlesDriver() = viewModelScope.launch(Dispatchers.IO) { // Sudah IO
-        Log.d("TuningVM_GLES", "Fetching OpenGLES Driver...")
-        repo.getOpenGlesDriver()
-            .catch { e -> Log.e("TuningVM_GLES", "Error getting OpenGLES Driver", e); _currentOpenGlesDriver.value = "Error" }
-            .collect { _currentOpenGlesDriver.value = it.ifBlank { "N/A" } }
-        Log.d("TuningVM_GLES", "Finished fetching OpenGLES Driver: ${_currentOpenGlesDriver.value}")
+    /* ---------------- OpenGL / Vulkan ---------------- */
+    internal fun fetchOpenGlesDriver() = viewModelScope.launch(Dispatchers.IO) {
+        repo.getOpenGlesDriver().collect { _currentOpenGlesDriver.value = it }
     }
 
-    // --- GPU Renderer Methods ---
-    internal fun fetchCurrentGpuRenderer() = viewModelScope.launch(Dispatchers.IO) { // Sudah IO
-        Log.d("TuningVM_GPURenderer", "Fetching current GPU Renderer...")
-        repo.getGpuRenderer()
-            .catch { e -> Log.e("TuningVM_GPURenderer", "Error getting GPU Renderer", e); _currentGpuRenderer.value = "Error" }
-            .collect { renderer -> _currentGpuRenderer.value = renderer.ifBlank { "Default" } }
-        Log.d("TuningVM_GPURenderer", "Finished fetching GPU Renderer: ${_currentGpuRenderer.value}")
+    internal fun fetchCurrentGpuRenderer() = viewModelScope.launch(Dispatchers.IO) {
+        repo.getGpuRenderer().collect { _currentGpuRenderer.value = it }
     }
 
-    // --- Vulkan API Version Methods ---
     internal fun fetchVulkanApiVersion() = viewModelScope.launch(Dispatchers.IO) {
-        Log.d("TuningVM_Vulkan", "Fetching Vulkan API Version...")
-        repo.getVulkanApiVersion()
-            .catch { e -> Log.e("TuningVM_Vulkan", "Error getting Vulkan API Version", e); _vulkanApiVersion.value = "Error" }
-            .collect { _vulkanApiVersion.value = it.ifBlank { "N/A" } }
-        Log.d("TuningVM_Vulkan", "Finished fetching Vulkan API Version: ${_vulkanApiVersion.value}")
+        repo.getVulkanApiVersion().collect { _vulkanApiVersion.value = it }
     }
 
-
-    fun userSelectedGpuRenderer(renderer: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            Log.i("TuningVM_GPURenderer_Set", "Attempting to set GPU Renderer to '$renderer'")
-            repo.setGpuRenderer(renderer).collect { success ->
-                withContext(Dispatchers.Main) {
-                    if (success) {
-                        _currentGpuRenderer.value = renderer
-                        Log.d("TuningViewModel", "GPU Renderer set to $renderer. Prompting for reboot.")
-                        _showRebootConfirmationDialog.value = true
-                    } else {
-                        Log.e("TuningViewModel", "Failed to set GPU Renderer to '$renderer'.")
-                        _rebootCommandFeedback.emit("Gagal mengatur GPU Renderer.")
-                        // Fetch ulang nilai sebenarnya jika gagal
-                        launch(Dispatchers.IO) { fetchCurrentGpuRenderer() }
-                    }
-                }
+    fun userSelectedGpuRenderer(renderer: String) = viewModelScope.launch(Dispatchers.IO) {
+        repo.setGpuRenderer(renderer).collect { success ->
+            if (success) {
+                _currentGpuRenderer.value = renderer
+                _showRebootConfirmationDialog.value = true
+            } else {
+                _rebootCommandFeedback.emit("Gagal mengatur GPU Renderer.")
             }
         }
     }
-
 
     fun confirmAndRebootDevice() {
-        viewModelScope.launch(Dispatchers.Main) {
-            _showRebootConfirmationDialog.value = false
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            Log.d("TuningViewModel", "Reboot confirmed. Attempting to execute reboot command...")
-            repo.rebootDevice().collect { success ->
-                if (success) {
-                    Log.i("TuningViewModel", "Reboot command sent successfully to repository.")
-                } else {
-                    Log.e("TuningViewModel", "Repository reported failure in sending reboot command.")
-                    _rebootCommandFeedback.emit("Perintah reboot gagal dikirim.")
-                }
-            }
-        }
+        _showRebootConfirmationDialog.value = false
+        viewModelScope.launch { repo.rebootDevice().collect { /* ignore, device reboot */ } }
     }
 
     fun cancelRebootConfirmation() {
         _showRebootConfirmationDialog.value = false
     }
 
-
-    // --- Swappiness Control ---
-    private suspend fun fetchCurrentSwappiness() {
-        Log.d("TuningVM_Mem", "Fetching current swappiness...")
-        repo.getSwappiness()
-            .catch { e -> Log.e("TuningVM_Mem", "Error getting current swappiness", e); _swappiness.value = 60 } // Default on error
-            .collect { _swappiness.value = it }
-        Log.d("TuningVM_Mem", "Finished fetching swappiness: ${_swappiness.value}")
+    /* ---------------- RAM Control ---------------- */
+    private fun fetchRamControlData() = viewModelScope.launch {
+        launch(Dispatchers.IO) { repo.getZramEnabled().collect { _zramEnabled.value = it } }
+        launch(Dispatchers.IO) { repo.getZramDisksize().collect { _zramDisksize.value = it } }
+        launch(Dispatchers.IO) {
+            repo.getCompressionAlgorithms().collect {
+                _compressionAlgorithms.value = it
+                // Ambil nilai kompresi saat ini setelah daftar algoritma tersedia
+                repo.getCurrentCompression().firstOrNull()?.let { currentAlgo -> _currentCompression.value = currentAlgo }
+            }
+        }
+        launch(Dispatchers.IO) { repo.getSwappiness().collect { _swappiness.value = it } }
+        launch(Dispatchers.IO) { repo.getDirtyRatio().collect { _dirtyRatio.value = it } }
+        launch(Dispatchers.IO) { repo.getDirtyBackgroundRatio().collect { _dirtyBackgroundRatio.value = it } }
+        launch(Dispatchers.IO) { repo.getDirtyWriteback().collect { _dirtyWriteback.value = it } }
+        launch(Dispatchers.IO) { repo.getDirtyExpireCentisecs().collect { _dirtyExpireCentisecs.value = it } }
+        launch(Dispatchers.IO) { repo.getMinFreeMemory().collect { _minFreeMemory.value = it } }
     }
 
-    fun setSwappiness(value: Int) = viewModelScope.launch(Dispatchers.IO) {
-        Log.i("TuningVM_Mem_Set", "Attempting to set swappiness to $value")
-        if (value !in 0..200) {
-            Log.e("TuningVM_Mem_Set", "Invalid swappiness value: $value. Must be 0-200.")
-            _rebootCommandFeedback.emit("Nilai Swappiness tidak valid (0-200).")
+    fun setZramEnabled(enabled: Boolean) = viewModelScope.launch(Dispatchers.IO) {
+        repo.setZramEnabled(enabled).collect { _zramEnabled.value = it }
+    }
+
+    fun setZramDisksize(sizeBytes: Long) = viewModelScope.launch(Dispatchers.IO) {
+        val max = repo.calculateMaxZramSize()
+        if (sizeBytes < 512 * 1024 * 1024 || sizeBytes > max) {
+            _rebootCommandFeedback.emit("Ukuran ZRAM tidak valid (512 MB - ${max / 1024 / 1024} MB)")
             return@launch
         }
-        try {
-            repo.setSwappiness(value)
-            _swappiness.value = value
-        } catch (e: Exception) {
-            Log.e("TuningVM_Mem_Set", "Error setting swappiness to $value", e)
-            fetchCurrentSwappiness() // Revert
+        repo.resizeZramSafely(sizeBytes)
+        repo.getZramDisksize().collect { _zramDisksize.value = it }
+    }
+
+    fun setCompression(algo: String) = viewModelScope.launch(Dispatchers.IO) {
+        if (algo != _currentCompression.value) {
+            try {
+                Log.d("TuningVM_RAM", "Attempting to set compression to: $algo")
+                repo.setCompressionAlgorithm(algo)
+                val newAlgo = repo.getCurrentCompression().first()
+                Log.d("TuningVM_RAM", "New currentCompression fetched after set: $newAlgo")
+                _currentCompression.value = newAlgo
+                Log.d("TuningVM_RAM", "_currentCompression.value after set: ${_currentCompression.value}")
+            } catch (e: Exception) {
+                Log.e("TuningVM_RAM", "Error setting or getting compression: $algo", e)
+                // Mungkin coba refresh lagi atau emit error
+                _currentCompression.value = "Error" // Atau nilai default yang jelas
+            }
+        } else {
+            Log.d("TuningVM_RAM", "Skipping setCompression, algo is already: $algo")
         }
     }
 
-    // --- Thermal Control Methods ---
+
+    fun setSwappiness(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setSwappiness(value) }
+    fun setDirtyRatio(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setDirtyRatio(value) }
+    fun setDirtyBackgroundRatio(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setDirtyBackgroundRatio(value) }
+    fun setDirtyWriteback(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setDirtyWriteback(value * 100) }
+    fun setDirtyExpireCentisecs(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setDirtyExpireCentisecs(value) }
+    fun setMinFreeMemory(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setMinFreeMemory(value * 1024) }
+
+    /* ---------------- Thermal ---------------- */
     private fun fetchCurrentThermalMode(isInitialLoad: Boolean = false) {
         if (isInitialLoad) _isThermalLoading.value = true
-        Log.d("TuningVM_Thermal", "Fetching current thermal mode. Initial: $isInitialLoad")
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                repo.getCurrentThermalModeIndex()
-                    .catch { e ->
-                        Log.e("TuningVM_Thermal", "Error get thermal mode index", e)
-                        withContext(Dispatchers.Main) {
-                            if (isInitialLoad) applyLastSavedThermalProfile() else _isThermalLoading.value = false
-                        }
-                    }
-                    .collect { indexFromKernel ->
-                        Log.d("TuningVM_Thermal", "Fetched thermal index: $indexFromKernel")
-                        withContext(Dispatchers.Main) {
-                            _currentThermalModeIndex.value = indexFromKernel
-                            if (isInitialLoad) applyLastSavedThermalProfile() else _isThermalLoading.value = false
-                        }
-                    }
-            } catch (e: Exception) {
-                Log.e("TuningVM_Thermal", "Exception in fetchCurrentThermalMode: ${e.message}", e)
-                withContext(Dispatchers.Main) {
-                    _isThermalLoading.value = false
-                    if (isInitialLoad && _currentThermalModeIndex.value == -1) {
-                        _currentThermalModeIndex.value = 0
-                    }
+            repo.getCurrentThermalModeIndex()
+                .catch {
+                    if (isInitialLoad) applyLastSavedThermalProfile() else _isThermalLoading.value = false
                 }
-            }
+                .collect {
+                    _currentThermalModeIndex.value = it
+                    if (isInitialLoad) applyLastSavedThermalProfile() else _isThermalLoading.value = false
+                }
         }
     }
 
     private suspend fun applyLastSavedThermalProfile() {
-        val lastSavedIndex = thermalPrefs.getInt(KEY_LAST_APPLIED_THERMAL_INDEX, -1)
-        Log.d("TuningVM_Thermal", "Apply last saved profile. Saved: $lastSavedIndex, Kernel: ${_currentThermalModeIndex.value}")
-
-        if (lastSavedIndex != -1) {
-            val profileToRestore = availableThermalProfiles.find { it.index == lastSavedIndex }
-            if (profileToRestore != null) {
-
-                if (_currentThermalModeIndex.value == -1 || _currentThermalModeIndex.value != lastSavedIndex) {
-                    Log.i("TuningVM_Thermal", "Restoring thermal profile: ${profileToRestore.displayName}")
-                    setThermalProfileInternal(profileToRestore, isRestoring = true)
-                } else {
-                    _isThermalLoading.value = false
-                }
-            } else {
-
-                thermalPrefs.edit().remove(KEY_LAST_APPLIED_THERMAL_INDEX).apply()
-                _isThermalLoading.value = false
-            }
+        val idx = thermalPrefs.getInt(KEY_LAST_APPLIED_THERMAL_INDEX, -1)
+        val profile = availableThermalProfiles.find { it.index == idx }
+        if (profile != null && _currentThermalModeIndex.value != idx) {
+            setThermalProfileInternal(profile, isRestoring = true)
         } else {
-            if (_currentThermalModeIndex.value == -1) _currentThermalModeIndex.value = 0 // Default ke "Disable"
             _isThermalLoading.value = false
         }
     }
 
-
     private suspend fun setThermalProfileInternal(profile: ThermalProfile, isRestoring: Boolean) {
         if (!isRestoring) _isThermalLoading.value = true
-
-        withContext(Dispatchers.IO) {
-            Log.d("TuningVM_Thermal_Set", "Internal set: ${profile.displayName}, Restoring: $isRestoring")
-            repo.setThermalModeIndex(profile.index)
-                .catch { e ->
-                    Log.e("TuningVM_Thermal_Set", "Error set profile ${profile.displayName}", e)
-                    withContext(Dispatchers.Main) { fetchCurrentThermalMode() }
-                }
-                .collect { success ->
-                    withContext(Dispatchers.Main) {
-                        if (success) {
-                            _currentThermalModeIndex.value = profile.index
-                            if (!isRestoring) {
-                                thermalPrefs.edit().putInt(KEY_LAST_APPLIED_THERMAL_INDEX, profile.index).apply()
-                            }
-                        } else {
-                            fetchCurrentThermalMode()
-                        }
-
-                        if (!isRestoring || !success) {
-                            if (success && isRestoring) {
-                            } else {
-                                _isThermalLoading.value = false
-                            }
-                        }
-                    }
-                }
-        }
-
-        if (isRestoring) {
-            val finalIndex = _currentThermalModeIndex.value
-            val restoredSuccessfully = availableThermalProfiles.any { it.index == finalIndex && finalIndex == profile.index }
-            if (restoredSuccessfully) _isThermalLoading.value = false
-
+        repo.setThermalModeIndex(profile.index).collect { ok ->
+            if (ok) {
+                _currentThermalModeIndex.value = profile.index
+                if (!isRestoring) thermalPrefs.edit().putInt(KEY_LAST_APPLIED_THERMAL_INDEX, profile.index).apply()
+            } else {
+                fetchCurrentThermalMode()
+            }
+            _isThermalLoading.value = false
         }
     }
 
+    fun setThermalProfile(profile: ThermalProfile) =
+        viewModelScope.launch { setThermalProfileInternal(profile, isRestoring = false) }
 
-    fun setThermalProfile(profile: ThermalProfile) {
-        Log.i("TuningVM_Thermal_Set", "User request set profile: ${profile.displayName}")
-        viewModelScope.launch(Dispatchers.Main) {
-            setThermalProfileInternal(profile, isRestoring = false)
+    /* ---------------- Init ---------------- */
+    private fun fetchAllInitialData() {
+        viewModelScope.launch {
+            launch(Dispatchers.IO) { fetchAllCpuData() }
+            launch(Dispatchers.IO) { fetchGpuData() }
+            fetchCurrentThermalMode(isInitialLoad = true)
+            launch(Dispatchers.IO) { fetchOpenGlesDriver() }
+            launch(Dispatchers.IO) { fetchCurrentGpuRenderer() }
+            launch(Dispatchers.IO) { fetchVulkanApiVersion() }
+            fetchRamControlData()
         }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        Log.d("TuningVM_Lifecycle", "ViewModel onCleared")
-
     }
 }
