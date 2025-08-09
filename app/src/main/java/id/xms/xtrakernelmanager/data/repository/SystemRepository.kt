@@ -431,18 +431,24 @@ class SystemRepository @Inject constructor(
             processModel.destroy()
 
             if (!manufacturer.isNullOrBlank() && !model.isNullOrBlank()) {
-                // Penyesuaian khusus untuk model QTI SM7475
+                // Penyesuaian khusus untuk Qualcomm Snapdragon
                 if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM7475", ignoreCase = true)) {
                     socName = "Qualcomm® Snapdragon™ 7+ Gen 2"
-                // Penyesuaian khusus untuk model QTI SM8650
                 } else if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM8650", ignoreCase = true)) {
                     socName = "Qualcomm® Snapdragon™ 8 Gen 3"
-                // Penyesuaian khusus untuk model QTI SM8635
                 } else if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM8635", ignoreCase = true)) {
                     socName = "Qualcomm® Snapdragon™ 8s Gen 3"
-                // Penyesuaian khusus untuk model QTI SDM845
                 } else if (manufacturer.equals("QTI", ignoreCase = true) && (model.equals("SDM845", ignoreCase = true) || model.equals("sdm845", ignoreCase = true) )) {
                     socName = "Qualcomm® Snapdragon™ 845"
+                } else if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM7435-AB", ignoreCase = true) || model.equals("SM7435", ignoreCase = true)) {
+                    socName = "Qualcomm® Snapdragon™ 7s Gen 2"
+                } else if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM8735", ignoreCase = true) || model.equals("sm8735", ignoreCase = true)) {
+                    socName = "Qualcomm® Snapdragon™ 8s Gen 4"
+                // Penyesuaian khusus untuk Mediatek
+                } else if (manufacturer.equals("Mediatek", ignoreCase = true) && model.equals("MT6785/CD", ignoreCase = true) || model.equals("MT6785", ignoreCase = true)) {
+                    socName = "MediaTek Helio G95"
+                } else if (manufacturer.equals("Mediatek", ignoreCase = true) && model.equals("MT6877V/TTZA", ignoreCase = true) || model.equals("MT6877V", ignoreCase = true)) {
+                    socName = "MediaTek Dimensity 1080"
                 } else {
                     socName = "$manufacturer $model"
                 }
