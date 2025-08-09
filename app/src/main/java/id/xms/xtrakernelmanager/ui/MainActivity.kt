@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             XtraTheme {
                 val navController = rememberNavController()
-                val items = listOf("Home", "Tuning", "Terminal", "Info")
+                val items = listOf("Home", "Tuning", "Misc", "Info")
 
                 Scaffold(
                     bottomBar = { BottomNavBar(navController, items) }
@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         composable("home") { HomeScreen() }
                         composable("tuning") { TuningScreen() }
-                        composable("terminal") { TerminalScreen() }
+                        composable("misc") { MiscScreen() }
                         composable("info") { InfoScreen() }
                     }
                 }
