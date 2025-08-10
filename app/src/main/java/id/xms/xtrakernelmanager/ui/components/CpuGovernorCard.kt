@@ -12,6 +12,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
@@ -155,7 +157,9 @@ fun CpuGovernorCard(
                         dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMedium
                     )
-                )
+                ),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
             ) {
                 Column(modifier = Modifier.padding(top = 4.dp)) {
                     HorizontalDivider(
@@ -419,17 +423,20 @@ private fun GovernorSelectionDialog(
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
+        shape = MaterialTheme.shapes.large,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         onDismissRequest = onDismiss,
-        title = { Text("Select Governor", style = MaterialTheme.typography.headlineSmall) },
+        title = {
+            Text(
+                "Select Governor for ${clusterName.replaceFirstChar { it.titlecase() }}",
+                style = MaterialTheme.typography.headlineSmall
+            )
+        },
         text = {
-            Column {
-                Text(
-                    clusterName.replaceFirstChar { it.titlecase() },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 12.dp, top = 4.dp)
-                )
-                availableGovernors.forEach { governor ->
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(16.dp))
+                availableGovernors.sorted().forEach { governor -> // Urutkan daftar governor
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -441,6 +448,7 @@ private fun GovernorSelectionDialog(
                         RadioButton(
                             selected = (governor == currentSelectedGovernor),
                             onClick = { onGovernorSelected(governor) },
+                            modifier = Modifier.size(20.dp),
                             colors = RadioButtonDefaults.colors(
                                 selectedColor = MaterialTheme.colorScheme.primary,
                                 unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -450,7 +458,11 @@ private fun GovernorSelectionDialog(
                         Text(
                             governor,
                             style = MaterialTheme.typography.bodyLarge,
-                            color = if (governor == currentSelectedGovernor) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            color = if (governor == currentSelectedGovernor) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
                         )
                     }
                 }
@@ -459,11 +471,14 @@ private fun GovernorSelectionDialog(
         confirmButton = {
             TextButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
             ) {
-                Text("CANCEL", fontWeight = FontWeight.Medium)
+                Text("CANCEL", fontWeight = FontWeight.SemiBold)
             }
-        }
+        },
+        dismissButton = null // Tidak perlu dismiss button eksplisit, onDismissRequest sudah cukup
     )
 }
 
@@ -620,6 +635,9 @@ private fun CoreStatusDialog(
     onCoreToggled: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val GreenOnline = Color(0xFF4CAF50)
+    val RedOffline = Color(0xFFF44336)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Core Status", style = MaterialTheme.typography.headlineSmall) },
@@ -639,19 +657,35 @@ private fun CoreStatusDialog(
                             .padding(vertical = 8.dp, horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(
-                            selected = isOnline,
+                        // Custom Button with rounded shape instead of RadioButton
+                        Button(
                             onClick = { onCoreToggled(index) },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = MaterialTheme.colorScheme.primary,
-                                unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
+                            shape = RoundedCornerShape(50), // Fully rounded
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isOnline) GreenOnline else RedOffline,
+                                contentColor = Color.White // Text color for the button
+                            ),
+                            modifier = Modifier
+                                .size(24.dp) // Maintain size
+                                .padding(0.dp), // Ensure no extra padding inside the button
+                        ) {
+                            // Empty content as the color itself indicates the state
+                            // Alternatively, you can put a small check icon or something similar
+                        }
+
                         Spacer(Modifier.width(16.dp))
                         Text(
                             text = "Core $index",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = if (isOnline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            text = if (isOnline) "Online" else "Offline",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = if (isOnline) GreenOnline else RedOffline,
+                                fontWeight = FontWeight.SemiBold
+                            ),
                         )
                     }
                 }
