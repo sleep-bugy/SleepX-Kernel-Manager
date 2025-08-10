@@ -28,8 +28,10 @@
         android:label="@string/app_name"
         android:roundIcon="@drawable/logo"
         android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.XtraKernelManager"
-        android:requestLegacyExternalStorage="true" >
+        android:requestLegacyExternalStorage="true"
+        tools:targetApi="33">
 
     <activity
         android:name=".ui.MainActivity"
