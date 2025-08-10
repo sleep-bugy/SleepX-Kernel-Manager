@@ -59,42 +59,30 @@ class TuningRepository @Inject constructor(
     /* ----------------------------------------------------------
        Helper Shell
        ---------------------------------------------------------- */
-    private var isSuShellWorking = true // Assume libsu works initially
-
-    // Fungsi untuk menjalankan perintah shell dengan penanganan SELinux
-    // Fungsi ini akan menjadi wrapper untuk semua perintah yang MEMBUTUHKAN perubahan SELinux
+    private var isSuShellWorking = true
     private fun runTuningCommand(cmd: String): Boolean {
         Log.d(TAG, "[Shell RW TUNING] Preparing to execute: '$cmd'")
-        val originalSelinuxMode = getSelinuxModeInternal() // Dapatkan mode SELinux saat ini
+        val originalSelinuxMode = getSelinuxModeInternal()
         var success = false
-
-        // Hanya ubah ke permisif jika saat ini enforcing
         val needsSelinuxChange = originalSelinuxMode.equals("Enforcing", ignoreCase = true)
 
         if (needsSelinuxChange) {
             Log.i(TAG, "[Shell RW TUNING] Current SELinux mode: $originalSelinuxMode. Setting to Permissive.")
-            if (!setSelinuxModeInternal(false)) { // Set ke Permissive (0)
+            if (!setSelinuxModeInternal(false)) {
                 Log.e(TAG, "[Shell RW TUNING] Failed to set SELinux to Permissive. Command will run in current mode.")
-                // Lanjutkan eksekusi perintah meskipun gagal mengubah SELinux,
-                // mungkin beberapa perintah masih bisa berhasil atau ini adalah fallback.
+
             }
         }
 
-        // Jalankan perintah tuning utama
         success = executeShellCommand(cmd)
-
-        // Kembalikan ke mode SELinux enforcing jika sebelumnya diubah
         if (needsSelinuxChange) {
             Log.i(TAG, "[Shell RW TUNING] Restoring SELinux mode to Enforcing.")
             if (!setSelinuxModeInternal(true)) { // Set kembali ke Enforcing (1)
                 Log.w(TAG, "[Shell RW TUNING] Failed to restore SELinux to Enforcing. System might remain in Permissive mode.")
-                // Tidak ada tindakan error khusus di sini, hanya log peringatan.
             }
         }
         return success
     }
-
-    // Fungsi internal untuk eksekusi shell, dipanggil oleh runTuningCommand atau langsung jika tidak perlu SELinux handling
     private fun executeShellCommand(cmd: String): Boolean {
         Log.d(TAG, "[Shell EXEC] Executing: '$cmd'")
         if (isSuShellWorking) {
@@ -117,19 +105,7 @@ class TuningRepository @Inject constructor(
             return executeShellCommandFallback(cmd)
         }
     }
-
-
-    // Fungsi runShellCommand lama sekarang bisa menjadi alias ke executeShellCommand
-    // jika Anda ingin membedakan antara perintah yang dimodifikasi SELinux dan yang tidak.
-    // Atau, Anda bisa mengganti semua pemanggilan runShellCommand lama dengan runTuningCommand.
-    // Untuk kesederhanaan, saya akan asumsikan semua perintah tulis potensial akan melalui runTuningCommand.
-    // Jika ada perintah tulis yang TIDAK boleh mengubah SELinux, panggil executeShellCommand secara langsung.
     private fun runShellCommand(cmd: String): Boolean {
-        // Wrapper ini bisa dipertimbangkan apakah akan selalu melalui runTuningCommand
-        // atau executeShellCommand. Jika sebuah `echo` sederhana tidak perlu SELinux,
-        // maka bisa langsung ke `executeShellCommand`.
-        // Untuk saat ini, kita akan membuat semua `runShellCommand` yang ada
-        // menggunakan logika tuning SELinux.
         return runTuningCommand(cmd)
     }
 
@@ -140,7 +116,7 @@ class TuningRepository @Inject constructor(
             try {
                 val result = Shell.cmd(cmd).exec()
                 return if (result.isSuccess) result.out.joinToString("\n").trim() else {
-                    isSuShellWorking = false // Assume problem if read fails too
+                    isSuShellWorking = false
                     readShellCommandFallback(cmd)
                 }
             } catch (e: Exception) {
@@ -159,8 +135,6 @@ class TuningRepository @Inject constructor(
     private fun setSelinuxModeInternal(enforcing: Boolean): Boolean {
         val mode = if (enforcing) "1" else "0"
         Log.i(TAG, "[SELinux] Setting mode to: ${if (enforcing) "Enforcing" else "Permissive"} ($mode)")
-        // Gunakan executeShellCommand di sini karena ini adalah bagian dari mekanisme internal
-        // dan tidak boleh memicu loop rekursif perubahan SELinux.
         val success = executeShellCommand("setenforce $mode")
         if (!success) {
             Log.e(TAG, "[SELinux] Failed to set SELinux mode to $mode")
@@ -172,7 +146,7 @@ class TuningRepository @Inject constructor(
         // Gunakan readShellCommand karena ini adalah operasi baca
         val result = readShellCommand("getenforce").trim()
         Log.i(TAG, "[SELinux] Current mode: $result")
-        return result // Akan mengembalikan "Enforcing", "Permissive", atau "Disabled"
+        return result // Akan mengembalikan "Enforcing", "Permissive"
     }
 
     // Public functions for SELinux if needed by ViewModel/UI, though likely not directly
@@ -212,11 +186,7 @@ class TuningRepository @Inject constructor(
             else -> totalRamBytes / 4       // 25%
         }
     }
-
-    // Fungsi resizeZramSafely sekarang akan menggunakan runTuningCommand untuk setiap echo
-    // Namun, karena ini adalah serangkaian perintah, lebih baik membungkus seluruh blok.
     private fun resizeZramSafely(newSizeBytes: Long): Boolean {
-        // Perintah-perintah ini melakukan penulisan, jadi bungkus dengan SELinux handling
         val originalSelinuxMode = getSelinuxModeInternal()
         val needsSelinuxChange = originalSelinuxMode.equals("Enforcing", ignoreCase = true)
         var overallSuccess = true
@@ -225,12 +195,9 @@ class TuningRepository @Inject constructor(
             Log.i(TAG, "[ZRAM SELinux] Current SELinux mode: $originalSelinuxMode. Setting to Permissive for ZRAM ops.")
             if (!setSelinuxModeInternal(false)) {
                 Log.e(TAG, "[ZRAM SELinux] Failed to set SELinux to Permissive for ZRAM ops.")
-                // Lanjutkan, tapi catat kegagalan
             }
         }
 
-        // Jalankan perintah ZRAM satu per satu menggunakan executeShellCommand (tanpa handling SELinux individual)
-        // karena kita sudah menangani SELinux untuk seluruh blok.
         if (!executeShellCommand("swapoff /dev/block/zram0 2>/dev/null || true")) overallSuccess = false
         if (!executeShellCommand("echo 1 > $zramResetPath")) overallSuccess = false
         if (!executeShellCommand("echo $newSizeBytes > $zramDisksizePath")) overallSuccess = false
@@ -247,14 +214,11 @@ class TuningRepository @Inject constructor(
     }
 
     fun setZramEnabled(enabled: Boolean): Flow<Boolean> = flow {
-        // resizeZramSafely sudah menangani SELinux
         resizeZramSafely(if (enabled) calculateMaxZramSize() else 0)
-        // Baca status setelahnya, tidak perlu SELinux handling untuk `cat`
         emit(readShellCommand("cat $zramInitStatePath").trim() == "1")
     }.flowOn(Dispatchers.IO)
 
     fun setZramDisksize(sizeBytes: Long): Boolean {
-        // resizeZramSafely sudah menangani SELinux
         return resizeZramSafely(sizeBytes)
     }
 
@@ -279,11 +243,10 @@ class TuningRepository @Inject constructor(
         var success = true
 
         if (needsSelinuxChange) {
-            setSelinuxModeInternal(false) // Ke Permisif
+            setSelinuxModeInternal(false)
         }
 
-        // Jalankan perintah dengan executeShellCommand
-        executeShellCommand("chmod 666 $zramCompAlgorithmPath") // Chmod mungkin memerlukan permisif
+        executeShellCommand("chmod 666 $zramCompAlgorithmPath")
 
         val commands = if (currentSize > 0) {
             """
@@ -298,14 +261,10 @@ class TuningRepository @Inject constructor(
             "echo $algo > $zramCompAlgorithmPath"
         }
 
-        // Eksekusi perintah utama, bisa jadi multi-line
-        // Jika `commands` adalah string tunggal dengan newline, Shell.cmd() akan menanganinya.
-        // Jika Anda ingin mengeksekusi baris per baris, Anda perlu mem-parsingnya.
-        // Untuk saat ini, kita asumsikan Shell.cmd() menangani string multi-baris.
         success = executeShellCommand(commands)
 
         if (needsSelinuxChange) {
-            setSelinuxModeInternal(true) // Kembali ke Enforcing
+            setSelinuxModeInternal(true)
         }
         return success
     }
@@ -319,11 +278,9 @@ class TuningRepository @Inject constructor(
         val active = raw.split(" ").firstOrNull { it.startsWith("[") }
             ?.removeSurrounding("[", "]")
             ?: raw.split(" ").firstOrNull()
-            ?: "lz4" // Default jika parsing gagal
+            ?: "lz4"
         emit(active)
     }.flowOn(Dispatchers.IO)
-
-    // Untuk fungsi set sederhana yang hanya melakukan 'echo', runTuningCommand akan menangani SELinux
     fun setSwappiness(value: Int): Boolean =
         runTuningCommand("echo $value > $swappinessPath")
 
@@ -345,30 +302,23 @@ class TuningRepository @Inject constructor(
         emit(readShellCommand("cat $dirtyBackgroundRatioPath").toIntOrNull() ?: 10)
     }.flowOn(Dispatchers.IO)
 
-    // valueCentisecs sudah benar di sini, ViewModel yang akan mengonversi dari detik jika perlu
     fun setDirtyWriteback(valueCentisecs: Int): Boolean =
         runTuningCommand("echo $valueCentisecs > $dirtyWritebackCentisecsPath")
 
     fun getDirtyWriteback(): Flow<Int> = flow {
-        // Kembalikan dalam DETIK untuk ViewModel
         emit((readShellCommand("cat $dirtyWritebackCentisecsPath").toIntOrNull() ?: 3000) / 100)
     }.flowOn(Dispatchers.IO)
 
-    // valueCentisecsInput sudah benar, ViewModel yang akan mengonversi dari detik
     fun setDirtyExpireCentisecs(valueCentisecsInput: Int): Boolean =
         runTuningCommand("echo $valueCentisecsInput > $dirtyExpireCentisecsPath")
 
     fun getDirtyExpireCentisecs(): Flow<Int> = flow {
-        // Kembalikan dalam DETIK untuk ViewModel
         emit((readShellCommand("cat $dirtyExpireCentisecsPath").toIntOrNull() ?: 3000) / 100)
     }.flowOn(Dispatchers.IO)
-
-    // valueKBytes sudah benar, ViewModel yang akan mengonversi dari MB
     fun setMinFreeMemory(valueKBytes: Int): Boolean =
         runTuningCommand("echo $valueKBytes > $minFreeKbytesPath")
 
     fun getMinFreeMemory(): Flow<Int> = flow {
-        // Kembalikan dalam MB untuk ViewModel
         emit((readShellCommand("cat $minFreeKbytesPath").toIntOrNull() ?: (128 * 1024)) / 1024)
     }.flowOn(Dispatchers.IO)
 
@@ -381,11 +331,6 @@ class TuningRepository @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     fun setCpuGov(cluster: String, gov: String): Boolean {
-        // `chmod` dan `echo` keduanya memerlukan SELinux permisif jika enforcing
-        // runTuningCommand akan menangani ini untuk setiap perintah.
-        // Ini mungkin kurang efisien karena SELinux akan diubah dua kali.
-        // Idealnya, buat fungsi yang menjalankan beberapa perintah dalam satu blok SELinux.
-        // Untuk saat ini, kita gunakan pendekatan sederhana.
         val chmodSuccess = runTuningCommand("chmod 666 ${cpuGovPath.format(cluster)}")
         return chmodSuccess && runTuningCommand("echo $gov > ${cpuGovPath.format(cluster)}")
     }
@@ -397,7 +342,6 @@ class TuningRepository @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     fun setCpuFreq(cluster: String, min: Int, max: Int): Boolean {
-        // Sama seperti setCpuGov, idealnya satu blok SELinux
         val chmodMinSuccess = runTuningCommand("chmod 666 ${cpuMinFreqPath.format(cluster)}")
         val chmodMaxSuccess = runTuningCommand("chmod 666 ${cpuMaxFreqPath.format(cluster)}")
         val setMinSuccess = runTuningCommand("echo $min > ${cpuMinFreqPath.format(cluster)}")
@@ -423,8 +367,7 @@ class TuningRepository @Inject constructor(
         val value = if (isOnline) 1 else 0
         // Chmod mungkin diperlukan dan harus berada dalam blok SELinux jika digunakan
         var chmodSuccess = true
-        if (coreId >= 4) { // Asumsi dari kode sebelumnya
-            // chmod juga akan melalui runTuningCommand jika itu yang terbaik
+        if (coreId >= 4) {
             chmodSuccess = runTuningCommand("chmod 666 ${coreOnlinePath.format(coreId)}")
         }
         return chmodSuccess && runTuningCommand("echo $value > ${coreOnlinePath.format(coreId)}")
@@ -433,24 +376,21 @@ class TuningRepository @Inject constructor(
     fun getCoreOnline(coreId: Int): Boolean =
         readShellCommand("cat ${coreOnlinePath.format(coreId)}").trim() == "1"
 
-    // Helper untuk mendapatkan jumlah core, jika tidak ada cara yang lebih baik
+
     fun getNumberOfCores(): Int {
-        // Coba baca dari /sys/devices/system/cpu/present atau online
-        // Ini adalah contoh sederhana, mungkin perlu disesuaikan
         val presentCores = readShellCommand("cat /sys/devices/system/cpu/present") // e.g., "0-7"
         if (presentCores.contains("-")) {
             try {
                 return presentCores.split("-").last().toInt() + 1
             } catch (e: NumberFormatException) {
-                // Fallback jika format tidak terduga
             }
         }
-        // Fallback ke hitungan file cpuX, bisa lambat atau tidak akurat
+
         var count = 0
         while (readShellCommand("if [ -d /sys/devices/system/cpu/cpu$count ]; then echo 1; else echo 0; fi").trim() == "1") {
             count++
         }
-        return if (count > 0) count else 8 // Default ke 8 jika gagal deteksi
+        return if (count > 0) count else 8
     }
 
 
@@ -467,16 +407,54 @@ class TuningRepository @Inject constructor(
     }
 
     fun getGpuFreq(): Flow<Pair<Int, Int>> = flow {
-        val min = readShellCommand("cat $gpuMinFreqPath").toIntOrNull() ?: 0
-        val max = readShellCommand("cat $gpuMaxFreqPath").toIntOrNull() ?: 0
-        emit((min / 1000000) to (max / 1000000)) // Pastikan pembagian benar (Hz ke MHz)
+        Log.d("MyGpuDebug", "getGpuFreq: Memulai pembacaan frekuensi GPU.")
+
+        Log.d("MyGpuDebug", "getGpuFreq: Membaca min_freq dari path: $gpuMinFreqPath")
+        val rawMinOutput = readShellCommand("cat $gpuMinFreqPath").trim()
+        Log.d("MyGpuDebug", "getGpuFreq: rawMinOutput dari readShellCommand: [$rawMinOutput]")
+
+        Log.d("MyGpuDebug", "getGpuFreq: Membaca max_freq dari path: $gpuMaxFreqPath")
+        val rawMaxOutput = readShellCommand("cat $gpuMaxFreqPath").trim()
+        Log.d("MyGpuDebug", "getGpuFreq: rawMaxOutput dari readShellCommand: [$rawMaxOutput]")
+
+        val minHz = rawMinOutput.toIntOrNull() ?: 0
+        Log.d("MyGpuDebug", "getGpuFreq: minHz setelah toIntOrNull (default 0): $minHz")
+
+        val maxHz = rawMaxOutput.toIntOrNull() ?: 0
+        Log.d("MyGpuDebug", "getGpuFreq: maxHz setelah toIntOrNull (default 0): $maxHz")
+
+        val minMhzResult = if (minHz == 0) 0 else minHz / 1000000
+        val maxMhzResult = if (maxHz == 0) 0 else maxHz / 1000000
+        Log.d("MyGpuDebug", "getGpuFreq: Mengirimkan pasangan (minMhz, maxMhz): ($minMhzResult, $maxMhzResult)")
+
+        emit(minMhzResult to maxMhzResult)
     }.flowOn(Dispatchers.IO)
 
-    fun setGpuMinFreq(freqMHz: Int): Boolean =
-        runTuningCommand("echo ${freqMHz * 1000000} > $gpuMinFreqPath") // MHz ke Hz
 
-    fun setGpuMaxFreq(freqMHz: Int): Boolean =
-        runTuningCommand("echo ${freqMHz * 1000000} > $gpuMaxFreqPath") // MHz ke Hz
+    fun setGpuMinFreq(freqMHz: Int): Boolean {
+        Log.d(TAG, "setGpuMinFreq: Menyetel ke $freqMHz MHz (nilai Hz: ${freqMHz * 1000000})")
+        val success = runTuningCommand("echo ${freqMHz * 1000000} > $gpuMinFreqPath")
+        if (success) {
+            val valueAfterSet = readShellCommand("cat $gpuMinFreqPath").trim()
+            Log.i(TAG, "setGpuMinFreq: VERIFIKASI - Nilai di $gpuMinFreqPath setelah set: [$valueAfterSet]")
+        } else {
+            Log.e(TAG, "setGpuMinFreq: Gagal menjalankan runTuningCommand")
+        }
+        return success
+    }
+
+    fun setGpuMaxFreq(freqMHz: Int): Boolean {
+        Log.d(TAG, "setGpuMaxFreq: Menyetel ke $freqMHz MHz (nilai Hz: ${freqMHz * 1000000})")
+        val success = runTuningCommand("echo ${freqMHz * 1000000} > $gpuMaxFreqPath")
+        if (success) {
+            val valueAfterSet = readShellCommand("cat $gpuMaxFreqPath").trim()
+            Log.i(TAG, "setGpuMaxFreq: VERIFIKASI - Nilai di $gpuMaxFreqPath setelah set: [$valueAfterSet]")
+        } else {
+            Log.e(TAG, "setGpuMaxFreq: Gagal menjalankan runTuningCommand")
+        }
+        return success
+    }
+
 
 
     fun getAvailableGpuGovernors(): Flow<List<String>> = flow {
@@ -490,7 +468,7 @@ class TuningRepository @Inject constructor(
         emit(readShellCommand("cat $gpuAvailableFreqsPath")
             .split(" ")
             .mapNotNull { it.toIntOrNull() }
-            .map { it / 1000000 } // Hz ke MHz
+            .map { freqHz -> if (freqHz > 100000) freqHz / 1000000 else freqHz }
             .sorted())
     }.flowOn(Dispatchers.IO)
 
@@ -518,12 +496,8 @@ class TuningRepository @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     fun setThermalModeIndex(modeIndex: Int): Flow<Boolean> = flow {
-        // Menggunakan runTuningCommand untuk setiap operasi tulis
-        // Idealnya, bungkus dalam satu blok jika memungkinkan, tapi untuk setprop ini mungkin tidak apa-apa
         val preChmodOk = runTuningCommand("chmod 0666 $thermalSysfsNode")
         val writeOk = runTuningCommand("echo $modeIndex > $thermalSysfsNode")
-        // chmod lagi setelahnya mungkin tidak selalu diperlukan, tergantung implementasi kernel
-        // tapi tidak berbahaya.
         val postChmodOk = runTuningCommand("chmod 0666 $thermalSysfsNode")
         emit(preChmodOk && writeOk && postChmodOk)
     }.flowOn(Dispatchers.IO)
@@ -540,18 +514,15 @@ class TuningRepository @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     fun getGpuRenderer(): Flow<String> = flow {
-        emit(readShellCommand("getprop debug.hwui.renderer").ifEmpty { "OpenGL" }) // Default OpenGL
+        emit(readShellCommand("getprop debug.hwui.renderer").ifEmpty { "OpenGL" })
     }.flowOn(Dispatchers.IO)
 
     fun setGpuRenderer(renderer: String): Flow<Boolean> = flow {
         val command = if (renderer.equals("Default", ignoreCase = true)) {
-            "setprop debug.hwui.renderer \"\"" // Set ke string kosong untuk default
+            "setprop debug.hwui.renderer \"\""
         } else {
             "setprop debug.hwui.renderer $renderer"
         }
-        // `setprop` biasanya tidak memerlukan SELinux permisif, jadi bisa gunakan `executeShellCommand`
-        // Tapi untuk konsistensi, jika `runTuningCommand` defaultnya, bisa dipakai.
-        // Mari kita asumsikan setprop aman tanpa SELinux change.
         emit(executeShellCommand(command))
     }.flowOn(Dispatchers.IO)
 
@@ -560,7 +531,6 @@ class TuningRepository @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     fun rebootDevice(): Flow<Boolean> = flow {
-        // Reboot tidak memerlukan SELinux permisif secara khusus.
         emit(executeShellCommand("reboot"))
     }.flowOn(Dispatchers.IO)
 
@@ -572,10 +542,8 @@ class TuningRepository @Inject constructor(
         Log.d(TAG, "[Shell EXEC Fallback] Executing: '$cmd'")
         try {
             val process = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
-            // Penting untuk mengonsumsi output dan error stream untuk menghindari deadlock
-            // Meskipun kita tidak menggunakannya untuk Boolean, ini adalah praktik yang baik.
-            process.inputStream.bufferedReader().use { it.readText() } // Konsumsi output
-            val errorOutput = process.errorStream.bufferedReader().use { it.readText() } // Konsumsi error
+            process.inputStream.bufferedReader().use { it.readText() }
+            val errorOutput = process.errorStream.bufferedReader().use { it.readText() }
 
             val exitCode = process.waitFor()
             return if (exitCode == 0) {
@@ -603,11 +571,11 @@ class TuningRepository @Inject constructor(
                 output.trim()
             } else {
                 Log.e(TAG, "[Shell R Fallback] Failed (code $exitCode) for cmd: '$cmd'. Err: $errorOutput")
-                "" // Kembalikan string kosong jika gagal
+                ""
             }
         } catch (e: Exception) {
             Log.e(TAG, "[Shell R Fallback] Exception for cmd: '$cmd'", e)
-            return "" // Kembalikan string kosong jika terjadi exception
+            return ""
         }
     }
 }

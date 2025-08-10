@@ -224,6 +224,7 @@ class TuningViewModel @Inject constructor(
         val (min, max) = repo.getGpuFreq().first()
         _currentGpuMinFreq.value = min
         _currentGpuMaxFreq.value = max
+        Log.d("ViewModelGPU", "StateFlows updated: _currentGpuMinFreq=${_currentGpuMinFreq.value}, _currentGpuMaxFreq=${_currentGpuMaxFreq.value}")
         _gpuPowerLevelRange.value = repo.getGpuPowerLevelRange().first()
         _currentGpuPowerLevel.value = repo.getCurrentGpuPowerLevel().first()
     }
@@ -235,16 +236,20 @@ class TuningViewModel @Inject constructor(
     }
 
     fun setGpuMinFrequency(freqKHz: Int) = viewModelScope.launch(Dispatchers.IO) {
+        repo.setGpuMinFreq(freqKHz)
         if (repo.setGpuMinFreq(freqKHz)) {
             val (min, max) = repo.getGpuFreq().first()
             _currentGpuMinFreq.value = min
+            fetchGpuData()
         }
     }
 
     fun setGpuMaxFrequency(freqKHz: Int) = viewModelScope.launch(Dispatchers.IO) {
+        repo.setGpuMaxFreq(freqKHz)
         if (repo.setGpuMaxFreq(freqKHz)) {
             val (min, max) = repo.getGpuFreq().first()
             _currentGpuMaxFreq.value = max
+            fetchGpuData()
         }
     }
 
