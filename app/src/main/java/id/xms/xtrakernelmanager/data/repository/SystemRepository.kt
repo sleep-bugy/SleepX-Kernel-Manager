@@ -5,7 +5,33 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.util.Log
+import androidx.compose.ui.geometry.isEmpty
+import androidx.compose.ui.graphics.vector.path
+// Hapus impor yang tidak terpakai jika ada, seperti:
+// import androidx.compose.ui.geometry.isEmpty
+// import androidx.compose.ui.graphics.vector.path
+// import kotlin.io.path.inputStream // Ini juga sepertinya tidak digunakan, File.inputStream() lebih umum
+
 import id.xms.xtrakernelmanager.data.model.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.channels.awaitClose // Diperlukan untuk callbackFlow
+import kotlinx.coroutines.channels.ChannelResult // Untuk memeriksa hasil trySend
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.callbackFlow
+// import kotlinx.coroutines.flow.first // Tidak digunakan di kode yang Anda berikan
+// import kotlinx.coroutines.flow.mapLatest // Tidak digunakan di kode yang Anda berikan
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -13,41 +39,44 @@ import java.io.InputStreamReader
 import java.io.BufferedReader
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.io.path.inputStream
 
 
 @Suppress("UNREACHABLE_CODE")
 @Singleton
 class SystemRepository @Inject constructor(
-    private val context: Context
+    private val context: Context,
 ) {
 
     companion object {
         private const val TAG = "SystemRepository"
         private const val VALUE_NOT_AVAILABLE = "N/A"
         private const val VALUE_UNKNOWN = "Unknown"
-        private const val TARGET_CYCLES_FOR_80_PERCENT_HEALTH = 500
-        private const val TARGET_HEALTH_AT_TARGET_CYCLES = 80
-        // Persentase kehilangan per siklus
-        private const val DEGRADATION_PERCENT_PER_CYCLE =
-            (100.0 - TARGET_HEALTH_AT_TARGET_CYCLES) / TARGET_CYCLES_FOR_80_PERCENT_HEALTH
+        private const val REALTIME_UPDATE_INTERVAL_MS = 1000L
     }
 
-    // --- Fungsi Helper Inti untuk Membaca File dengan Fallback 'su' ---
+    private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    private var cachedSystemInfo: SystemInfo? = null
+    private suspend fun getCachedSystemInfo(): SystemInfo {
+        // Menggunakan double-checked locking untuk thread-safety sederhana jika diakses dari coroutine berbeda
+        // Meskipun dalam kasus ini, kemungkinan besar akan dipanggil dari scope callbackFlow yang sama.
+        return cachedSystemInfo ?: synchronized(this) {
+            cachedSystemInfo ?: getSystemInfoInternal().also { cachedSystemInfo = it }
+        }
+    }
+
     private fun readFileToString(filePath: String, fileDescription: String, attemptSu: Boolean = true): String? {
         val file = File(filePath)
-        Log.d(TAG, "Membaca '$fileDescription' dari: $filePath (Attempt SU: $attemptSu)")
         try {
             if (file.exists() && file.canRead()) {
                 val content = file.readText().trim()
                 if (content.isNotBlank()) {
-                    Log.d(TAG, "'$fileDescription': Konten mentah (langsung) = '$content'")
                     return content
                 } else {
                     Log.w(TAG, "'$fileDescription': File kosong (langsung). Path: $filePath")
                     if (!attemptSu) return null
                 }
-            } else {
-                Log.w(TAG, "'$fileDescription': File tidak ada/baca (langsung). Path: $filePath. Exists: ${file.exists()}, CanRead: ${file.canRead()}")
             }
         } catch (e: SecurityException) {
             Log.w(TAG, "'$fileDescription': SecurityException (langsung). Path: $filePath. Mencoba SU.", e)
@@ -60,11 +89,14 @@ class SystemRepository @Inject constructor(
             Log.e(TAG, "'$fileDescription': Exception tidak diketahui (langsung). Path: $filePath.", e)
             return null
         }
+
         if (attemptSu) {
-            Log.i(TAG, "'$fileDescription': Mencoba membaca $filePath menggunakan 'su cat'")
             var process: Process? = null
             try {
                 process = Runtime.getRuntime().exec(arrayOf("su", "-c", "cat \"$filePath\""))
+                // Membaca output dan error stream dalam coroutine terpisah untuk menghindari deadlock
+                // Namun, untuk kesederhanaan di sini, kita jaga seperti sebelumnya,
+                // asumsikan output tidak terlalu besar.
                 val reader = BufferedReader(InputStreamReader(process.inputStream))
                 val errorReader = BufferedReader(InputStreamReader(process.errorStream))
                 val output = StringBuilder()
@@ -86,7 +118,6 @@ class SystemRepository @Inject constructor(
                 if (exitCode == 0) {
                     val contentSu = output.toString().trim()
                     if (contentSu.isNotBlank()) {
-                        Log.i(TAG, "'$fileDescription': Konten mentah (via SU) = '$contentSu'")
                         return contentSu
                     } else {
                         Log.w(TAG, "'$fileDescription': File kosong (via SU). Path: $filePath")
@@ -94,9 +125,6 @@ class SystemRepository @Inject constructor(
                     }
                 } else {
                     Log.e(TAG, "'$fileDescription': Perintah 'su cat \"$filePath\"' gagal dengan exit code $exitCode.")
-                    if (output.isNotBlank()) {
-                        Log.w(TAG, "'$fileDescription': Output stdout dari 'su cat' saat gagal:\n${output.toString().trim()}")
-                    }
                 }
             } catch (e: IOException) {
                 Log.e(TAG, "'$fileDescription': IOException saat menjalankan 'su cat \"$filePath\"'", e)
@@ -108,24 +136,11 @@ class SystemRepository @Inject constructor(
             } finally {
                 process?.destroy()
             }
-        } else {
-            Log.d(TAG, "'$fileDescription': Tidak mencoba membaca $filePath via SU (attemptSu false atau baca langsung gagal tanpa SecurityException).")
         }
-
-        Log.e(TAG, "'$fileDescription': GAGAL membaca dari $filePath setelah semua percobaan.")
         return null
     }
 
-    private var lastCpuRealtimeUpdate = 0L
-    private var cachedCpuRealtimeInfo: RealtimeCpuInfo? = null
-
-    fun getCpuRealtime(): RealtimeCpuInfo {
-        val currentTime = System.currentTimeMillis()
-        if (currentTime - lastCpuRealtimeUpdate < 2000 && cachedCpuRealtimeInfo != null) {
-            return cachedCpuRealtimeInfo!!
-        }
-        Log.d(TAG, "Memperbarui RealtimeCpuInfo...")
-
+    private suspend fun getCpuRealtimeInternal(): RealtimeCpuInfo {
         val cores = Runtime.getRuntime().availableProcessors()
         val governor = readFileToString("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "CPU0 Governor") ?: VALUE_UNKNOWN
 
@@ -135,129 +150,99 @@ class SystemRepository @Inject constructor(
         }
 
         val tempStr = readFileToString("/sys/class/thermal/thermal_zone0/temp", "Thermal Zone0 Temp")
-        val temperature = (tempStr?.toFloatOrNull()?.div(1000)) ?: 0f
+        val temperature = (tempStr?.toFloatOrNull()?.div(1000)) ?: 0f // Asumsi temp dalam mili-Celsius
 
-        cachedCpuRealtimeInfo = RealtimeCpuInfo(cores, governor, frequencies, temperature)
-        lastCpuRealtimeUpdate = currentTime
-        Log.d(TAG, "RealtimeCpuInfo diperbarui: $cachedCpuRealtimeInfo")
-        return cachedCpuRealtimeInfo!!
+        val systemInfo = getCachedSystemInfo() // Dapatkan info SoC
+        val cpuLoadPercentage = null // Placeholder
+
+        return RealtimeCpuInfo(
+            cores = cores,
+            governor = governor,
+            freqs = frequencies,
+            temp = temperature,
+            soc = systemInfo.soc, // Menambahkan kembali socModel
+            cpuLoadPercentage = cpuLoadPercentage
+        )
     }
 
+    fun getCpuRealtime(): RealtimeCpuInfo {
+        Log.w(TAG, "Panggilan getCpuRealtime() sinkron. Disarankan menggunakan Flow untuk update realtime.")
+        return runBlocking { getCpuRealtimeInternal() }
+    }
 
-    // --- Battery Info ---
     private fun getBatteryLevelFromApi(): Int {
         val intentFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        val batteryStatusIntent = context.registerReceiver(null, intentFilter)
-
+        val batteryStatusIntent = context.applicationContext.registerReceiver(null, intentFilter)
         if (batteryStatusIntent == null) {
-            Log.w(TAG, "Gagal mendapatkan BatteryStatusIntent (context bermasalah?).")
+            Log.w(TAG, "Gagal mendapatkan BatteryStatusIntent.")
             return -1
         }
-
         val level = batteryStatusIntent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         val scale = batteryStatusIntent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-
         return if (level != -1 && scale != -1 && scale != 0) {
-            val batteryPct = (level / scale.toFloat() * 100).toInt()
-            Log.d(TAG, "Level baterai dari API: $batteryPct%")
-            batteryPct
-        } else {
-            Log.w(TAG, "Gagal mendapatkan level baterai valid dari API: level=$level, scale=$scale")
-            -1
-        }
+            (level / scale.toFloat() * 100).toInt()
+        } else -1
     }
-    fun getBatteryInfo(): BatteryInfo {
-        Log.d(TAG, "Memulai pengambilan BatteryInfo (struktur BatteryInfo.kt dipertahankan)...")
+
+    private fun getBatteryInfoInternal(): BatteryInfo {
         val batteryDir = "/sys/class/power_supply/battery"
         val batteryLevelStr = readFileToString("$batteryDir/capacity", "Battery Level Percent from File")
-        val currentLevelFromFile = batteryLevelStr?.toIntOrNull()
-        val finalLevel = currentLevelFromFile ?: run {
-            Log.i(TAG, "Level baterai dari file tidak valid, menggunakan API.")
-            getBatteryLevelFromApi()
-        }.let { if (it == -1) 0 else it }
-        Log.d(TAG, "Final Level Baterai (untuk BatteryInfo.level): $finalLevel%")
+        val finalLevel = batteryLevelStr?.toIntOrNull() ?: getBatteryLevelFromApi().let { if (it == -1) 0 else it }
 
         var tempStr = readFileToString("$batteryDir/temp", "Battery Temperature")
         var tempSource = "$batteryDir/temp"
         if (tempStr == null) {
-            Log.w(TAG, "Gagal baca suhu dari '$tempSource', mencoba path alternatif...")
             val thermalZoneDirs = File("/sys/class/thermal/").listFiles { dir, name ->
                 dir.isDirectory && name.startsWith("thermal_zone")
             }
-            var foundTempInThermalZone = false
-            thermalZoneDirs?.sortedBy { it.name }?.forEach { zoneDir ->
+            thermalZoneDirs?.sortedBy { it.name }?.forEach thermalLoop@{ zoneDir ->
                 val type = readFileToString("${zoneDir.path}/type", "Thermal Zone Type (${zoneDir.name})", attemptSu = false)
                 if (type != null && (type.contains("battery", ignoreCase = true) || type.contains("แบตเตอรี่") || type.contains("case_therm", ignoreCase = true) || type.contains("ibat_therm", ignoreCase = true))) {
                     tempStr = readFileToString("${zoneDir.path}/temp", "Battery Temperature from ${zoneDir.name} ($type)")
                     if (tempStr != null) {
                         tempSource = "${zoneDir.path}/temp (type: $type)"
-                        foundTempInThermalZone = true
-                        return@forEach
+                        return@thermalLoop
                     }
                 }
             }
-            if (!foundTempInThermalZone) {
-                Log.w(TAG, "Tidak menemukan file suhu baterai yang valid di thermal_zones.")
-            }
         }
         val finalTemperature = tempStr?.toFloatOrNull()?.let { rawTemp ->
-            if (tempSource.startsWith("/sys/class/thermal/thermal_zone")) rawTemp / 1000 else rawTemp / 10
+            // Jika dari thermal_zone, biasanya dalam mili-Celsius, jika dari power_supply, bisa deci-Celsius
+            if (rawTemp > 1000 && (tempSource.contains("thermal_zone") || tempSource.contains("temp_input"))) rawTemp / 1000 else rawTemp / 10
         } ?: 0f
-        Log.d(TAG, "Final Suhu Baterai (untuk BatteryInfo.temp): $finalTemperature°C (mentah: '$tempStr' dari $tempSource)")
-
 
         val cycleCountStr = readFileToString("$batteryDir/cycle_count", "Battery Cycle Count")
-        val finalCyclesForInfo = cycleCountStr?.toIntOrNull() ?: 0 // 0 jika tidak tersedia
-        Log.d(TAG, "Jumlah siklus baterai (untuk BatteryInfo.cycles): $finalCyclesForInfo (mentah: '$cycleCountStr')")
+        val finalCyclesForInfo = cycleCountStr?.toIntOrNull() ?: 0
 
         val designCapacityUahStr = readFileToString("$batteryDir/charge_full_design", "Battery Design Capacity (uAh)")
         val designCapacityUah = designCapacityUahStr?.toLongOrNull()
         val finalDesignCapacityMah = if (designCapacityUah != null && designCapacityUah > 0) (designCapacityUah / 1000).toInt() else 0
-        if (finalDesignCapacityMah == 0) {
-            Log.w(TAG, "Kapasitas desain ('charge_full_design') tidak ditemukan atau tidak valid. BatteryInfo.capacity akan 0. Perhitungan kesehatan SoH tidak mungkin.")
-        }
-        Log.d(TAG, "Desain kapasitas (untuk BatteryInfo.capacity): $finalDesignCapacityMah mAh (dari uAh: $designCapacityUah, mentah: '$designCapacityUahStr')")
-
 
         var calculatedSohPercentage: Int = BatteryManager.BATTERY_HEALTH_UNKNOWN
-        if (finalDesignCapacityMah > 0) {
-            var currentFullUahStr = readFileToString("$batteryDir/charge_full", "Battery Current Full Capacity (uAh)")
-            var currentFullUahSource = "$batteryDir/charge_full"
-
-            if (currentFullUahStr == null) {
-                Log.w(TAG, "File '$currentFullUahSource' tidak ditemukan, SoH mungkin tidak akurat atau menggunakan fallback.")
-            }
-
+        if (finalDesignCapacityMah > 0 && designCapacityUah != null) {
+            val currentFullUahStr = readFileToString("$batteryDir/charge_full", "Battery Current Full Capacity (uAh)")
             val currentFullUah = currentFullUahStr?.toLongOrNull()
-
             if (currentFullUah != null && currentFullUah > 0) {
-                val currentFullMah = (currentFullUah / 1000).toInt()
-                Log.i(TAG, "Kapasitas Penuh Saat Ini (dari '$currentFullUahSource'): $currentFullMah mAh (mentah uAh: $currentFullUah)")
-
-                val soh = (currentFullUah.toDouble() / designCapacityUah!!.toDouble()) * 100.0
+                val soh = (currentFullUah.toDouble() / designCapacityUah.toDouble()) * 100.0
                 calculatedSohPercentage = soh.toInt().coerceIn(0, 100)
-                Log.i(TAG, "Estimasi Kesehatan Baterai (SoH dari kapasitas untuk BatteryInfo.health): $calculatedSohPercentage% (Current: $currentFullMah mAh, Design: $finalDesignCapacityMah mAh)")
-            } else {
-                Log.w(TAG, "Tidak dapat membaca kapasitas penuh saat ini ('$currentFullUahSource' atau fallback) atau nilainya tidak valid. SoH tidak dapat dihitung dengan metode kapasitas.")
             }
-        } else {
-            Log.e(TAG, "Kapasitas desain adalah 0, tidak mungkin menghitung SoH. BatteryInfo.health akan default.")
         }
 
-        val qualitativeHealthString = readFileToString("$batteryDir/health", "Battery Qualitative Health String")
-        val result = BatteryInfo(
+        return BatteryInfo(
             level = finalLevel,
             temp = finalTemperature,
             health = calculatedSohPercentage,
             cycles = finalCyclesForInfo,
             capacity = finalDesignCapacityMah
         )
-        Log.i(TAG, "BatteryInfo hasil akhir (struktur dipertahankan): $result")
-        return result
     }
 
-    fun getMemoryInfo(): MemoryInfo {
-        Log.d(TAG, "Mengambil MemoryInfo...")
+    fun getBatteryInfo(): BatteryInfo {
+        Log.w(TAG, "Panggilan getBatteryInfo() sinkron. Disarankan menggunakan Flow untuk update realtime.")
+        return getBatteryInfoInternal()
+    }
+
+    private fun getMemoryInfoInternal(): MemoryInfo {
         return try {
             val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
             val memoryInfo = android.app.ActivityManager.MemoryInfo()
@@ -266,16 +251,176 @@ class SystemRepository @Inject constructor(
                 used = memoryInfo.totalMem - memoryInfo.availMem,
                 total = memoryInfo.totalMem,
                 free = memoryInfo.availMem
-            ).also { Log.d(TAG, "MemoryInfo: $it") }
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Gagal mengambil MemoryInfo", e)
             MemoryInfo(0, 0, 0)
         }
     }
 
+    fun getMemoryInfo(): MemoryInfo {
+        Log.w(TAG, "Panggilan getMemoryInfo() sinkron. Disarankan menggunakan Flow untuk update realtime.")
+        return getMemoryInfoInternal()
+    }
+
+    private fun getUptimeMillisInternal(): Long {
+        return android.os.SystemClock.elapsedRealtime()
+    }
+
+    private fun getDeepSleepMillisInternal(): Long {
+        val uptime = android.os.SystemClock.elapsedRealtime()
+        val awakeTime = android.os.SystemClock.uptimeMillis()
+        return uptime - awakeTime
+    }
+
+    private fun formatDuration(millis: Long): String {
+        val totalSeconds = millis / 1000
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            String.format("%02d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%02d:%02d", minutes, seconds)
+        }
+    }
+    fun getDeepSleepInfo(): DeepSleepInfo {
+        Log.w(TAG, "Panggilan getDeepSleepInfo() sinkron. Disarankan menggunakan Flow untuk update realtime.")
+        return DeepSleepInfo(getUptimeMillisInternal(), getDeepSleepMillisInternal())
+    }
+
+    private fun getSystemInfoInternal(): SystemInfo {
+        Log.d(TAG, "Mengambil SystemInfo (API based)...")
+        var socName = VALUE_UNKNOWN
+        try {
+            val processManufacturer = Runtime.getRuntime().exec("getprop ro.soc.manufacturer")
+            val manufacturer = BufferedReader(InputStreamReader(processManufacturer.inputStream)).readLine()?.trim()
+            processManufacturer.waitFor()
+            processManufacturer.destroy()
+
+            val processModel = Runtime.getRuntime().exec("getprop ro.soc.model")
+            val model = BufferedReader(InputStreamReader(processModel.inputStream)).readLine()?.trim()
+            processModel.waitFor()
+            processModel.destroy()
+
+            if (!manufacturer.isNullOrBlank() && !model.isNullOrBlank()) {
+                socName = when {
+                    manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM7475", ignoreCase = true) -> "Qualcomm® Snapdragon™ 7+ Gen 2"
+                    manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM8650", ignoreCase = true) -> "Qualcomm® Snapdragon™ 8 Gen 3"
+                    manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM8635", ignoreCase = true) -> "Qualcomm® Snapdragon™ 8s Gen 3"
+                    manufacturer.equals("QTI", ignoreCase = true) && (model.equals("SDM845", ignoreCase = true) || model.equals("sdm845", ignoreCase = true)) -> "Qualcomm® Snapdragon™ 845"
+                    manufacturer.equals("QTI", ignoreCase = true) && (model.equals("SM7435-AB", ignoreCase = true) || model.equals("SM7435", ignoreCase = true)) -> "Qualcomm® Snapdragon™ 7s Gen 2"
+                    manufacturer.equals("QTI", ignoreCase = true) && (model.equals("SM8735", ignoreCase = true) || model.equals("sm8735", ignoreCase = true)) -> "Qualcomm® Snapdragon™ 8s Gen 4"
+                    manufacturer.equals("Mediatek", ignoreCase = true) && (model.equals("MT6785/CD", ignoreCase = true) || model.equals("MT6785", ignoreCase = true)) -> "MediaTek Helio G95"
+                    manufacturer.equals("Mediatek", ignoreCase = true) && (model.equals("MT6877V/TTZA", ignoreCase = true) || model.equals("MT6877V", ignoreCase = true)) -> "MediaTek Dimensity 1080"
+                    else -> "$manufacturer $model"
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Gagal mendapatkan info SOC dari getprop", e)
+        }
+
+        return SystemInfo(
+            model = android.os.Build.MODEL ?: VALUE_UNKNOWN,
+            codename = android.os.Build.DEVICE ?: VALUE_UNKNOWN,
+            androidVersion = android.os.Build.VERSION.RELEASE ?: VALUE_UNKNOWN,
+            sdk = android.os.Build.VERSION.SDK_INT,
+            fingerprint = android.os.Build.FINGERPRINT ?: VALUE_UNKNOWN,
+            soc = socName
+        )
+    }
+
+    fun getSystemInfo(): SystemInfo {
+        return runBlocking { getCachedSystemInfo() }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+    val realtimeAggregatedInfoFlow: Flow<RealtimeAggregatedInfo> = callbackFlow {
+        Log.d(TAG, "callbackFlow started for realtimeAggregatedInfoFlow")
+
+        // Dapatkan SystemInfo sekali di awal (terutama untuk SoC Name)
+        // Ini akan mengisi cache jika belum ada
+        // getCachedSystemInfo() adalah suspend, jadi panggil dalam konteks coroutine jika perlu
+        // Namun, callbackFlow sudah berjalan dalam konteks coroutine.
+        getCachedSystemInfo() // Memastikan cache terisi
+
+        // Kirim nilai awal segera
+        val initialData = RealtimeAggregatedInfo(
+            cpuInfo = getCpuRealtimeInternal(), // Akan menggunakan cache jika socModel diperlukan
+            batteryInfo = getBatteryInfoInternal(),
+            memoryInfo = getMemoryInfoInternal(),
+            uptimeMillis = getUptimeMillisInternal(),
+            deepSleepMillis = getDeepSleepMillisInternal()
+        )
+
+        // Menggunakan trySend yang mengembalikan ChannelResult
+        val initialSendResult: ChannelResult<Unit> = trySend(initialData)
+        if (initialSendResult.isFailure) {
+            Log.e(TAG, "Failed to send initial data to flow", initialSendResult.exceptionOrNull())
+        } else if (initialSendResult.isClosed) {
+            Log.w(TAG, "Flow was closed before initial data could be sent.")
+        } else {
+            Log.d(TAG, "Initial data sent successfully to flow.")
+        }
+
+        // job untuk update periodik
+        val updateJob = launch(Dispatchers.IO) { // Gunakan Dispatchers.IO untuk delay dan I/O
+            Log.d(TAG, "Realtime update job started in callbackFlow. isActive: $isActive")
+            try {
+                while (isActive) { // Loop selama Flow (dan job ini) aktif
+                    delay(REALTIME_UPDATE_INTERVAL_MS)
+                    // Tidak perlu cek isActive lagi di sini karena delay akan throw CancellationException
+                    // jika scope atau job di-cancel.
+
+                    // Log.d(TAG, "Preparing to send updated realtime data...")
+                    val updatedData = RealtimeAggregatedInfo(
+                        cpuInfo = getCpuRealtimeInternal(),
+                        batteryInfo = getBatteryInfoInternal(),
+                        memoryInfo = getMemoryInfoInternal(),
+                        uptimeMillis = getUptimeMillisInternal(),
+                        deepSleepMillis = getDeepSleepMillisInternal()
+                    )
+                    val sendResult: ChannelResult<Unit> = trySend(updatedData)
+
+                    when {
+                        sendResult.isSuccess -> { /* Log.d(TAG, "Realtime data sent successfully.") */ }
+                        sendResult.isClosed -> {
+                            Log.w(TAG, "Flow closed while trying to send realtime data. Loop will terminate.")
+                            break // Keluar dari loop jika channel ditutup
+                        }
+                        sendResult.isFailure -> {
+                            Log.e(TAG, "Error sending realtime data to flow", sendResult.exceptionOrNull())
+                            // Pertimbangkan apa yang harus dilakukan jika terjadi error. Mungkin coba lagi atau hentikan.
+                        }
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                Log.d(TAG, "Realtime update job cancelled: ${e.message}")
+                // Ini normal jika flow ditutup
+            } finally {
+                Log.d(TAG, "Realtime update job finished. isActive: $isActive")
+            }
+        }
+
+        // awaitClose akan dipanggil ketika flow di-cancel atau scope-nya di-cancel
+        awaitClose {
+            Log.d(TAG, "RealtimeAggregatedInfoFlow (awaitClose) triggered, cancelling update job.")
+            updateJob.cancel("Flow was closed") // Batalkan job yang melakukan update periodik
+            Log.d(TAG, "Realtime update job cancellation requested.")
+        }
+    }.shareIn(
+        scope = repositoryScope,
+        started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5000L, replayExpirationMillis = 0L),
+        replay = 1
+    )
+
+    fun onCleared() {
+        Log.d(TAG, "SystemRepository onCleared, cancelling repositoryScope.")
+        repositoryScope.cancel("Repository is being cleared")
+    }
+
     fun getKernelInfo(): KernelInfo {
         Log.d(TAG, "Memulai pengambilan KernelInfo...")
-
         val rawKernelVersionOutput = readFileToString("/proc/version", "Full Kernel Version String")
 
         val parsedVersion = if (!rawKernelVersionOutput.isNullOrBlank()) {
@@ -293,7 +438,6 @@ class SystemRepository @Inject constructor(
             val kernelVersionRegex = "Linux version (\\d+\\.\\d+)".toRegex()
             val matchResult = kernelVersionRegex.find(rawKernelVersionOutput)
             val linuxKernelBaseVersion = matchResult?.groups?.get(1)?.value
-
             Log.d(TAG, "Ekstraksi Versi Linux Kernel dari raw: $linuxKernelBaseVersion (Full raw: '$rawKernelVersionOutput')")
 
             gkiType = when (linuxKernelBaseVersion) {
@@ -310,7 +454,7 @@ class SystemRepository @Inject constructor(
                         rawKernelVersionOutput.contains("android13-") -> "GKI 2.0 (Android 13 based)"
                         rawKernelVersionOutput.contains("android12-") -> "GKI 2.0 (Android 12 based)"
                         rawKernelVersionOutput.contains("android11-") -> "GKI 1.0 (Android 11 based)"
-                        rawKernelVersionOutput.contains("perf-")-> "EAS (Perf-based)"
+                        rawKernelVersionOutput.contains("perf-") -> "EAS (Perf-based)"
                         else -> {
                             Log.d(TAG, "Tidak ada pola GKI yang cocok untuk versi Linux '$linuxKernelBaseVersion' atau string 'androidXX-'. Menganggap Non-GKI atau Unknown.")
                             if (linuxKernelBaseVersion != null) "Non-GKI ($linuxKernelBaseVersion)" else VALUE_UNKNOWN
@@ -337,33 +481,17 @@ class SystemRepository @Inject constructor(
         if (parsedSchedulerName.isEmpty()) parsedSchedulerName = VALUE_NOT_AVAILABLE
 
         val parsedScheduler = when (parsedSchedulerName.lowercase()) {
-            "bfq" -> {
-                "BFQ (Budget Fair Queueing)"
-            }
-            "cfq" -> {
-                "CFQ (Completely Fair Queuing)"
-            }
-            else ->
-                if (parsedSchedulerName != VALUE_NOT_AVAILABLE) parsedSchedulerName else VALUE_NOT_AVAILABLE
-
+            "bfq" -> "BFQ (Budget Fair Queueing)"
+            "cfq" -> "CFQ (Completely Fair Queuing)"
+            else -> if (parsedSchedulerName != VALUE_NOT_AVAILABLE) parsedSchedulerName else VALUE_NOT_AVAILABLE
         }
         Log.d(TAG, "Scheduler I/O Terparsir: $parsedScheduler (mentah utama: '$rawSchedulerOutput')")
 
-        val result = KernelInfo(
+        return KernelInfo(
             version = parsedVersion,
             gkiType = gkiType,
             scheduler = parsedScheduler
         )
-        Log.i(TAG, "KernelInfo hasil akhir: $result")
-        return result
-    }
-
-    fun getDeepSleepInfo(): DeepSleepInfo {
-        Log.d(TAG, "Mengambil DeepSleepInfo...")
-        val uptime = android.os.SystemClock.elapsedRealtime()
-        val awakeTime = android.os.SystemClock.uptimeMillis()
-        val deepSleepTime = uptime - awakeTime
-        return DeepSleepInfo(uptime, deepSleepTime).also { Log.d(TAG, "DeepSleepInfo: $it") }
     }
 
     fun getCpuClusters(): List<CpuCluster> {
@@ -382,17 +510,19 @@ class SystemRepository @Inject constructor(
             ?.forEachIndexed { index, policyFile ->
                 val policyNum = policyFile.name.removePrefix("policy")
                 val policyDesc = "Policy$policyNum"
-                Log.d(TAG, "Memproses CPU Cluster: $policyDesc (${policyFile.path})")
+                // Log.d(TAG, "Memproses CPU Cluster: $policyDesc (${policyFile.path})") // Optional: kurangi log spam
 
                 val relatedCpus = readFileToString("${policyFile.path}/related_cpus", "$policyDesc Related CPUs", attemptSu = false)?.trim()
                 val firstCpuInCluster = relatedCpus?.split(" ")?.firstOrNull()?.toIntOrNull()
 
-                val clusterName = when (index) {
+                val clusterNameSuggestion = when (index) { // Penamaan cluster bisa lebih kompleks tergantung arsitektur
                     0 -> "Little"
-                    1 -> "Big"
-                    2 -> "Prime"
+                    1 -> if (cpuPolicyDir.listFiles()?.count { it.name.startsWith("policy") } == 2) "Big" else "Mid" // Contoh sederhana
+                    2 -> "Big" // Atau Prime
                     else -> "Cluster ${index + 1}"
-                } + (if (firstCpuInCluster != null) " (CPU$firstCpuInCluster+)" else " ($policyDesc)")
+                }
+                val clusterName = "$clusterNameSuggestion" + (if (firstCpuInCluster != null) " (CPU$firstCpuInCluster+)" else " ($policyDesc)")
+
 
                 val governor = readFileToString("${policyFile.path}/scaling_governor", "$policyDesc Governor") ?: VALUE_UNKNOWN
                 val minFreqStr = readFileToString("${policyFile.path}/cpuinfo_min_freq", "$policyDesc Min Freq")
@@ -404,66 +534,13 @@ class SystemRepository @Inject constructor(
                 val availableGovernors = availableGovernorsStr?.split(Regex("\\s+"))?.filter { it.isNotBlank() } ?: emptyList()
 
                 clusters.add(CpuCluster(clusterName, minFreq, maxFreq, governor, availableGovernors))
-                Log.d(TAG, "Cluster '$clusterName': Gov=$governor, Min=${minFreq}MHz, Max=${maxFreq}MHz, AvailGov=$availableGovernors")
+                // Log.d(TAG, "Cluster '$clusterName': Gov=$governor, Min=${minFreq}MHz, Max=${maxFreq}MHz, AvailGov=$availableGovernors")
             }
 
         if (clusters.isEmpty()) {
             Log.w(TAG, "Tidak ada CPU cluster yang terdeteksi atau dapat diproses di ${cpuPolicyDir.path}")
         }
-        Log.i(TAG, "CPU Clusters hasil akhir: $clusters")
+        // Log.i(TAG, "CPU Clusters hasil akhir: $clusters") // Optional: kurangi log spam
         return clusters
-    }
-
-    fun getSystemInfo(): SystemInfo {
-        Log.d(TAG, "Mengambil SystemInfo (API based)...")
-
-        // Mencoba mendapatkan SOC dari properti sistem jika tersedia
-        var socName = VALUE_UNKNOWN
-        try {
-            val process = Runtime.getRuntime().exec("getprop ro.soc.manufacturer")
-            val manufacturer = BufferedReader(InputStreamReader(process.inputStream)).readLine()?.trim()
-            process.waitFor()
-            process.destroy()
-
-            val processModel = Runtime.getRuntime().exec("getprop ro.soc.model")
-            val model = BufferedReader(InputStreamReader(processModel.inputStream)).readLine()?.trim()
-            processModel.waitFor()
-            processModel.destroy()
-
-            if (!manufacturer.isNullOrBlank() && !model.isNullOrBlank()) {
-                // Penyesuaian khusus untuk Qualcomm Snapdragon
-                if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM7475", ignoreCase = true)) {
-                    socName = "Qualcomm® Snapdragon™ 7+ Gen 2"
-                } else if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM8650", ignoreCase = true)) {
-                    socName = "Qualcomm® Snapdragon™ 8 Gen 3"
-                } else if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM8635", ignoreCase = true)) {
-                    socName = "Qualcomm® Snapdragon™ 8s Gen 3"
-                } else if (manufacturer.equals("QTI", ignoreCase = true) && (model.equals("SDM845", ignoreCase = true) || model.equals("sdm845", ignoreCase = true) )) {
-                    socName = "Qualcomm® Snapdragon™ 845"
-                } else if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM7435-AB", ignoreCase = true) || model.equals("SM7435", ignoreCase = true)) {
-                    socName = "Qualcomm® Snapdragon™ 7s Gen 2"
-                } else if (manufacturer.equals("QTI", ignoreCase = true) && model.equals("SM8735", ignoreCase = true) || model.equals("sm8735", ignoreCase = true)) {
-                    socName = "Qualcomm® Snapdragon™ 8s Gen 4"
-                // Penyesuaian khusus untuk Mediatek
-                } else if (manufacturer.equals("Mediatek", ignoreCase = true) && model.equals("MT6785/CD", ignoreCase = true) || model.equals("MT6785", ignoreCase = true)) {
-                    socName = "MediaTek Helio G95"
-                } else if (manufacturer.equals("Mediatek", ignoreCase = true) && model.equals("MT6877V/TTZA", ignoreCase = true) || model.equals("MT6877V", ignoreCase = true)) {
-                    socName = "MediaTek Dimensity 1080"
-                } else {
-                    socName = "$manufacturer $model"
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Gagal mendapatkan info SOC dari getprop", e)
-        }
-
-        return SystemInfo(
-            model = android.os.Build.MODEL,
-            codename = android.os.Build.DEVICE,
-            androidVersion = android.os.Build.VERSION.RELEASE,
-            sdk = android.os.Build.VERSION.SDK_INT,
-            fingerprint = android.os.Build.FINGERPRINT,
-            soc = socName
-        ).also { Log.d(TAG, "SystemInfo: $it") }
     }
 }
