@@ -6,11 +6,24 @@ Changelogs For Xtra Kernel Manager Version 1.2
 - Add Misc (Still Development)
 - Add Adjust Swap Size Feature (Coming soon)
 
-Info Feature System Card Update [Added SOC Model Registration in Info Feature] :
+ SOC Model Registration :
+- Qualcomm® Snapdragon™ 7+ Gen 2 
+- Qualcomm® Snapdragon™ 8 Gen 3 
+- Qualcomm® Snapdragon™ 8s Gen 3 
+- Qualcomm® Snapdragon™ 845
 - Qualcomm® Snapdragon™ 7s Gen 2 (SM7435-AB, SM7435)
 - Qualcomm® Snapdragon™ 8s Gen 4 (SM8735, sm8735)
 - MediaTek Helio G95 (MT6785/CD, MT6785)
 - MediaTek Dimensity 1080 (MT6877V/TTZA, MT6877V)
+- Qualcomm® Snapdragon™ 870 (SM8250)
+- Qualcomm® Snapdragon™ 860 (SM8150)
+- Qualcomm® Snapdragon™ 665 (SDM665)
+- Qualcomm® Snapdragon™ 660 (SDM660)
+- Qualcomm® Snapdragon™ (SM8750)
+- Mediatek Dimensity 6080 (MT6833GP)
+- Mediatek Helio G85 (MT6769Z)
+- Mediatek Dimensity 9300+ (MT6989W)
+
 
 Zram Adjust Max Size:
 - 3GB : Max 1GB
