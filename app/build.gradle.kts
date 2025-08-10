@@ -8,6 +8,7 @@ import org.apache.http.entity.mime.content.FileBody
 import org.apache.http.impl.client.HttpClients
 import org.apache.http.util.EntityUtils
 import java.util.Date
+import org.jetbrains.kotlin.gradle.plugin.getKotlinPluginVersion
 import kotlin.text.substringAfterLast
 
 
@@ -22,11 +23,11 @@ plugins {
 
 android {
     namespace = "id.xms.xtrakernelmanager"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "id.xms.xtrakernelmanager"
         minSdk = 29
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.3.-Release"
     }
@@ -152,9 +153,22 @@ abstract class SendTelegramMessageTask : DefaultTask() {
         val currentAppPackage = appPackageName.getOrElse(project.android.defaultConfig.applicationId ?: "N/A")
         val currentProjectName = appProjectName.get()
 
+        val kotlinVersion = project.getKotlinPluginVersion() ?: "N/A"
         val javaVersion = JavaVersion.current().toString()
         val gradleVersion = project.gradle.gradleVersion
-        val osName = System.getProperty("os.name")
+        // val osName = System.getProperty("os.name")
+        val osName = try {
+            val process = ProcessBuilder("cat", "/etc/os-release")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText()
+            process.waitFor()
+            val prettyNameLine = output.lines().find { it.startsWith("NAME=") }
+            prettyNameLine?.substringAfter("=")?.removeSurrounding("\"") ?: System.getProperty("os.name")
+        } catch (e: Exception) {
+            logger.warn("Could not read /etc/os-release: ${e.message}")
+            System.getProperty("os.name") // Fallback
+        }
         val osArch = System.getProperty("os.arch")
         val processor = try {
             val process = ProcessBuilder("cat", "/proc/cpuinfo")
@@ -168,6 +182,87 @@ abstract class SendTelegramMessageTask : DefaultTask() {
             osArch // Fallback
         }
 
+        // SDK Info
+        val compileSdkVersion = project.android.compileSdk ?: "N/A"
+        val minSdkVersion = project.android.defaultConfig.minSdk ?: "N/A"
+        val targetSdkVersionInt = project.android.defaultConfig.targetSdk
+        val targetSdkVersionName = when (targetSdkVersionInt) {
+            29 -> "10 [QuinceTart]" // Android 10
+            30 -> "11 [RedVelvet]" // Android 11
+            31 -> "12 [Snowcone]" // Android 12
+            32 -> "12L [Snowcone V2]" // Android 12L
+            33 -> "13 [Tiramisu]" // Android 13
+            34 -> "14 [UpsideDownCake]" // Android 14
+            35 -> "15 [VanillaIceCream]" // Android 15
+            36 -> "16 [Baklava]" // Android 16
+            else -> "Unknown"
+            }
+        val minSdkCodename = when (minSdkVersion) {
+            // Assuming minSdkVersion is an Int or can be converted to one for this when
+            29 -> "10 [QuinceTart]" // Android 10
+                30 -> "11 [RedVelvet]" // Android 11
+                31 -> "12 [Snowcone]" // Android 12
+                32 -> "12L [Snowcone V2]" // Android 12L
+                33 -> "13 [Tiramisu]" // Android 13
+                34 -> "14 [UpsideDownCake]" // Android 14
+                35 -> "15 [VanillaIceCream]" // Android 15
+                36 -> "16 [Baklava]" // Android 16
+                else -> "Unknown"
+            }
+
+        val (totalRamGb, freeRamGb, usedRamGb) = try {
+            val process = ProcessBuilder("cat", "/proc/meminfo")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText()
+            process.waitFor()
+            val lines = output.lines()
+            val memTotalKb = lines.find { it.startsWith("MemTotal:") }?.substringAfter(":")?.trim()?.removeSuffix(" kB")?.toLongOrNull() ?: 0L
+            val memFreeKb = lines.find { it.startsWith("MemFree:") }?.substringAfter(":")?.trim()?.removeSuffix(" kB")?.toLongOrNull() ?: 0L
+            // MemAvailable is generally a better indicator of free memory
+            val memAvailableKb = lines.find { it.startsWith("MemAvailable:") }?.substringAfter(":")?.trim()?.removeSuffix(" kB")?.toLongOrNull() ?: memFreeKb
+
+            val totalGb = memTotalKb / (1024.0 * 1024.0)
+            val freeGb = memAvailableKb / (1024.0 * 1024.0)
+            val usedGb = totalGb - freeGb
+
+            Triple(String.format("%.2f GB", totalGb), String.format("%.2f GB", freeGb), String.format("%.2f GB", usedGb))
+
+        } catch (e: Exception) {
+            logger.warn("Could not read /proc/meminfo: ${e.message}")
+            Triple("N/A", "N/A", "N/A") // Fallback
+        }
+
+        val (totalStorageGb, freeStorageGb) = try {
+            val process = ProcessBuilder("df", "-h", "/")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText()
+            process.waitFor()
+            val lines = output.lines()
+            // Example df output: /dev/sda1       100G   50G   50G  50% /
+            val relevantLine = lines.find { it.contains(" /") }
+            val parts = relevantLine?.split("\\s+".toRegex())
+            val total = parts?.getOrNull(1) ?: "N/A"
+            val free = parts?.getOrNull(3) ?: "N/A"
+            Pair(total, free)
+        } catch (e: Exception) {
+            logger.warn("Could not read disk usage: ${e.message}")
+            Pair("N/A", "N/A") // Fallback
+        }
+
+        val kernelInfo = try {
+            val process = ProcessBuilder("uname", "-r")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            process.waitFor()
+            output.ifEmpty { "N/A" }
+        } catch (e: Exception) {
+            logger.warn("Could not read kernel info: ${e.message}")
+            "N/A" // Fallback
+        }
+
         // Function to escape MarkdownV2 characters
         fun escapeMarkdownV2(text: String): String {
             val escapeChars = charArrayOf('_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!')
@@ -178,23 +273,30 @@ abstract class SendTelegramMessageTask : DefaultTask() {
             return result
         }
 
-        var message = "🚀 *Build Status: ${escapeMarkdownV2(project.name)} \\- $buildStatus* 🚀\n\n" +
-                "📦 *App:* ${escapeMarkdownV2(currentProjectName)}\n" +
-                "🏷️ *Version:* ${escapeMarkdownV2(currentAppVersion)}\n" +
-                "🆔 *Package:* ${escapeMarkdownV2(currentAppPackage)}\n" +
-                "📅 *Time:* ${escapeMarkdownV2(Date().toString())}\n\n" +
-                "🔧 *Build Environment:*\n" +
-                "  \\- Java: ${escapeMarkdownV2(javaVersion)}\n" +
-                "  \\- Gradle: ${escapeMarkdownV2(gradleVersion)}\n" +
+        var message = "[Build Status] ${escapeMarkdownV2(project.name)} \\- $buildStatus* 🚀\n\n" +
+                "📦 App: ${escapeMarkdownV2(currentProjectName)}\n" +
+                "🏷️ Version: ${escapeMarkdownV2(currentAppVersion)}\n" +
+                "🆔 Package: ${escapeMarkdownV2(currentAppPackage)}\n" +
+                "📅 Time: ${escapeMarkdownV2(Date().toString())}\n\n" +
+                "[Build Environment]\n" +
                 "  \\- OS: ${escapeMarkdownV2("$osName ($osArch)")}\n" +
-                "  \\- Processor: ${escapeMarkdownV2(processor)}"
+                "  \\- Kernel: ${escapeMarkdownV2(kernelInfo)}\n" +
+                "  \\- Processor:\n ${escapeMarkdownV2(processor)}\n" +
+                "  \\- RAM:\n Total: ${escapeMarkdownV2(totalRamGb)}\n Free: ${escapeMarkdownV2(freeRamGb)}\n Used: ${escapeMarkdownV2(usedRamGb)}\n" +
+                "  \\- Storage:\n Total: ${escapeMarkdownV2(totalStorageGb)}\n Free: ${escapeMarkdownV2(freeStorageGb)}\n" +
+                "  \\- Android Studio: ${escapeMarkdownV2("Narwhal Feature Drop")}\n" +
+                "  \\- Kotlin: ${escapeMarkdownV2(kotlinVersion)}\n" +
+                "  \\- Java: ${escapeMarkdownV2(javaVersion)}\n" +
+                "  \\- Gradle (Kotlin DSL): ${escapeMarkdownV2(gradleVersion)}\n\n" +
+                "[App SDK Information]\n" +
+                "  \\- Min SDK: ${escapeMarkdownV2("$minSdkVersion (Android $minSdkCodename)")}\n" +
+                "  \\- Target SDK: ${escapeMarkdownV2("$targetSdkVersionInt (Android $targetSdkVersionName)")}\n"
 
         if (buildStatus == "FAILED") {
             val failedTasks = project.gradle.taskGraph.allTasks.filter { it.state.failure != null }
             if (failedTasks.isNotEmpty()) {
                 val errorDetails = failedTasks.joinToString(separator = "\n") { task ->
                     val taskName = escapeMarkdownV2(task.path)
-                    // Ambil baris pertama dari pesan error, atau pesan umum jika tidak ada
                     val errorMessage = escapeMarkdownV2(
                         task.state.failure?.message?.lines()?.firstOrNull()?.trim() ?: "No specific error message"
                     )
@@ -206,11 +308,8 @@ abstract class SendTelegramMessageTask : DefaultTask() {
             }
         }
 
-        // Tidak perlu memanggil escapeMarkdownV2 pada keseluruhan message lagi
-        // karena kita sudah meng-escape setiap bagian secara individual.
-        // val escapedMessage = escapeMarkdownV2(message) // HAPUS ATAU KOMENTARI BARIS INI
 
-        val url = "https://api.telegram.org/bot${telegramBotToken.get()}/sendMessage"
+        val url = "https://botapi.arasea.dpdns.org/bot${telegramBotToken.get()}/sendMessage"
         val requestConfig = RequestConfig.custom()
             .setConnectTimeout(15 * 1000)
             .setSocketTimeout(30 * 1000)
@@ -249,15 +348,10 @@ abstract class SendTelegramMessageTask : DefaultTask() {
 tasks.register("uploadDebugApkToTelegram", UploadApkToTelegramTask::class) {
     group = "custom"
     description = "Builds and uploads the debug APK to Telegram."
-    // This task will depend on assembleDebug implicitly if not specified,
-    // but explicit is better for clarity if you intend to run it standalone.
-    dependsOn("assembleRelease") // If you want to run this task and ensure debug APK is built.
-    // If it's only run *after* assembleDebug, this isn't strictly needed here.
+    // dependsOn("assembleDebug")
+    dependsOn("assembleRelease")
+    // apkFile.set(project.layout.projectDirectory.file("build/outputs/apk/debug/app-debug.apk"))
     apkFile.set(project.layout.projectDirectory.file("release/app-release.apk"))
-    // Alternative for finding the first APK if the name is dynamic:
-    // apkFile.set(project.layout.buildDirectory.dir("outputs/apk/debug").map { dir ->
-    //     dir.asFile.listFiles { _, name -> name.endsWith(".apk") }?.firstOrNull()
-    // })
 }
 
 abstract class UploadApkToTelegramTask : DefaultTask() {
@@ -269,19 +363,19 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
     abstract val telegramChatId: Property<String>
 
     @get:InputFile
-    abstract val apkFile: RegularFileProperty // Use RegularFileProperty for task inputs
+    abstract val apkFile: RegularFileProperty
 
     @get:Input
     abstract val appVersionName: Property<String>
 
     @get:Input
-    abstract val appName: Property<String> // You might want to make this configurable
+    abstract val appName: Property<String>
 
     init {
         telegramBotToken.convention(project.findProperty("telegramBotToken")?.toString() ?: "")
         telegramChatId.convention(project.findProperty("telegramChatId")?.toString() ?: "")
         appVersionName.convention(project.android.defaultConfig.versionName ?: "N/A")
-        appName.convention(project.name) // Default to project name, or set a fixed string
+        appName.convention(project.name)
     }
 
     @TaskAction
@@ -301,12 +395,10 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
         logger.lifecycle("Attempting to upload APK: ${currentApkFile.name} (Size: ${"%.2f".format(fileSizeMb)} MB)")
 
         // Telegram Bot API limit can be up to 2GB for bots, but typically 50MB for general use without special setup.
-        if (fileSizeMb > 109) { // Check slightly less than 110MB to be safe
-            logger.error("APK size (${"%.2f".format(fileSizeMb)} MB) exceeds Telegram's typical 50MB limit. Skipping upload.")
-            // Optionally send a message indicating the failure to upload due to size
-            // tasks.named("sendTelegramMessage", SendTelegramMessageTask::class) {
-            //     // Configure message about upload failure
-            // }.get().sendMessage() // This is a bit complex; better to have a dedicated message for this
+        if (fileSizeMb > 199) { // Check slightly less than 200MB to be safe
+            logger.error("APK size (${"%.2f".format(fileSizeMb)} MB) exceeds Telegram's typical 200MB limit. Skipping upload.")
+            tasks.named("sendTelegramMessage", SendTelegramMessageTask::class) {
+            }.get().sendMessage()
             return
         }
 
@@ -315,10 +407,10 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
                 "Build time: ${Date()}\n" +
                 "File: ${currentApkFile.name} (${"%.2f".format(fileSizeMb)} MB)"
 
-        val url = "https://api.telegram.org/bot${telegramBotToken.get()}/sendDocument"
+        val url = "https://botapi.arasea.dpdns.org/bot${telegramBotToken.get()}/sendDocument"
         val requestConfig = RequestConfig.custom()
-            .setConnectTimeout(30 * 1000) // 30 seconds connection timeout
-            .setSocketTimeout(5 * 60 * 1000)  // 5 minutes socket timeout (for larger uploads)
+            .setConnectTimeout(30 * 1000)
+            .setSocketTimeout(5 * 60 * 1000)
             .build()
 
         HttpClients.custom().setDefaultRequestConfig(requestConfig).build().use { httpClient ->
@@ -343,7 +435,7 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
                 EntityUtils.consumeQuietly(response.entity)
             } catch (e: Exception) {
                 logger.error("Failed to upload APK to Telegram: ${e.message}", e)
-                // e.printStackTrace() // logger.error with exception will print stack trace with --stacktrace
+                e.printStackTrace() // logger.error with exception will print stack trace with --stacktrace
             }
         }
     }
@@ -352,7 +444,7 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
 // --- Hook tasks into the build lifecycle ---
 
 // Configure the sendTelegramMessage task
-project.afterEvaluate { // Ensure android extension is available
+project.afterEvaluate {
     tasks.named("sendTelegramMessage", SendTelegramMessageTask::class) {
         appVersionName.set(project.provider { android.defaultConfig.versionName ?: "N/A" })
         appPackageName.set(project.provider { android.defaultConfig.applicationId ?: "N/A" })
@@ -362,7 +454,7 @@ project.afterEvaluate { // Ensure android extension is available
     }
 }
 
-// Configure the uploadDebugApkToTelegram task
+
 tasks.named("uploadDebugApkToTelegram", UploadApkToTelegramTask::class) {
     // Configuration...
 }
