@@ -1,10 +1,11 @@
-Changelogs For Xtra Kernel Manager Version 1.2
+Changelogs For Xtra Kernel Manager Version 1.3
 
+- Fixed the issue of Tuning not working in Version 1.2
 - Add CPU Core Control 
 - Add Ram Control
 - Dropped Terminal
 - Add Misc (Still Development)
-- Add Adjust Swap Size Feature (Coming soon)
+- Add Adjust Swap Size Feature
 
  SOC Model Registration :
 - Qualcomm® Snapdragon™ 7+ Gen 2 
