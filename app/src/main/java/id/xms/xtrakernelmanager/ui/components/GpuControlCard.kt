@@ -1,5 +1,6 @@
 package id.xms.xtrakernelmanager.ui.components
 
+import android.util.Log // Tambahkan import Log jika belum ada
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -37,7 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
-import id.xms.xtrakernelmanager.ui.components.GlassCard
+// Pastikan GlassCard diimpor jika ini adalah komponen custom Anda
+// import id.xms.xtrakernelmanager.ui.components.GlassCard
 import kotlin.math.roundToInt
 
 @Composable
@@ -48,9 +50,20 @@ fun GpuControlCard(
 ) {
     val availableGpuGovernors by tuningViewModel.availableGpuGovernors.collectAsState()
     val currentGpuGovernor by tuningViewModel.currentGpuGovernor.collectAsState()
-    val availableGpuFrequenciesKHz by tuningViewModel.availableGpuFrequencies.collectAsState()
-    val currentMinGpuFreqKHz by tuningViewModel.currentGpuMinFreq.collectAsState()
-    val currentMaxGpuFreqKHz by tuningViewModel.currentGpuMaxFreq.collectAsState()
+
+    // Mengasumsikan StateFlow dari ViewModel ini memberikan nilai dalam kHz
+    val availableGpuFrequenciesFromVM by tuningViewModel.availableGpuFrequencies.collectAsState()
+    Log.d("GpuControlCard", "RAW availableGpuFrequencies FROM VM (LIKELY ALREADY MHz): $availableGpuFrequenciesFromVM")
+
+    val currentMinGpuFreqMHz by tuningViewModel.currentGpuMinFreq.collectAsState()
+    Log.d("GpuControlCard", "currentMinGpuFreqMHz from VM: $currentMinGpuFreqMHz")
+    val currentMaxGpuFreqMHz by tuningViewModel.currentGpuMaxFreq.collectAsState()
+    Log.d("GpuControlCard", "currentMaxGpuFreqMHz from VM: $currentMaxGpuFreqMHz")
+
+    // Log untuk debugging nilai yang diterima dari ViewModel
+    Log.d("GpuControlCard", "currentMinGpuFreqMHz from VM: $currentMinGpuFreqMHz")
+    Log.d("GpuControlCard", "currentMaxGpuFreqMHz from VM: $currentMaxGpuFreqMHz")
+
 
     val gpuPowerLevelRange by tuningViewModel.gpuPowerLevelRange.collectAsState()
     val currentGpuPowerLevelValue by tuningViewModel.currentGpuPowerLevel.collectAsState()
@@ -83,6 +96,17 @@ fun GpuControlCard(
         }
     }
 
+
+    val availableGpuFrequenciesMHz = remember(availableGpuFrequenciesFromVM) {
+        Log.d("GpuControlCard", "Processing availableGpuFrequenciesFromVM: $availableGpuFrequenciesFromVM")
+        availableGpuFrequenciesFromVM
+            .filter { it > 0 }
+            .distinct()
+            .sorted()
+    }
+    Log.d("GpuControlCard", "FINAL availableGpuFrequenciesMHz for UI: $availableGpuFrequenciesMHz")
+
+
     GlassCard(blur) {
         Column(
             Modifier
@@ -110,51 +134,10 @@ fun GpuControlCard(
                 )
             }
 
-
             AnimatedVisibility(
                 visible = isExpanded,
-                enter = slideInVertically(
-                    initialOffsetY = { -it / 2 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + expandVertically(
-                    expandFrom = Alignment.Top,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeIn(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                ) + scaleIn(
-                    transformOrigin = TransformOrigin(0.5f, 0f),
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ),
-                exit = slideOutVertically(
-                    targetOffsetY = { -it / 2 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + shrinkVertically(
-                    shrinkTowards = Alignment.Top,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                ) + scaleOut(
-                    transformOrigin = TransformOrigin(0.5f, 0f),
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                )
+                enter = slideInVertically(initialOffsetY = { -it / 2 }, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)) + expandVertically(expandFrom = Alignment.Top, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMedium)) + scaleIn(transformOrigin = TransformOrigin(0.5f, 0f), animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)),
+                exit = slideOutVertically(targetOffsetY = { -it / 2 }, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)) + shrinkVertically(shrinkTowards = Alignment.Top, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium)) + scaleOut(transformOrigin = TransformOrigin(0.5f, 0f), animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium))
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     SectionTitle(text = "Graphics Driver Information")
@@ -190,10 +173,10 @@ fun GpuControlCard(
                     SectionTitle(text = "Frequency Control")
                     GpuFrequencyControl(
                         label = "Min Frequency",
-                        currentFrequencyKHz = currentMinGpuFreqKHz,
-                        availableFrequenciesKHz = availableGpuFrequenciesKHz,
-                        onFrequencySelectedKHz = { freqKHz ->
-                            tuningViewModel.setGpuMinFrequency(freqKHz)
+                        currentFrequencyMHz = currentMinGpuFreqMHz,
+                        availableFrequenciesMHz = availableGpuFrequenciesMHz,
+                        onFrequencySelectedMHz = { freqMHz ->
+                            tuningViewModel.setGpuMinFrequency(freqMHz)
                         },
                         showDialog = showMinFreqDialog,
                         onShowDialogChange = { showMinFreqDialog = it }
@@ -203,10 +186,10 @@ fun GpuControlCard(
 
                     GpuFrequencyControl(
                         label = "Max Frequency",
-                        currentFrequencyKHz = currentMaxGpuFreqKHz,
-                        availableFrequenciesKHz = availableGpuFrequenciesKHz.filter { it >= currentMinGpuFreqKHz.coerceAtLeast(0) },
-                        onFrequencySelectedKHz = { freqKHz ->
-                            tuningViewModel.setGpuMaxFrequency(freqKHz)
+                        currentFrequencyMHz = currentMaxGpuFreqMHz,
+                        availableFrequenciesMHz = availableGpuFrequenciesMHz.filter { it >= currentMinGpuFreqMHz.coerceAtLeast(0) },
+                        onFrequencySelectedMHz = { freqMHz ->
+                            tuningViewModel.setGpuMaxFrequency(freqMHz)
                         },
                         showDialog = showMaxFreqDialog,
                         onShowDialogChange = { showMaxFreqDialog = it }
@@ -417,19 +400,27 @@ private fun GpuGovernorControl(
 @Composable
 private fun GpuFrequencyControl(
     label: String,
-    currentFrequencyKHz: Int,
-    availableFrequenciesKHz: List<Int>,
-    onFrequencySelectedKHz: (Int) -> Unit,
+    currentFrequencyMHz: Int, // Diperbarui untuk menerima MHz
+    availableFrequenciesMHz: List<Int>, // Diperbarui untuk menerima daftar MHz
+    onFrequencySelectedMHz: (Int) -> Unit, // Callback sekarang dengan MHz
     showDialog: Boolean,
     onShowDialogChange: (Boolean) -> Unit
 ) {
-    fun formatKHzToMHzString(freqKHz: Int): String {
-        if (freqKHz <= 0) return "N/A"
-        val freqMHz = freqKHz / 1000
+    // Fungsi format sekarang langsung menggunakan nilai MHz
+    fun formatMHzToString(freqMHz: Int, isCurrentValue: Boolean = false): String {
+        // Untuk nilai saat ini yang ditampilkan di Row, jika 0 atau negatif, dan bukan dari daftar pilihan, tampilkan "N/A"
+        if (isCurrentValue && freqMHz <= 0 && !availableFrequenciesMHz.contains(freqMHz)) return "N/A"
+        // Untuk item dalam dialog, jika 0 atau negatif (seharusnya tidak terjadi jika daftar difilter),
+        // atau untuk nilai saat ini yang valid tapi 0 (mis. belum dimuat), tampilkan "N/A" atau sesuai logika.
+        if (freqMHz <= 0) return "N/A" // Atau "Loading..." jika freqMHz adalah nilai awal default
         return "$freqMHz MHz"
     }
 
-    var tempSelectedKHz by remember(currentFrequencyKHz, showDialog) { mutableIntStateOf(currentFrequencyKHz) }
+    // tempSelected sekarang juga dalam MHz
+    var tempSelectedMHz by remember(currentFrequencyMHz, showDialog) { mutableIntStateOf(currentFrequencyMHz) }
+
+    Log.d("GpuFrequencyControl", "Label: $label, currentFrequencyMHz: $currentFrequencyMHz, availableFrequenciesMHz: $availableFrequenciesMHz, showDialog: $showDialog")
+
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -449,7 +440,8 @@ private fun GpuFrequencyControl(
             horizontalArrangement = Arrangement.End
         ) {
             Text(
-                text = formatKHzToMHzString(currentFrequencyKHz),
+                // Menggunakan formatMHzToString dengan nilai MHz
+                text = formatMHzToString(currentFrequencyMHz, isCurrentValue = true),
                 style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.primary),
                 textAlign = TextAlign.End
             )
@@ -468,33 +460,36 @@ private fun GpuFrequencyControl(
             onDismissRequest = { onShowDialogChange(false) },
             title = { Text("Select $label", style = MaterialTheme.typography.headlineSmall) },
             text = {
-                if (availableFrequenciesKHz.isEmpty()) {
+                if (availableFrequenciesMHz.isEmpty()) {
                     Text("No frequencies available.", style = MaterialTheme.typography.bodyLarge)
                 } else {
-                    LaunchedEffect(currentFrequencyKHz) {
-                        tempSelectedKHz = currentFrequencyKHz
+                    // Pastikan tempSelectedMHz direset dengan benar saat dialog dibuka
+                    LaunchedEffect(currentFrequencyMHz, showDialog) {
+                        if (showDialog) tempSelectedMHz = currentFrequencyMHz
                     }
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                        items(availableFrequenciesKHz.sorted()) { freqKHz ->
+                        // Iterasi melalui daftar frekuensi MHz yang sudah diurutkan
+                        items(availableFrequenciesMHz) { freqMHz -> // freqMHz sudah dalam MHz
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .selectable(
-                                        selected = (freqKHz == tempSelectedKHz),
-                                        onClick = { tempSelectedKHz = freqKHz },
+                                        selected = (freqMHz == tempSelectedMHz),
+                                        onClick = { tempSelectedMHz = freqMHz },
                                         role = androidx.compose.ui.semantics.Role.RadioButton
                                     )
                                     .padding(vertical = 12.dp, horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RadioButton(
-                                    selected = (freqKHz == tempSelectedKHz),
-                                    onClick = { tempSelectedKHz = freqKHz },
+                                    selected = (freqMHz == tempSelectedMHz),
+                                    onClick = { tempSelectedMHz = freqMHz },
                                     colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(
-                                    text = formatKHzToMHzString(freqKHz),
+                                    // Menampilkan nilai MHz secara langsung
+                                    text = formatMHzToString(freqMHz),
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                             }
@@ -505,19 +500,20 @@ private fun GpuFrequencyControl(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (tempSelectedKHz != currentFrequencyKHz && availableFrequenciesKHz.isNotEmpty()) {
-                            onFrequencySelectedKHz(tempSelectedKHz)
+                        // Kirim nilai tempSelectedMHz (yang sudah dalam MHz)
+                        if (tempSelectedMHz != currentFrequencyMHz && availableFrequenciesMHz.isNotEmpty()) {
+                            onFrequencySelectedMHz(tempSelectedMHz)
                         }
                         onShowDialogChange(false)
                     },
-                    enabled = availableFrequenciesKHz.isNotEmpty()
+                    enabled = availableFrequenciesMHz.isNotEmpty()
                 ) {
                     Text("Apply", style = MaterialTheme.typography.labelLarge)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { onShowDialogChange(false) }) {
-                    Text("Cancel", style = MaterialTheme.typography.labelLarge)
+                    Text("Cancel", style = MaterialTheme. typography.labelLarge)
                 }
             }
         )
