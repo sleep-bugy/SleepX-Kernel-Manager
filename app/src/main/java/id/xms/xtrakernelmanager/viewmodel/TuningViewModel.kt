@@ -186,11 +186,15 @@ class TuningViewModel @Inject constructor(
     fun getAvailableCpuFrequencies(cluster: String): StateFlow<List<Int>> = _availableCpuFrequenciesPerClusterMap.map { it[cluster] ?: emptyList() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
     fun setCpuGov(cluster: String, gov: String) = viewModelScope.launch(Dispatchers.IO) {
-        repo.setCpuGov(cluster, gov)
+        if (repo.setCpuGov(cluster, gov)) {
+            repo.getCpuGov(cluster).take(1).collect { _currentCpuGovernors[cluster]?.value = it }
+        }
     }
 
     fun setCpuFreq(cluster: String, min: Int, max: Int) = viewModelScope.launch(Dispatchers.IO) {
-        repo.setCpuFreq(cluster, min, max)
+        if (repo.setCpuFreq(cluster, min, max)) {
+            repo.getCpuFreq(cluster).take(1).collect { _currentCpuFrequencies[cluster]?.value = it }
+        }
     }
 
     fun toggleCore(coreId: Int) = viewModelScope.launch(Dispatchers.IO) {
@@ -225,19 +229,29 @@ class TuningViewModel @Inject constructor(
     }
 
     fun setGpuGovernor(gov: String) = viewModelScope.launch(Dispatchers.IO) {
-        repo.setGpuGov(gov)
+        if (repo.setGpuGov(gov)) {
+            repo.getGpuGov().take(1).collect { _currentGpuGovernor.value = it }
+        }
     }
 
     fun setGpuMinFrequency(freqKHz: Int) = viewModelScope.launch(Dispatchers.IO) {
-        repo.setGpuMinFreq(freqKHz)
+        if (repo.setGpuMinFreq(freqKHz)) {
+            val (min, max) = repo.getGpuFreq().first()
+            _currentGpuMinFreq.value = min
+        }
     }
 
     fun setGpuMaxFrequency(freqKHz: Int) = viewModelScope.launch(Dispatchers.IO) {
-        repo.setGpuMaxFreq(freqKHz)
+        if (repo.setGpuMaxFreq(freqKHz)) {
+            val (min, max) = repo.getGpuFreq().first()
+            _currentGpuMaxFreq.value = max
+        }
     }
 
     fun setGpuPowerLevel(level: Float) = viewModelScope.launch(Dispatchers.IO) {
-        repo.setGpuPowerLevel(level)
+        if (repo.setGpuPowerLevel(level)) {
+            repo.getCurrentGpuPowerLevel().take(1).collect { _currentGpuPowerLevel.value = it }
+        }
     }
 
     /* ---------------- OpenGL / Vulkan ---------------- */
@@ -280,7 +294,6 @@ class TuningViewModel @Inject constructor(
         launch(Dispatchers.IO) {
             repo.getCompressionAlgorithms().collect {
                 _compressionAlgorithms.value = it
-                // Ambil nilai kompresi saat ini setelah daftar algoritma tersedia
                 repo.getCurrentCompression().firstOrNull()?.let { currentAlgo -> _currentCompression.value = currentAlgo }
             }
         }
@@ -302,36 +315,54 @@ class TuningViewModel @Inject constructor(
             _rebootCommandFeedback.emit("Ukuran ZRAM tidak valid (512 MB - ${max / 1024 / 1024} MB)")
             return@launch
         }
-        repo.resizeZramSafely(sizeBytes)
-        repo.getZramDisksize().collect { _zramDisksize.value = it }
+        if (repo.setZramDisksize(sizeBytes)) {
+            repo.getZramDisksize().take(1).collect { _zramDisksize.value = it }
+        }
     }
 
     fun setCompression(algo: String) = viewModelScope.launch(Dispatchers.IO) {
         if (algo != _currentCompression.value) {
-            try {
-                Log.d("TuningVM_RAM", "Attempting to set compression to: $algo")
-                repo.setCompressionAlgorithm(algo)
-                val newAlgo = repo.getCurrentCompression().first()
-                Log.d("TuningVM_RAM", "New currentCompression fetched after set: $newAlgo")
-                _currentCompression.value = newAlgo
-                Log.d("TuningVM_RAM", "_currentCompression.value after set: ${_currentCompression.value}")
-            } catch (e: Exception) {
-                Log.e("TuningVM_RAM", "Error setting or getting compression: $algo", e)
-                // Mungkin coba refresh lagi atau emit error
-                _currentCompression.value = "Error" // Atau nilai default yang jelas
+            if (repo.setCompressionAlgorithm(algo)) {
+                repo.getCurrentCompression().take(1).collect { _currentCompression.value = it }
             }
-        } else {
-            Log.d("TuningVM_RAM", "Skipping setCompression, algo is already: $algo")
         }
     }
 
+    fun setSwappiness(value: Int) = viewModelScope.launch(Dispatchers.IO) {
+        if (repo.setSwappiness(value)) {
+            repo.getSwappiness().take(1).collect { _swappiness.value = it }
+        }
+    }
 
-    fun setSwappiness(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setSwappiness(value) }
-    fun setDirtyRatio(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setDirtyRatio(value) }
-    fun setDirtyBackgroundRatio(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setDirtyBackgroundRatio(value) }
-    fun setDirtyWriteback(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setDirtyWriteback(value * 100) }
-    fun setDirtyExpireCentisecs(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setDirtyExpireCentisecs(value) }
-    fun setMinFreeMemory(value: Int) = viewModelScope.launch(Dispatchers.IO) { repo.setMinFreeMemory(value * 1024) }
+    fun setDirtyRatio(value: Int) = viewModelScope.launch(Dispatchers.IO) {
+        if (repo.setDirtyRatio(value)) {
+            repo.getDirtyRatio().take(1).collect { _dirtyRatio.value = it }
+        }
+    }
+
+    fun setDirtyBackgroundRatio(value: Int) = viewModelScope.launch(Dispatchers.IO) {
+        if (repo.setDirtyBackgroundRatio(value)) {
+            repo.getDirtyBackgroundRatio().take(1).collect { _dirtyBackgroundRatio.value = it }
+        }
+    }
+
+    fun setDirtyWriteback(value: Int) = viewModelScope.launch(Dispatchers.IO) {
+        if (repo.setDirtyWriteback(value * 100)) {
+            repo.getDirtyWriteback().take(1).collect { _dirtyWriteback.value = it }
+        }
+    }
+
+    fun setDirtyExpireCentisecs(value: Int) = viewModelScope.launch(Dispatchers.IO) {
+        if (repo.setDirtyExpireCentisecs(value)) {
+            repo.getDirtyExpireCentisecs().take(1).collect { _dirtyExpireCentisecs.value = it }
+        }
+    }
+
+    fun setMinFreeMemory(value: Int) = viewModelScope.launch(Dispatchers.IO) {
+        if (repo.setMinFreeMemory(value * 1024)) {
+            repo.getMinFreeMemory().take(1).collect { _minFreeMemory.value = it }
+        }
+    }
 
     /* ---------------- Thermal ---------------- */
     private fun fetchCurrentThermalMode(isInitialLoad: Boolean = false) {
