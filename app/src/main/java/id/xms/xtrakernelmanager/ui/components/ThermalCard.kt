@@ -27,7 +27,6 @@ fun ThermalCard(
     blur: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Ambil state yang relevan dari ViewModel
     val availableProfiles = viewModel.availableThermalProfiles
     val currentProfileName by viewModel.currentThermalProfileName.collectAsState()
     val currentProfileIndex by viewModel.currentThermalModeIndex.collectAsState()
@@ -81,6 +80,13 @@ fun ThermalCard(
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                     } else {
+
+                        Text(
+                            text = "Currently Thermal: $currentProfileName",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -110,7 +116,6 @@ fun ThermalCard(
                         }
                     }
 
-                    // Dialog untuk memilih profil
                     if (showDialog) {
                         ThermalProfileSelectionDialog(
                             availableProfiles = availableProfiles,
@@ -136,7 +141,6 @@ private fun ThermalProfileSelectionDialog(
     onDismiss: () -> Unit,
 ) {
     if (availableProfiles.isEmpty()) {
-        // Jika tidak ada profil, langsung dismiss (seharusnya tidak terjadi jika tombol ditampilkan)
         LaunchedEffect(Unit) { onDismiss() }
         return
     }
@@ -145,13 +149,12 @@ private fun ThermalProfileSelectionDialog(
         onDismissRequest = onDismiss,
         title = { Text("Select Thermal Profile") },
         text = {
-            // Menggunakan LazyVerticalGrid untuk tata letak 4 kolom
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2), // Atau GridCells.Adaptive(minSize = 128.dp) untuk responsif
+                columns = GridCells.Fixed(2),
                 contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.heightIn(max = 400.dp) // Batasi ketinggian dialog jika daftar panjang
+                modifier = Modifier.heightIn(max = 400.dp)
             ) {
                 items(availableProfiles) { profile ->
                     OutlinedButton(
@@ -166,7 +169,6 @@ private fun ThermalProfileSelectionDialog(
                             text = profile.displayName,
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
-                            // overflow = TextOverflow.Ellipsis // Jika nama terlalu panjang
                         )
                     }
                 }
@@ -179,4 +181,3 @@ private fun ThermalProfileSelectionDialog(
         }
     )
 }
-
