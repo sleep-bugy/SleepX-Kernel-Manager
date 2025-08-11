@@ -49,6 +49,13 @@ class HomeViewModel @Inject constructor(
     private val _systemInfo = MutableStateFlow<SystemInfo?>(null)
     val systemInfo: StateFlow<SystemInfo?> = _systemInfo.asStateFlow()
 
+    private val _isTitleAnimationDone = MutableStateFlow(false)
+    val isTitleAnimationDone: StateFlow<Boolean> = _isTitleAnimationDone.asStateFlow()
+
+    fun onTitleAnimationFinished() {
+        _isTitleAnimationDone.value = true
+    }
+
     private val _cpuClusters = MutableStateFlow<List<CpuCluster>>(emptyList())
 
     init {

@@ -74,6 +74,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
 
+    implementation("androidx.appcompat:appcompat:1.7.0")
+
     implementation("androidx.datastore:datastore-preferences:1.1.7")
 
     // Hilt
