@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -174,32 +175,36 @@ fun FeatureInfoDialog(
         },
         text = {
             Column {
-                TabRow(
-                    selectedTabIndex = selectedLanguage.ordinal,
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ) {
-                    Tab(
-                        selected = selectedLanguage == Language.ID,
-                        onClick = { selectedLanguage = Language.ID },
-                        text = { Text("ID") },
-                        selectedContentColor = MaterialTheme.colorScheme.primary,
-                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Tab(
-                        selected = selectedLanguage == Language.EN,
-                        onClick = { selectedLanguage = Language.EN },
-                        text = { Text("EN") },
-                        selectedContentColor = MaterialTheme.colorScheme.primary,
-                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Row(modifier = Modifier.fillMaxWidth()) { // Baris pertama untuk TabRow
+                    TabRow(
+                        selectedTabIndex = selectedLanguage.ordinal,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        indicator = { tabPositions ->
+                            TabRowDefaults.Indicator(Modifier.tabIndicatorOffset(tabPositions[selectedLanguage.ordinal]))
+                        }
+                    ) {
+                        Tab(
+                            selected = selectedLanguage == Language.ID,
+                            onClick = { selectedLanguage = Language.ID },
+                            text = { Text("ID") },
+                            selectedContentColor = MaterialTheme.colorScheme.primary,
+                            unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Tab(
+                            selected = selectedLanguage == Language.EN,
+                            onClick = { selectedLanguage = Language.EN },
+                            text = { Text("EN") },
+                            selectedContentColor = MaterialTheme.colorScheme.primary,
+                            unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp)) // Spacer antara TabRow dan konten fitur
 
                 Column(modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 300.dp)
+                    .weight(1f) // Biarkan kolom ini mengambil sisa ruang vertikal
                     .verticalScroll(rememberScrollState())
                 ) {
                     features.forEachIndexed { index, feature ->
@@ -216,7 +221,7 @@ fun FeatureInfoDialog(
         },
         confirmButton = {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp, start = 8.dp, end = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically
             ) {
