@@ -60,12 +60,13 @@ fun MergedSystemCard(
                     contentDescription = if (expanded) "Collapse" else "Expand"
                 )
             }
+            Spacer(modifier = Modifier.height(8.dp)) // Added space between System Info title and Device Details
 
             AnimatedVisibility(visible = expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Device Details", style = MaterialTheme.typography.titleMedium)
                         Icon(painterResource(id = R.drawable.device_details), contentDescription = "Device Details Icon", modifier = Modifier.size(24.dp))
+                        Text("Device Details", style = MaterialTheme.typography.titleMedium)
                     }
                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                         Text("Model:"); Text(systemInfo.model)
@@ -88,8 +89,8 @@ fun MergedSystemCard(
 
                     // Battery Status
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(painterResource(id = R.drawable.battery), contentDescription = "Battery Icon", modifier = Modifier.size(20.dp))
                         Text("Battery Status", style = MaterialTheme.typography.titleMedium)
-                        Icon(painterResource(id = R.drawable.battery), contentDescription = "Battery Icon", modifier = Modifier.size(24.dp))
                     }
                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                         Text("Level:"); Text(if (b.level >= 0) "${b.level}%" else "Unknown")
@@ -127,8 +128,8 @@ fun MergedSystemCard(
 
                     // RAM Usage
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("RAM Usage", style = MaterialTheme.typography.titleMedium)
                         Icon(painterResource(id = R.drawable.memory), contentDescription = "RAM Icon", modifier = Modifier.size(24.dp))
+                        Text("RAM Usage", style = MaterialTheme.typography.titleMedium)
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),

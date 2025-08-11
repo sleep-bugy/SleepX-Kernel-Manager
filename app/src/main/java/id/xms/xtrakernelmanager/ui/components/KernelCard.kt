@@ -68,24 +68,29 @@ fun KernelCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.kernel), style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.width(8.dp)) // Space between text and icon
-                    Icon(
-                        contentDescription = stringResource(R.string.kernel),
-                        painter = painterResource(id = R.drawable.kernel),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp) // Increased size
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(onClick = { showDialog = true }, modifier = Modifier.size(18.dp)) { // Adjust size as needed
+                    IconButton(onClick = { showDialog = true }, modifier = Modifier.size(32.dp)) { // Use 32.dp for kernel icon size
                         Icon(
-                            Icons.Filled.Info,
+                            painter = painterResource(id = R.drawable.kernel), // Changed to kernel icon
                             contentDescription = stringResource(R.string.kernel_information),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
-                Text(stringResource(R.string.version, k.version.take(120)))
+                Spacer(modifier = Modifier.height(4.dp)) // Added vertical space
+                val versionString = k.version
+                val hashIndex = versionString.indexOf(" #")
+                val parenIndex = versionString.indexOf(" (")
+
+                val endIndex = when {
+                    hashIndex != -1 && parenIndex != -1 -> minOf(hashIndex, parenIndex)
+                    hashIndex != -1 -> hashIndex
+                    parenIndex != -1 -> parenIndex
+                    else -> versionString.length // No special characters found, take full string
+                }
+                val localVersion = versionString.substring(0, endIndex).trim()
+                Text(stringResource(R.string.version, localVersion))
                 Text(stringResource(R.string.kernel_type, k.gkiType))
-                Text(stringResource(R.string.sched, k.scheduler.take(30)))
+                
             }
         }
     }
