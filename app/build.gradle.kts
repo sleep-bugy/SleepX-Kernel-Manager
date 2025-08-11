@@ -345,19 +345,8 @@ abstract class SendTelegramMessageTask : DefaultTask() {
     }
 }
 
-tasks.register("uploadDebugApkToTelegram", UploadApkToTelegramTask::class) {
-    group = "custom"
-    description = "Builds and uploads the debug APK to Telegram."
-    // dependsOn("assembleDebug")
-    dependsOn("assembleRelease")
-    // apkFile.set(project.layout.projectDirectory.file("build/outputs/apk/debug/app-debug.apk"))
-    apkFile.set(project.layout.projectDirectory.file("release/app-release.apk"))
-}
-
 abstract class UploadApkToTelegramTask : DefaultTask() {
-
-    @get:Input
-    abstract val telegramBotToken: Property<String>
+    @get:Input abstract val telegramBotToken: Property<String>
 
     @get:Input
     abstract val telegramChatId: Property<String>
@@ -371,13 +360,6 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
     @get:Input
     abstract val appName: Property<String>
 
-    init {
-        telegramBotToken.convention(project.findProperty("telegramBotToken")?.toString() ?: "")
-        telegramChatId.convention(project.findProperty("telegramChatId")?.toString() ?: "")
-        appVersionName.convention(project.android.defaultConfig.versionName ?: "N/A")
-        appName.convention(project.name)
-    }
-
     @TaskAction
     fun uploadApk() {
         if (telegramBotToken.get().isEmpty() || telegramChatId.get().isEmpty()) {
@@ -387,7 +369,7 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
 
         val currentApkFile = apkFile.get().asFile
         if (!currentApkFile.exists()) {
-            logger.error("Release APK not found at ${currentApkFile.absolutePath}. Ensure assembleRelease has run.")
+            project.logger.error("Release APK not found at ${currentApkFile.absolutePath}. Ensure assembleRelease has run.")
             return
         }
 
@@ -396,9 +378,9 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
 
         // Telegram Bot API limit can be up to 2GB for bots, but typically 50MB for general use without special setup.
         if (fileSizeMb > 199) { // Check slightly less than 200MB to be safe
-            logger.error("APK size (${"%.2f".format(fileSizeMb)} MB) exceeds Telegram's typical 200MB limit. Skipping upload.")
-            tasks.named("sendTelegramMessage", SendTelegramMessageTask::class) {
-            }.get().sendMessage()
+            project.logger.error("APK size (${"%.2f".format(fileSizeMb)} MB) exceeds Telegram's typical 200MB limit. Skipping upload.")
+            // Consider how to trigger SendTelegramMessageTask if needed, as direct task execution from another is not standard.
+            // One option is to ensure SendTelegramMessageTask runs via task dependencies or lifecycle hooks.
             return
         }
 
@@ -422,23 +404,37 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
             post.entity = entityBuilder.build()
 
             try {
-                logger.info("Uploading APK to Telegram...")
+                project.logger.info("Uploading APK to Telegram...")
                 val response = httpClient.execute(post)
                 val responseBody = EntityUtils.toString(response.entity, "UTF-8")
                 if (response.statusLine.statusCode in 200..299) {
-                    logger.lifecycle("Successfully uploaded APK to Telegram. Response: $responseBody")
+                    project.logger.lifecycle("Successfully uploaded APK to Telegram. Response: $responseBody")
                 } else if (response.statusLine.statusCode == 400 && responseBody.contains("can't parse entities")) {
-                    logger.error("Failed to upload APK to Telegram due to Markdown parsing error. Status: ${response.statusLine}, Body: $responseBody. Caption was: $caption")
+                    project.logger.error("Failed to upload APK to Telegram due to Markdown parsing error. Status: ${response.statusLine}, Body: $responseBody. Caption was: $caption")
                 } else {
-                    logger.error("Failed to upload APK to Telegram. Status: ${response.statusLine}, Body: $responseBody")
+                    project.logger.error("Failed to upload APK to Telegram. Status: ${response.statusLine}, Body: $responseBody")
                 }
                 EntityUtils.consumeQuietly(response.entity)
             } catch (e: Exception) {
-                logger.error("Failed to upload APK to Telegram: ${e.message}", e)
+                project.logger.error("Failed to upload APK to Telegram: ${e.message}", e)
                 e.printStackTrace() // logger.error with exception will print stack trace with --stacktrace
             }
         }
     }
+}
+
+
+tasks.register("uploadDebugApkToTelegram", UploadApkToTelegramTask::class) {
+    group = "custom"
+    description = "Builds and uploads the debug APK to Telegram."
+    // dependsOn("assembleDebug")
+    dependsOn("assembleRelease")
+    // apkFile.set(project.layout.projectDirectory.file("build/outputs/apk/debug/app-debug.apk"))
+    apkFile.set(project.layout.projectDirectory.file("release/app-release.apk"))
+    telegramBotToken.convention(project.findProperty("telegramBotToken")?.toString() ?: "")
+    telegramChatId.convention(project.findProperty("telegramChatId")?.toString() ?: "")
+    appVersionName.convention(project.provider { project.android.defaultConfig.versionName ?: "N/A" })
+    appName.convention(project.name)
 }
 
 // --- Hook tasks into the build lifecycle ---
@@ -452,11 +448,6 @@ project.afterEvaluate {
             android.namespace?.substringAfterLast('.') ?: project.name
         })
     }
-}
-
-
-tasks.named("uploadDebugApkToTelegram", UploadApkToTelegramTask::class) {
-    // Configuration...
 }
 
 // DEFER HOOKING INTO PLUGIN TASKS:
