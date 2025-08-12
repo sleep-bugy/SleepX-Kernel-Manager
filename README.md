@@ -63,13 +63,13 @@ This is the official repository for **Xtra Kernel Manager**, maintained by the *
 Feel free to fork, open issues, or contribute via pull requests.
 
 ---
-
-> [!Tips and Tricks]
+> [!TIP]
 >
 > - **Performance Mode**: For demanding tasks like gaming, switch to `performance` governor for maximum CPU speed.
 > - **Battery Saving**: Use `powersave` governor when battery life is a priority.
-> - **Balanced Profile**: Most custom kernels offer a `schedutil` or `interactive` governor for a balance between performance and power saving.
-> - **Thermal Monitoring**: Keep an eye on CPU temperatures during heavy usage to prevent overheating.
+> - **Balanced Profile**: Most custom kernels offer a `schedutil` or `schedhorizon` governor for a balance between performance and power saving.
+> - **Thermal Monitoring**: Use `Dynamic` for Performance & Use `Thermal 20` For Balance & Use `Incalls` For Battery life. 
+
 
 ---
 
