@@ -1,5 +1,8 @@
 package id.xms.xtrakernelmanager.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -89,27 +92,34 @@ fun AboutCard(
         }
     }
     if (showCreditsDialog) {
-        AlertDialog(
-            onDismissRequest = { showCreditsDialog = false },
-            title = { Text(stringResource(id = R.string.credits)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    developers.forEach { developer ->
-                        DeveloperCreditItem(developer = developer)
+        AnimatedVisibility(
+            visible = showCreditsDialog,
+            enter = fadeIn(animationSpec = tween(durationMillis = 300)),
+        ) {
+            AlertDialog(
+                onDismissRequest = { showCreditsDialog = false },
+                title = { Text(stringResource(id = R.string.credits)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        developers.forEach { developer ->
+                            DeveloperCreditItem(developer = developer)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showCreditsDialog = false }) {
+                        Text(stringResource(android.R.string.ok))
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showCreditsDialog = false }) {
-                    Text(stringResource(android.R.string.ok))
-                }
-            }
-        )
+            )
+        }
     }
 }
 
 @Composable
 fun DeveloperCreditItem(developer: Developer) {
+    val uriHandler = LocalUriHandler.current
+    val githubProfileUrl = "https://github.com/${developer.githubUsername}"
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -121,11 +131,19 @@ fun DeveloperCreditItem(developer: Developer) {
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
+                .clickable { uriHandler.openUri(githubProfileUrl) }
         )
 
         Column {
             Text(text = developer.name, style = MaterialTheme.typography.titleMedium)
             Text(text = developer.role, style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = "@${developer.githubUsername}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { uriHandler.openUri(githubProfileUrl) }
+            )
         }
     }
 }
+
