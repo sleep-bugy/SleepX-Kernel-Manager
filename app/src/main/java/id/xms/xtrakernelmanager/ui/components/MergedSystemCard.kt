@@ -3,16 +3,19 @@ package id.xms.xtrakernelmanager.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons.Filled
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.rounded.BatteryFull
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,41 +59,62 @@ fun MergedSystemCard(
                     }
                 }
                 Icon(
-                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    imageVector = if (expanded) Filled.KeyboardArrowUp else Filled.KeyboardArrowDown,
                     contentDescription = if (expanded) "Collapse" else "Expand"
                 )
             }
             Spacer(modifier = Modifier.height(8.dp)) // Added space between System Info title and Device Details
 
             AnimatedVisibility(visible = expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { // Device Details
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(painterResource(id = R.drawable.device_details), contentDescription = "Device Details Icon", modifier = Modifier.size(24.dp))
+                        Icon(Icons.Rounded.Smartphone, contentDescription = "Device Details Icon", modifier = Modifier.size(24.dp))
                         Text("Device Details", style = MaterialTheme.typography.titleMedium)
                     }
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("Model:"); Text(systemInfo.model)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Filled.PhoneAndroid, contentDescription = "Model Icon", modifier = Modifier.size(18.dp))
+                            Text("Model:")
+                        }
+                        Text(systemInfo.model)
                     }
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("Codename:"); Text(systemInfo.codename)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Filled.Code, contentDescription = "Codename Icon", modifier = Modifier.size(18.dp))
+                            Text("Codename:")
+                        }
+                        Text(systemInfo.codename)
                     }
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("Android Version:"); Text(systemInfo.androidVersion)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Filled.Android, contentDescription = "Android Version Icon", modifier = Modifier.size(18.dp))
+                            Text("Android Version:")
+                        }
+                        Text(systemInfo.androidVersion)
                     }
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("SDK Level:"); Text(systemInfo.sdk.toString())
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Filled.Layers, contentDescription = "SDK Level Icon", modifier = Modifier.size(18.dp))
+                            Text("SDK Level:")
+                        }
+                        Text(systemInfo.sdk.toString())
                     }
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("Fingerprint:"); Text(systemInfo.fingerprint, maxLines = 6, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Filled.Fingerprint, contentDescription = "Fingerprint Icon", modifier = Modifier.size(18.dp))
+                            Text("Fingerprint:")
+                        }
                     }
-
+                    Text(
+                        systemInfo.fingerprint,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Divider(Modifier.padding(vertical = 8.dp))
 
 
                     // Battery Status
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(painterResource(id = R.drawable.battery), contentDescription = "Battery Icon", modifier = Modifier.size(20.dp))
-                        Text("Battery Status", style = MaterialTheme.typography.titleMedium)
+                        Icon(Icons.Rounded.BatteryFull, contentDescription = "Battery Icon", modifier = Modifier.size(24.dp))
+                        Text("Battery & Power", style = MaterialTheme.typography.titleMedium)
                     }
                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                         Text("Level:"); Text(if (b.level >= 0) "${b.level}%" else "Unknown")
@@ -128,7 +152,7 @@ fun MergedSystemCard(
 
                     // RAM Usage
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(painterResource(id = R.drawable.memory), contentDescription = "RAM Icon", modifier = Modifier.size(24.dp))
+                        Icon(Icons.Outlined.Memory, contentDescription = "RAM Icon", modifier = Modifier.size(24.dp))
                         Text("RAM Usage", style = MaterialTheme.typography.titleMedium)
                     }
                     Row(
@@ -177,8 +201,12 @@ fun MergedSystemCard(
                     Divider(Modifier.padding(vertical = 8.dp))
 
                     // Root & Version
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Rounded.Info, contentDescription = "App Info Icon", modifier = Modifier.size(24.dp))
+                        Text("App Info", style = MaterialTheme.typography.titleMedium)
+                    }
                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("Root:"); Text(if (rooted) "Granted" else "Not Granted")
+                        Text("Root Status:"); Text(if (rooted) "Granted" else "Not Granted")
                     }
                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                         Text("App Version:"); Text(version)
