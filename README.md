@@ -64,7 +64,7 @@ Feel free to fork, open issues, or contribute via pull requests.
 
 ---
 
-> [💡 Tips and Tricks]
+> [!💡 Tips and Tricks]
 >
 > - **Performance Mode**: For demanding tasks like gaming, switch to `performance` governor for maximum CPU speed.
 > - **Battery Saving**: Use `powersave` governor when battery life is a priority.
