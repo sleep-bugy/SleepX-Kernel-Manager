@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,11 +18,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import id.xms.xtrakernelmanager.R
+
+data class Developer(val name: String, val role: String, val githubUsername: String, val drawableResId: Int)
+
+val developers = listOf(
+    Developer("Gustyx-Power", "Founder & Developer", "Gustyx-Power", R.drawable.gustyx_power),
+    Developer("Pavelc4", "Ui Supports", "pavelc4", R.drawable.pavelc4),
+    Developer("Ziyu", "Tuning Supports", "Ziyu", R.drawable.ziyu)
+)
+
 
 @Composable
 fun AboutCard(
@@ -45,7 +58,7 @@ fun AboutCard(
                 )
                 Text(stringResource(id = R.string.desc_about))
                 val uriHandler = LocalUriHandler.current
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     IconButton(onClick = { uriHandler.openUri(telegramLink) }) {
                         Icon(
                             painterResource(id = R.drawable.telegram),
@@ -80,7 +93,11 @@ fun AboutCard(
             onDismissRequest = { showCreditsDialog = false },
             title = { Text(stringResource(id = R.string.credits)) },
             text = {
-                Text(stringResource(id = R.string.credits_author))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    developers.forEach { developer ->
+                        DeveloperCreditItem(developer = developer)
+                    }
+                }
             },
             confirmButton = {
                 TextButton(onClick = { showCreditsDialog = false }) {
@@ -88,5 +105,27 @@ fun AboutCard(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun DeveloperCreditItem(developer: Developer) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Image(
+            painter = painterResource(id = developer.drawableResId),
+            contentDescription = "${developer.name}'s profile picture",
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+        )
+
+        Column {
+            Text(text = developer.name, style = MaterialTheme.typography.titleMedium)
+            Text(text = developer.role, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
