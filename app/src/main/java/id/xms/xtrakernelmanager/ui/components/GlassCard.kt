@@ -29,7 +29,7 @@ fun GlassCard(
 ) {
     val finalBackgroundColor: Color
     val backgroundBrush: Brush
-    val strokeColor = Color(0xFF09764A) // Soft blue color
+    val strokeColor = MaterialTheme.colorScheme.outline
 
     if (isGlassEffectEnabled) {
         finalBackgroundColor = Color.Transparent

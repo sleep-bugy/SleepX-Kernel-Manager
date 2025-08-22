@@ -9,6 +9,10 @@ import dagger.hilt.components.SingletonComponent
 import id.xms.xtrakernelmanager.data.repository.RootRepository
 import id.xms.xtrakernelmanager.data.repository.SystemRepository
 import javax.inject.Singleton
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.preferencesDataStoreFile
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -26,4 +30,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideRootRepository(): RootRepository = RootRepository()
+
+    @Provides
+    @Singleton
+    fun providePreferencesDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
+        return PreferenceDataStoreFactory.create(produceFile = { context.preferencesDataStoreFile("settings") })
+    }
 }

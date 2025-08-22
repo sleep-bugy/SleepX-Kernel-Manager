@@ -6,7 +6,9 @@
     <string name="telegram">Telegram</string>
     <string name="github">Github</string>
     <string name="credits">Developer Xtra Kernel Manager</string>
-    <string name="credits_author">1. Gustyx-Power : Founder &amp; Developer\n2. Pavellc : Ui Supports\n3. Ziyu : Tuning Supports</string>
+    <string name="credits_author">1. Gustyx-Power : Founder &amp; Developer
+2. Pavellc : Ui Supports
+3. Ziyu : Tuning Supports</string>
     <string name="kernel">Kernel</string>
     <string name="version">Version: %1$s</string>
     <string name="kernel_type">Kernel Type: %1$s</string>
@@ -26,7 +28,7 @@
     <string name="reboot_recovery">Reboot Recovery</string>
     <string name="power_off">Power Off</string>
 
-        <!-- ... string lainnya ... -->
+    <!-- ... string lainnya ... -->
     <string name="central_proccessing_unit_cpu">Central Processing Unit (CPU)</string>
     <string name="offline">Offline</string>
     <string name="cpu_governor_label">Governor:</string>
@@ -40,8 +42,36 @@
 
     <!-- String yang sudah ada dari kode sebelumnya, pastikan masih relevan -->
     <string name="cpu_governor">Governor: %s</string>
-    <string name="cpu_cores_core">%d Cores</string>
+    <string name="cpu_cores_format">%d Cores</string>
     <string name="temperature_c">Temp: %.1f °C</string>
     <string name="uptime_regex">%02dh %02dm %02ds</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_back_button_desc">Back</string>
+    <string name="settings_language_label">Language</string>
+    <string name="language_english">English</string>
+    <string name="language_indonesian">Indonesian</string>
+
+    <!-- CpuCard -->
+    <string name="cpu_soc_label">SoC</string>
+    <string name="cpu_cpu_label">CPU</string>
+    <string name="cpu_freq_mhz">%d MHz</string>
+    <string name="common_na">N/A</string>
+    <string name="cpu_avg_load_format">%.1f%%</string>
+    <string name="cpu_toggle_graph_mode_desc">Toggle Graph Mode</string>
+
+    <!-- HomeScreen -->
+    <string name="home_reboot_system_desc">Reboot System</string>
+    <string name="home_reboot_systemui_desc">Reboot SystemUI</string>
+    <string name="home_reboot_bootloader_desc">Reboot Bootloader</string>
+    <string name="home_reboot_recovery_desc">Reboot Recovery</string>
+    <string name="home_power_off_desc">Power Off</string>
+    <string name="home_toggle_fab_desc">Toggle FAB Menu</string>
+    <string name="home_settings_button_desc">Settings</string>
+    <string name="cpu_fallback_title">CPU</string>
+
+    <!-- Common -->
+    <string name="common_unknown_value">Unknown</string>
 
 </resources>

@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
 import id.xms.xtrakernelmanager.R
 import id.xms.xtrakernelmanager.ui.components.*
 import id.xms.xtrakernelmanager.viewmodel.HomeViewModel
@@ -149,7 +150,7 @@ fun getSystemInfoFromDevice(): SystemInfo { // Ubah nama fungsi agar lebih jelas
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
+fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController) {
     // Kumpulkan semua state dari ViewModel
     val cpuInfo by vm.cpuInfo.collectAsState()
     val batteryInfo by vm.batteryInfo.collectAsState()       // Sekarang ini adalah StateFlow<BatteryInfo?>
@@ -160,42 +161,26 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
     val appVersion by vm.appVersion.collectAsState()        // Sekarang ini adalah StateFlow<String?>
     val systemInfoState by vm.systemInfo.collectAsState() // Flow untuk SystemInfo
 
-    var blurOn by rememberSaveable { mutableStateOf(true) }
     var showFabMenu by remember { mutableStateOf(false) }
 
-    // Shimmer animation for TopAppBar
-    val topAppBarShimmerColors = listOf(
-        Color.White.copy(alpha = 0.0f),
-        Color.White.copy(alpha = 0.5f),
-        Color.White.copy(alpha = 0.0f)
-    )
-    val infiniteAppBarTransition = rememberInfiniteTransition(label = "topAppBarShimmerInfinite")
-    val translateAppBarAnim by infiniteAppBarTransition.animateFloat(
-        initialValue = -100f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ), label = "topAppBarShimmerTranslateInfinite"
-    )
-    val topAppBarShimmerBrush = Brush.linearGradient(
-        colors = topAppBarShimmerColors,
-        // Anda mungkin perlu menyesuaikan start dan end offset untuk efek yang diinginkan
-        // start = Offset(translateAppBarAnim, 0f),
-        // end = Offset(translateAppBarAnim + 100f, 0f) // Contoh
-    )
+    
 
     val fullTitle = stringResource(R.string.xtra_kernel_manager)
-    var displayedTitle by remember { mutableStateOf("") }
+    val isTitleAnimationDone by vm.isTitleAnimationDone.collectAsState()
+    var displayedTitle by remember {
+        mutableStateOf(if (isTitleAnimationDone) fullTitle else "")
+    }
 
-    LaunchedEffect(Unit) {
-        var currentIndex = 0
-        while (currentIndex <= fullTitle.length) {
-            displayedTitle = fullTitle.substring(0, currentIndex)
-            currentIndex++
-            delay(100)
+    LaunchedEffect(isTitleAnimationDone) {
+        if (!isTitleAnimationDone) {
+            var currentIndex = 0
+            while (currentIndex <= fullTitle.length) {
+                displayedTitle = fullTitle.substring(0, currentIndex)
+                currentIndex++
+                delay(100)
+            }
+            vm.onTitleAnimationFinished()
         }
-        // Blinking cursor tidak diimplementasikan di sini untuk menjaga fokus
     }
 
     Scaffold(
@@ -254,57 +239,27 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
         },
         floatingActionButtonPosition = FabPosition.End,
         topBar = {
-            Box( // Menggunakan Box untuk kontrol lebih pada padding dan tinggi
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding() // Padding untuk status bar
-                    .height(56.dp)       // Tinggi standar TopAppBar
-            ) {
-                TopAppBar(
-                    title = {
-                        Box { // Box untuk melapisi teks dengan shimmer
-                            Text(
-                                text = displayedTitle,
-                                style = MaterialTheme.typography.headlineLarge,
-                                modifier = Modifier
-                                    .background(
-                                        Color(0xFF1E777F).copy(alpha = 0.7f), // Warna biru tua
-                                        shape = MaterialTheme.shapes.small
-                                    )
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                            // Canvas untuk efek shimmer di atas teks
-                            Canvas(modifier = Modifier.matchParentSize()) {
-                                drawIntoCanvas {
-                                    // Pastikan topAppBarShimmerBrush dan translateAppBarAnim sudah benar
-                                    // Untuk shimmer yang bergerak horizontal:
-                                    drawRect(
-                                        brush = topAppBarShimmerBrush,
-                                        topLeft = androidx.compose.ui.geometry.Offset(translateAppBarAnim, 0f),
-                                        // Lebar shimmer effect, sesuaikan
-                                        size = androidx.compose.ui.geometry.Size(100f, size.height)
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = if (blurOn) Color.Transparent else MaterialTheme.colorScheme.surface
-                    ),
-                    actions = {
-                        IconToggleButton(
-                            checked = blurOn,
-                            onCheckedChange = { blurOn = it },
-                            // modifier = Modifier.align(Alignment.CenterVertically) // Tidak diperlukan di TopAppBar actions
-                        ) {
-                            Icon(
-                                imageVector = if (blurOn) Icons.Default.BlurOn else Icons.Default.BlurOff,
-                                contentDescription = "Toggle blur"
-                            )
-                        }
+            TopAppBar(
+                title = {
+                    Text(
+                        text = displayedTitle,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                actions = {
+                    IconButton(onClick = { navController.navigate("settings") }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings"
+                        )
                     }
-                )
-            }
+                }
+            )
         }
     ) { paddingValues -> // Nama parameter yang lebih deskriptif
 
@@ -313,7 +268,7 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
                 .fillMaxSize()
                 .padding(paddingValues) // Gunakan paddingValues dari Scaffold
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp), // Padding konten
+                .padding(horizontal = 20.dp, vertical = 8.dp), // Padding konten
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
@@ -323,7 +278,7 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
                 val socNameToDisplay = currentSystemInfo?.soc?.takeIf { it.isNotBlank() && it != VALUE_UNKNOWN_SYS_INFO }
                     ?: cpuInfo.soc.takeIf { it.isNotBlank() && it != "Unknown SoC" && it != "N/A" }
                     ?: "CPU"
-                CpuCard(socNameToDisplay, cpuInfo, blurOn, modifier)
+                CpuCard(socNameToDisplay, cpuInfo, false, modifier)
             }
 
             /* 2. Merged card */
@@ -343,7 +298,7 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
                         d = currentDeepSleep,
                         rooted = currentRoot,
                         version = currentVersion,
-                        blur = blurOn,
+                        blur = false,
                         mem = currentMemory,
                         systemInfo = currentSystem, // Sediakan argumen systemInfo
                         modifier = modifier
@@ -363,7 +318,7 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
             val currentKernel = kernelInfo
             if (currentKernel != null) {
                 FadeInEffect { modifier ->
-                    KernelCard(currentKernel, blurOn, modifier)
+                    KernelCard(currentKernel, false, modifier)
                 }
             } else {
                 // Opsional: Placeholder untuk KernelCard
@@ -372,7 +327,7 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel()) {
 
             /* 4. About */
             FadeInEffect { modifier ->
-                AboutCard(blurOn, modifier)
+                AboutCard(false, modifier)
             }
         }
     }

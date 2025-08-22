@@ -97,15 +97,6 @@ fun CpuCard(
     }
 
     GlassCard(blur, modifier) {
-        val infiniteTransition = rememberInfiniteTransition(label = "shimmer_transition_cpu_card")
-        val shimmerAlpha by infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1500, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            ), label = "shimmer_alpha_cpu_card"
-        )
         val graphColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
 
         Card(
@@ -113,7 +104,7 @@ fun CpuCard(
                 .fillMaxWidth()
                 .padding(12.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = shimmerAlpha)
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
@@ -146,8 +137,8 @@ fun CpuCard(
                         ) {
                             Text(
                                 if ((soc.isNotBlank() && soc != "Unknown SoC" && soc != "N/A") ||
-                                    (info.soc.isNotBlank() && info.soc != "Unknown SoC" && info.soc != "N/A")) "SoC"
-                                else "CPU",
+                                    (info.soc.isNotBlank() && info.soc != "Unknown SoC" && info.soc != "N/A")) stringResource(R.string.cpu_soc_label)
+                                else stringResource(R.string.cpu_cpu_label),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 style = MaterialTheme.typography.labelSmall
                             )
@@ -186,7 +177,7 @@ fun CpuCard(
                                             )
                                         } else {
                                             Text(
-                                                text = "$freq MHz",
+                                                text = stringResource(R.string.cpu_freq_mhz, freq),
                                                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp), // Sedikit lebih kecil
                                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                                             )
@@ -218,7 +209,7 @@ fun CpuCard(
                             color = infoTextColor,
                         )
                         Text(
-                            info.governor.takeIf { it.isNotBlank() } ?: "N/A",
+                            info.governor.takeIf { it.isNotBlank() } ?: stringResource(R.string.common_na),
                             style = infoValueTextStyle,
                             color = infoTextColor,
                         )
@@ -231,7 +222,7 @@ fun CpuCard(
                             color = infoTextColor,
                         )
                         Text(
-                            "${info.cores} ${stringResource(R.string.core_suffix)}", // "8 Cores"
+                            stringResource(R.string.cpu_cores_format, info.cores),
                             style = infoValueTextStyle,
                             color = infoTextColor,
                         )
@@ -259,7 +250,7 @@ fun CpuCard(
                                 color = infoTextColor,
                             )
                             Text(
-                                "%.1f%%".format(graphDataHistory.lastOrNull() ?: 0f),
+                                stringResource(R.string.cpu_avg_load_format, graphDataHistory.lastOrNull() ?: 0f),
                                 style = infoValueTextStyle.copy(color = MaterialTheme.colorScheme.primary), // Warna beda untuk load
                                 // modifier = Modifier.padding(top = 6.dp)
                             )
@@ -315,12 +306,11 @@ fun CpuCard(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 0.dp), // Kurangi padding vertikal
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End // Pindahkan ke kanan
+                    horizontalArrangement = Arrangement.SpaceBetween // Pindahkan ke kanan
                 ) {
                     Text(
                         text = if (currentGraphMode == GraphMode.SPEED) stringResource(R.string.clock_speed) else stringResource(R.string.cpu_load),
                         style = MaterialTheme.typography.labelMedium, // Label lebih kecil
-                        modifier = Modifier.padding(end = 8.dp)
                     )
                     val switchIcon: ImageVector = if (currentGraphMode == GraphMode.SPEED) Icons.Filled.Speed else Icons.Filled.BarChart
                     Switch(
@@ -330,7 +320,7 @@ fun CpuCard(
                             graphDataHistory = emptyList() // Reset history saat ganti mode
                         },
                         thumbContent = {
-                            Icon(switchIcon, "Toggle Graph Mode", Modifier.size(SwitchDefaults.IconSize))
+                            Icon(switchIcon, stringResource(R.string.cpu_toggle_graph_mode_desc), Modifier.size(SwitchDefaults.IconSize))
                         }
                     )
                 }
