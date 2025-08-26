@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import id.xms.xtrakernelmanager.R
+import id.xms.xtrakernelmanager.R.*
+import id.xms.xtrakernelmanager.R.string.home
 
 @Composable
 fun BottomNavBar(navController: NavHostController, items: List<String>) {
@@ -35,6 +37,12 @@ fun BottomNavBar(navController: NavHostController, items: List<String>) {
             .height(90.dp), // Tinggi lebih modern
         containerColor = Color.Transparent, // Background dibuat transparan karena sudah dihandle oleh Modifier.background
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant // Konten Material 3 You
+            .padding(horizontal = 24.dp, vertical = 32.dp)
+            .shadow(elevation = 32.dp, shape = RoundedCornerShape(40.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+            .height(90.dp),
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     ) {
         items.forEach { screen ->
             val icon = when (screen) {
