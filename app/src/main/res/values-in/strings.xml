@@ -15,9 +15,9 @@
     <string name="kernel_information">Informasi Kernel</string>
     <string name="kernel_version">Versi Kernel: %1$s</string>
     <string name="xtra_kernel_manager">Xtra Kernel Manager</string>
-    <string name="home">Beranda</string>
-    <string name="tuning">Penyetelan</string>
-    <string name="misc">Lain-lain</string>
+    <string name="home">Home</string>
+    <string name="tuning">Tuning</string>
+    <string name="misc">Misc</string>
     <string name="info">Info</string>
     <string name="sched">Penjadwal I/O: %1$s</string>
     <string name="github_link">https://github.com/Gustyx-Power/Xtra-Kernel-Manager</string>
@@ -31,17 +31,17 @@
     <!-- ... string lainnya ... -->
     <string name="central_proccessing_unit_cpu">Unit Pemrosesan Pusat (CPU)</string>
     <string name="offline">Offline</string>
-    <string name="cpu_governor_label">Gubernur:</string>
+    <string name="cpu_governor_label">Governor:</string>
     <string name="cpu_cores_label">Inti:</string>
     <string name="core_suffix">Inti</string>
     <string name="temperature_label">Suhu:</string>
     <string name="temperature_c_format">%.1f °C</string>
     <string name="avg_load_label">Rata-rata Beban:</string>
-    <string name="clock_speed">Kecepatan Jam</string>
+    <string name="clock_speed">Kecepatan CPU</string>
     <string name="cpu_load">Beban CPU</string>
 
     <!-- String yang sudah ada dari kode sebelumnya, pastikan masih relevan -->
-    <string name="cpu_governor">Gubernur: %s</string>
+    <string name="cpu_governor">Governrr: %s</string>
     <string name="cpu_cores_format">%d Inti</string>
     <string name="temperature_c">Suhu: %.1f °C</string>
     <string name="uptime_regex">%02dh %02dm %02ds</string>
