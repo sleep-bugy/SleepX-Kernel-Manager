@@ -248,6 +248,7 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController
                         color = Color.White, // Pastikan teks kontras dengan background
                         modifier = Modifier
                             .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .clip(MaterialTheme.shapes.large) // Rounded corners
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
