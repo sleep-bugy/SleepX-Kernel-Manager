@@ -30,26 +30,20 @@ fun BottomNavBar(navController: NavHostController, items: List<String>) {
 
     NavigationBar(
         modifier = Modifier
-            .padding(horizontal = 24.dp, vertical = 32.dp) // Padding agar lebih mengambang dari tepi layar
-            .shadow(elevation = 32.dp, shape = RoundedCornerShape(40.dp)) // Efek shadow lebih kuat dan rounded lebih besar
-            .clip(RoundedCornerShape(24.dp)) // Rounded corners modern
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)) // Background Material 3 You lebih solid
-            .height(90.dp), // Tinggi lebih modern
-        containerColor = Color.Transparent, // Background dibuat transparan karena sudah dihandle oleh Modifier.background
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant // Konten Material 3 You
             .padding(horizontal = 24.dp, vertical = 32.dp)
             .shadow(elevation = 32.dp, shape = RoundedCornerShape(40.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
             .height(90.dp),
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     ) {
         items.forEach { screen ->
-            val icon = when (screen) {
-                stringResource(R.string.home)   -> Icons.Default.Home
-                stringResource(R.string.tuning) -> Icons.Default.Build
-                stringResource(R.string.misc) -> Icons.Default.MiscellaneousServices
-                stringResource(R.string.info)   -> Icons.Default.Info
+            val icon = when {
+                screen.equals(stringResource(R.string.home), ignoreCase = true)   -> Icons.Default.Home
+                screen.equals(stringResource(R.string.tuning), ignoreCase = true) -> Icons.Default.Build
+                screen.equals(stringResource(R.string.misc), ignoreCase = true) -> Icons.Default.MiscellaneousServices
+                screen.equals(stringResource(R.string.info), ignoreCase = true)   -> Icons.Default.Info
                 else     -> Icons.Default.Home
             }
             NavigationBarItem(
