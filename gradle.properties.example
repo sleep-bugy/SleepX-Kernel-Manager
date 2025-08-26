@@ -1,9 +1,0 @@
-# Gradle Settings
-org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 --enable-native-access=ALL-UNNAMED
-android.useAndroidX=true
-# Kotlin code style for this project: "official" or "obsolete":
-kotlin.code.style=official
-android.nonTransitiveRClass=true
-# API your bot if you use
-telegramBotToken=your api
-telegramChatId=-your api
