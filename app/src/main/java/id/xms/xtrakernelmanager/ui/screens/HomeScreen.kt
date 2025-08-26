@@ -2,7 +2,6 @@ package id.xms.xtrakernelmanager.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,13 +10,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
@@ -36,7 +33,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import id.xms.xtrakernelmanager.data.model.SystemInfo
-import kotlin.io.path.inputStream
 import kotlin.text.isNotBlank
 
 
@@ -154,13 +150,13 @@ fun getSystemInfoFromDevice(): SystemInfo { // Ubah nama fungsi agar lebih jelas
 fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController) {
     // Kumpulkan semua state dari ViewModel
     val cpuInfo by vm.cpuInfo.collectAsState()
-    val batteryInfo by vm.batteryInfo.collectAsState()       // Sekarang ini adalah StateFlow<BatteryInfo?>
-    val memoryInfo by vm.memoryInfo.collectAsState()         // Sekarang ini adalah StateFlow<MemoryInfo?>
+    val batteryInfo by vm.batteryInfo.collectAsState()
+    val memoryInfo by vm.memoryInfo.collectAsState()
     val deepSleepInfo by vm.deepSleep.collectAsState()
-    val rootStatus by vm.rootStatus.collectAsState()         // Sekarang ini adalah StateFlow<Boolean?>
-    val kernelInfo by vm.kernelInfo.collectAsState()         // Sekarang ini adalah StateFlow<KernelInfo?>
-    val appVersion by vm.appVersion.collectAsState()        // Sekarang ini adalah StateFlow<String?>
-    val systemInfoState by vm.systemInfo.collectAsState() // Flow untuk SystemInfo
+    val rootStatus by vm.rootStatus.collectAsState()
+    val kernelInfo by vm.kernelInfo.collectAsState()
+    val appVersion by vm.appVersion.collectAsState()
+    val systemInfoState by vm.systemInfo.collectAsState()
 
     var showFabMenu by remember { mutableStateOf(false) }
 
@@ -222,12 +218,12 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp)) // Spacer antara menu dan FAB utama
+                Spacer(modifier = Modifier.height(16.dp))
                 FloatingActionButton(
                     onClick = { showFabMenu = !showFabMenu },
                 ) {
                     val iconRotation by animateFloatAsState(
-                        targetValue = if (showFabMenu) 45f else 0f, // Rotasi 45 derajat untuk efek 'X'
+                        targetValue = if (showFabMenu) 45f else 0f,
                         animationSpec = tween(durationMillis = 300), label = "fabIconRotation"
                     )
                     Icon(
@@ -245,10 +241,10 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController
                     Text(
                         text = displayedTitle,
                         style = MaterialTheme.typography.titleLarge,
-                        color = Color.White, // Pastikan teks kontras dengan background
+                        color = Color.White,
                         modifier = Modifier
-                            .background(Color(0xFF006400), shape = MaterialTheme.shapes.medium) // Warna hijau gelap dengan rounded corners
-                            .clip(MaterialTheme.shapes.large) // Rounded corners
+                            .background(Color(0xFF006400), shape = MaterialTheme.shapes.medium)
+                            .clip(MaterialTheme.shapes.large)
                             .padding(horizontal = 8.dp, vertical = 2.dp)
 
 
@@ -267,14 +263,14 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController
                 }
             )
         }
-    ) { paddingValues -> // Nama parameter yang lebih deskriptif
+    ) { paddingValues ->
 
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(paddingValues) // Gunakan paddingValues dari Scaffold
+                .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp), // Padding konten
+                .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
@@ -288,7 +284,6 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController
             }
 
             /* 2. Merged card */
-            // Hanya tampilkan MergedSystemCard jika semua data yang dibutuhkan tidak null
             val currentBattery = batteryInfo
             val currentMemory = memoryInfo
             val currentDeepSleep = deepSleepInfo
@@ -306,17 +301,16 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController
                         version = currentVersion,
                         blur = false,
                         mem = currentMemory,
-                        systemInfo = currentSystem, // Sediakan argumen systemInfo
+                        systemInfo = currentSystem,
                         modifier = modifier
                     )
                 }
             } else {
-                // Opsional: Tampilkan placeholder atau loading untuk MergedSystemCard
-                // FadeInEffect { modifier ->
-                //     Box(modifier.fillMaxWidth().height(200.dp).background(Color.LightGray.copy(alpha = 0.5f))) {
-                //         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                //     }
-                // }
+                FadeInEffect { modifier ->
+                     Box(modifier.fillMaxWidth().height(200.dp).background(Color.LightGray.copy(alpha = 0.5f))) {
+                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                     }
+                }
             }
 
 
@@ -339,7 +333,7 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController
     }
 }
 
-// Composable kecil untuk FAB dengan Label, untuk mengurangi duplikasi
+
 @Composable
 private fun SmallFabWithLabel(
     text: String,

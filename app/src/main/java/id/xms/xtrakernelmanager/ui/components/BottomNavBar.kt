@@ -2,7 +2,6 @@ package id.xms.xtrakernelmanager.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -20,8 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import id.xms.xtrakernelmanager.R
-import id.xms.xtrakernelmanager.R.*
-import id.xms.xtrakernelmanager.R.string.home
+
 
 @Composable
 fun BottomNavBar(navController: NavHostController, items: List<String>) {
@@ -53,18 +51,18 @@ fun BottomNavBar(navController: NavHostController, items: List<String>) {
                         modifier = Modifier
                             .size(56.dp) // Ukuran ikon lebih besar
                             .clip(RoundedCornerShape(28.dp)) // Rounded shape lebih besar
-                            .background(if (current == screen.lowercase()) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f) else Color.Transparent) // Highlight aktif Material 3 You dengan alpha atau transparan
+                            .background(if (current == screen.lowercase()) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f) else Color.Transparent)
                             .padding(10.dp) // Padding ikon lebih besar
                     ) {
                         Icon(
                             imageVector = icon,
                             contentDescription = screen,
                             modifier = Modifier.size(28.dp), // Ukuran ikon di dalam Box lebih besar
-                            tint = if (current == screen.lowercase()) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant // Ikon Material 3 You
+                            tint = if (current == screen.lowercase()) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
-                label = { Text(screen, fontSize = 14.sp) }, // Ukuran teks label lebih besar
+                label = { Text(screen, fontSize = 14.sp) },
                 selected = current == screen.lowercase(),
                 onClick = {
                     navController.navigate(screen.lowercase()) {
@@ -78,7 +76,7 @@ fun BottomNavBar(navController: NavHostController, items: List<String>) {
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0f) // Indikator dibuat transparan karena Box sudah menghandle background
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0f)
                 )
             )
         }
