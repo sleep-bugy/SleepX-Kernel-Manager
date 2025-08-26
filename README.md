@@ -8,7 +8,7 @@
 ![GitHub commits](https://img.shields.io/github/commit-activity/t/Gustyx-Power/Xtra-Kernel-Manager?style=for-the-badge)
 [![Repo Size](https://img.shields.io/github/repo-size/Gustyx-Power/Xtra-Kernel-Manager?style=for-the-badge&logo=github)](https://github.com/Gustyx-Power/Xtra-Kernel-Manager)
 
-**Xtra Kernel Manager** is a modern, rooted Android application built with Kotlin and Jetpack Compose, designed for real-time monitoring and tuning of CPU performance, thermal behavior, and power-saving configurations on devices running custom kernels.
+**Xtra Kernel Manager** is a modern apps, rooted Android application built with Kotlin and Jetpack Compose, designed for real-time monitoring and tuning of CPU performance, thermal behavior, and power-saving configurations on devices running custom kernels.
 
 
 ## ✨ Features
