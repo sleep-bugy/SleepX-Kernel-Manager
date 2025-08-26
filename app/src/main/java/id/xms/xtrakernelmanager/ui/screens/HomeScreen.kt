@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -163,7 +164,7 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController
 
     var showFabMenu by remember { mutableStateOf(false) }
 
-    
+
 
     val fullTitle = stringResource(R.string.xtra_kernel_manager)
     val isTitleAnimationDone by vm.isTitleAnimationDone.collectAsState()
@@ -244,6 +245,7 @@ fun HomeScreen(vm: HomeViewModel = hiltViewModel(), navController: NavController
                     Text(
                         text = displayedTitle,
                         style = MaterialTheme.typography.titleLarge,
+                        color = Color.White, // Pastikan teks kontras dengan background
                         modifier = Modifier
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
