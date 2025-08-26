@@ -4,28 +4,23 @@ on:
   push:
     branches:
       - master
+
 jobs:
   check:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Create check run
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { data: checkRun } = await github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: 'Auto Check',
-              head_sha: context.sha,
-              status: 'completed',
-              conclusion: 'success',
-              output: {
-                title: 'Auto Check',
-                summary: '✅ Commit successfully checked.'
-              }
-            });
-            console.log('Check run created:', checkRun.id);
+      - name: Append checkmark to log
+        run: |
+          echo "✅ Commit $(git rev-parse HEAD)" >> commit-checks.md
+
+      - name: Commit and push log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add commit-checks.md
+          git commit -m "Auto check for commit $(git rev-parse --short HEAD)" || echo "No changes to commit"
+          git push
