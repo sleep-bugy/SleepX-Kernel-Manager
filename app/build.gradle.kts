@@ -429,10 +429,10 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
 tasks.register("uploadDebugApkToTelegram", UploadApkToTelegramTask::class) {
     group = "custom"
     description = "Builds and uploads the debug APK to Telegram."
-    // dependsOn("assembleDebug")
-    dependsOn("assembleRelease")
-    // apkFile.set(project.layout.projectDirectory.file("build/outputs/apk/debug/app-debug.apk"))
-    apkFile.set(project.layout.projectDirectory.file("release/app-release.apk"))
+    dependsOn("assembleDebug")
+    //dependsOn("assembleRelease")
+    apkFile.set(project.layout.projectDirectory.file("build/outputs/apk/debug/app-debug.apk"))
+    //apkFile.set(project.layout.projectDirectory.file("release/app-release.apk"))
     telegramBotToken.convention(project.findProperty("telegramBotToken")?.toString() ?: "")
     telegramChatId.convention(project.findProperty("telegramChatId")?.toString() ?: "")
     appVersionName.convention(project.provider { project.android.defaultConfig.versionName ?: "N/A" })
