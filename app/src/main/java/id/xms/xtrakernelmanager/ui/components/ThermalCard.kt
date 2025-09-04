@@ -18,7 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import id.xms.xtrakernelmanager.viewmodel.ThermalProfile
+import id.xms.xtrakernelmanager.data.repository.ThermalRepository
 import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
 
 @Composable
@@ -27,9 +27,10 @@ fun ThermalCard(
     blur: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val availableProfiles = viewModel.availableThermalProfiles
+    val supportedProfiles by viewModel.supportedThermalProfiles.collectAsState()
     val currentProfileName by viewModel.currentThermalProfileName.collectAsState()
     val currentProfileIndex by viewModel.currentThermalModeIndex.collectAsState()
+    val isLoading by viewModel.isThermalLoading.collectAsState()
 
     var showDialog by remember { mutableStateOf(false) }
     var isExpanded by remember { mutableStateOf(true) }
@@ -64,7 +65,7 @@ fun ThermalCard(
                     HorizontalDivider()
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    if (currentProfileName == "Loading...") {
+                    if (isLoading) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.Center,
@@ -74,13 +75,12 @@ fun ThermalCard(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Loading profile...")
                         }
-                    } else if (availableProfiles.isEmpty()) {
+                    } else if (supportedProfiles.isEmpty()) {
                         Text(
                             "No thermal profiles defined.",
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                     } else {
-
                         Text(
                             text = "Currently Thermal: $currentProfileName",
                             style = MaterialTheme.typography.bodyMedium,
@@ -118,7 +118,7 @@ fun ThermalCard(
 
                     if (showDialog) {
                         ThermalProfileSelectionDialog(
-                            availableProfiles = availableProfiles,
+                            availableProfiles = supportedProfiles,
                             currentProfileIndex = currentProfileIndex,
                             onProfileSelected = { selectedProfile ->
                                 viewModel.setThermalProfile(selectedProfile)
@@ -135,9 +135,9 @@ fun ThermalCard(
 
 @Composable
 private fun ThermalProfileSelectionDialog(
-    availableProfiles: List<ThermalProfile>,
+    availableProfiles: List<ThermalRepository.ThermalProfile>,
     currentProfileIndex: Int,
-    onProfileSelected: (ThermalProfile) -> Unit,
+    onProfileSelected: (ThermalRepository.ThermalProfile) -> Unit,
     onDismiss: () -> Unit,
 ) {
     if (availableProfiles.isEmpty()) {
