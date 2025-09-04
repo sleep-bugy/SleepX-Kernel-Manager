@@ -95,9 +95,12 @@ dependencies {
 
     // Serialization yang cocok dengan Kotlin 1.9.24
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
-
     debugImplementation("androidx.compose.ui:ui-tooling")
 
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.10.3")
+
+    // Guava
     implementation("com.google.guava:guava:32.1.3-jre") {
         exclude(mapOf("group" to "com.google.guava", "module" to "listenablefuture"))
     }
@@ -386,10 +389,15 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
             return
         }
 
+        // Hilangkan // jika sudah ingin release
+        // val caption = "📦 New Release build: ${appName.get()} v${appVersionName.get()}\n" +
+                //"Build time: ${Date()}\n" +
+                // "File: ${currentApkFile.name} (${"%.2f".format(fileSizeMb)} MB)"
 
-        val caption = "📦 New Release build: ${appName.get()} v${appVersionName.get()}\n" +
-                "Build time: ${Date()}\n" +
-                "File: ${currentApkFile.name} (${"%.2f".format(fileSizeMb)} MB)"
+        // Tambahkan // jika sudah tidak ingin menggunakan test release
+        val caption = "📦 New Test Release build: ${appName.get()} v${appVersionName.get()}\n" +
+            "Build time: ${Date()}\n" +
+             "File: ${currentApkFile.name} (${"%.2f".format(fileSizeMb)} MB)"
 
         val url = "https://botapi.arasea.dpdns.org/bot${telegramBotToken.get()}/sendDocument"
         val requestConfig = RequestConfig.custom()
@@ -429,10 +437,10 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
 tasks.register("uploadDebugApkToTelegram", UploadApkToTelegramTask::class) {
     group = "custom"
     description = "Builds and uploads the debug APK to Telegram."
-    dependsOn("assembleDebug")
-    //dependsOn("assembleRelease")
-    apkFile.set(project.layout.projectDirectory.file("build/outputs/apk/debug/app-debug.apk"))
-    //apkFile.set(project.layout.projectDirectory.file("release/app-release.apk"))
+    //dependsOn("assembleDebug")
+    dependsOn("assembleRelease")
+    //apkFile.set(project.layout.projectDirectory.file("build/outputs/apk/debug/app-debug.apk"))
+    apkFile.set(project.layout.projectDirectory.file("release/app-release.apk"))
     telegramBotToken.convention(project.findProperty("telegramBotToken")?.toString() ?: "")
     telegramChatId.convention(project.findProperty("telegramChatId")?.toString() ?: "")
     appVersionName.convention(project.provider { project.android.defaultConfig.versionName ?: "N/A" })
