@@ -1,26 +1,21 @@
-name: Auto Check Commit
-
+name: Auto PR Check
 on:
-  push:
-    branches:
-      - master
+  pull_request:
+    types: [opened, synchronize]
 
 jobs:
-  check:
+  add-check:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Append checkmark to log
-        run: |
-          echo "✅ Commit $(git rev-parse HEAD)" >> commit-checks.md
-
-      - name: Commit and push log
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add commit-checks.md
-          git commit -m "Auto check for commit $(git rev-parse --short HEAD)" || echo "No changes to commit"
-          git push
+      - name: Add ✅ comment
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '✅ Commit/PR successfully checked!'
+            })
