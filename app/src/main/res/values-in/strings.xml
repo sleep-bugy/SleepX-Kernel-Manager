@@ -73,5 +73,7 @@
 
     <!-- Common -->
     <string name="common_unknown_value">Tidak Diketahui</string>
-
+    <string name="language">Bahasa</string>
+    <string name="select_language">Pilih Bahasa</string>
+    <string name="close">Tutup</string>
 </resources>
