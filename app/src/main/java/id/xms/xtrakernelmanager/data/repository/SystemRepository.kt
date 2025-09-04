@@ -228,12 +228,39 @@ class SystemRepository @Inject constructor(
             }
         }
 
+        val finalVoltageStr = readFileToString("$batteryDir/voltage_now", "Battery Voltage Now")
+        val finalVoltage = finalVoltageStr?.toFloatOrNull()
+
+        val finalCurrentStr = readFileToString("$batteryDir/current_now", "Battery Current Now")
+        val finalCurrent = finalCurrentStr?.toFloatOrNull()
+
+        val finalWattageStr = readFileToString("$batteryDir/power_now", "Battery Power Now")
+        val finalWattage = finalWattageStr?.toFloatOrNull()
+
+        val finalTechnology = readFileToString("$batteryDir/technology", "Battery Technology")
+
+        val statusString = readFileToString("$batteryDir/status", "Battery Status")
+        val isCharging = statusString?.contains("Charging", ignoreCase = true) == true
+
+        val finalStatus = when {
+            statusString.isNullOrBlank() -> ""
+            statusString.contains("Charging", ignoreCase = true) -> "Charging"
+            statusString.contains("Discharging", ignoreCase = true) -> "Discharging"
+            statusString.contains("Full", ignoreCase = true) -> "Full"
+            else -> statusString
+        }
+
         return BatteryInfo(
             level = finalLevel,
             temp = finalTemperature,
-            health = calculatedSohPercentage,
-            cycles = finalCyclesForInfo,
-            capacity = finalDesignCapacityMah
+            voltage = finalVoltage ?: 0f,
+            isCharging = isCharging,
+            current = finalCurrent ?: 0f,
+            chargingWattage = finalWattage ?: 0f,
+            technology = finalTechnology ?: "",
+            health = "${calculatedSohPercentage}%",
+            status = finalStatus ?: "",
+            chargingType = getChargingTypeFromStatus(statusString)
         )
     }
 
@@ -500,6 +527,24 @@ class SystemRepository @Inject constructor(
             gkiType = gkiType,
             scheduler = parsedScheduler
         )
+    }
+
+    private fun getChargingTypeFromStatus(statusString: String?): String {
+        return try {
+            val intentFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            val batteryStatusIntent = context.applicationContext.registerReceiver(null, intentFilter)
+            val plugged = batteryStatusIntent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+
+            when (plugged) {
+                BatteryManager.BATTERY_PLUGGED_USB -> "USB"
+                BatteryManager.BATTERY_PLUGGED_AC -> "AC"
+                BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless"
+                else -> ""
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting charging type", e)
+            ""
+        }
     }
 
     fun getCpuClusters(): List<CpuCluster> {
