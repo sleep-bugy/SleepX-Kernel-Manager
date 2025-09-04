@@ -2,22 +2,24 @@ package id.xms.xtrakernelmanager.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import id.xms.xtrakernelmanager.data.repository.ThermalRepository
 import id.xms.xtrakernelmanager.data.repository.TuningRepository
+import id.xms.xtrakernelmanager.service.ThermalService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
-data class ThermalProfile(val displayName: String, val index: Int)
-
 @HiltViewModel
 class TuningViewModel @Inject constructor(
     private val application: Application,
-    private val repo: TuningRepository
+    private val repo: TuningRepository,
+    private val thermalRepo: ThermalRepository
 ) : AndroidViewModel(application) {
 
     private val thermalPrefs: SharedPreferences by lazy {
@@ -117,19 +119,6 @@ class TuningViewModel @Inject constructor(
     val maxZramSize: StateFlow<Long> = _maxZramSize.asStateFlow()
 
     /* ---------------- Thermal ---------------- */
-    val availableThermalProfiles = listOf(
-        ThermalProfile("Disable", 0),
-        ThermalProfile("Extreme", 2),
-        ThermalProfile("Incalls", 8),
-        ThermalProfile("Dynamic", 10),
-        ThermalProfile("PUBG", 13),
-        ThermalProfile("Thermal 20", 20),
-        ThermalProfile("Game", 40),
-        ThermalProfile("Camera", 42),
-        ThermalProfile("Game 2", 50),
-        ThermalProfile("YouTube", 51)
-    ).sortedBy { it.displayName }
-
     private val _isThermalLoading = MutableStateFlow(true)
     val isThermalLoading: StateFlow<Boolean> = _isThermalLoading.asStateFlow()
 
@@ -137,12 +126,14 @@ class TuningViewModel @Inject constructor(
     val currentThermalModeIndex: StateFlow<Int> = _currentThermalModeIndex.asStateFlow()
 
     val currentThermalProfileName: StateFlow<String> =
-        _currentThermalModeIndex.map { idx ->
-            availableThermalProfiles.find { it.index == idx }?.displayName
-                ?: if (idx == -1 && _isThermalLoading.value) "Loading..."
-                else if (idx == -1) "Disable"
-                else "Unknown ($idx)"
+        combine(_currentThermalModeIndex, _isThermalLoading) { idx, loading ->
+            if (loading) "Loading..."
+            else thermalRepo.getCurrentThermalProfileName(idx)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Loading...")
+
+    val supportedThermalProfiles: StateFlow<List<ThermalRepository.ThermalProfile>> =
+        thermalRepo.getSupportedThermalProfiles()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /* ---------------- Init ---------------- */
     init {
@@ -373,7 +364,7 @@ class TuningViewModel @Inject constructor(
     private fun fetchCurrentThermalMode(isInitialLoad: Boolean = false) {
         if (isInitialLoad) _isThermalLoading.value = true
         viewModelScope.launch(Dispatchers.IO) {
-            repo.getCurrentThermalModeIndex()
+            thermalRepo.getCurrentThermalModeIndex()
                 .catch {
                     if (isInitialLoad) applyLastSavedThermalProfile() else _isThermalLoading.value = false
                 }
@@ -386,7 +377,7 @@ class TuningViewModel @Inject constructor(
 
     private suspend fun applyLastSavedThermalProfile() {
         val idx = thermalPrefs.getInt(KEY_LAST_APPLIED_THERMAL_INDEX, -1)
-        val profile = availableThermalProfiles.find { it.index == idx }
+        val profile = thermalRepo.availableThermalProfiles.find { it.index == idx }
         if (profile != null && _currentThermalModeIndex.value != idx) {
             setThermalProfileInternal(profile, isRestoring = true)
         } else {
@@ -394,12 +385,21 @@ class TuningViewModel @Inject constructor(
         }
     }
 
-    private suspend fun setThermalProfileInternal(profile: ThermalProfile, isRestoring: Boolean) {
+    private suspend fun setThermalProfileInternal(profile: ThermalRepository.ThermalProfile, isRestoring: Boolean) {
         if (!isRestoring) _isThermalLoading.value = true
-        repo.setThermalModeIndex(profile.index).collect { ok ->
+        thermalRepo.setThermalModeIndex(profile.index).collect { ok ->
             if (ok) {
                 _currentThermalModeIndex.value = profile.index
                 if (!isRestoring) thermalPrefs.edit().putInt(KEY_LAST_APPLIED_THERMAL_INDEX, profile.index).apply()
+                // Mulai ThermalService untuk menjaga pengaturan di background
+                if (profile.index != 0) { // Jangan mulai kalau mode Disable
+                    val intent = Intent(application, ThermalService::class.java)
+                    intent.putExtra("thermal_mode", profile.index)
+                    application.startService(intent)
+                    Log.d("TuningVM_Thermal", "Started ThermalService for mode ${profile.index}")
+                } else {
+                    stopThermalService()
+                }
             } else {
                 fetchCurrentThermalMode()
             }
@@ -407,7 +407,13 @@ class TuningViewModel @Inject constructor(
         }
     }
 
-    fun setThermalProfile(profile: ThermalProfile) =
+    private fun stopThermalService() {
+        val intent = Intent(application, ThermalService::class.java)
+        application.stopService(intent)
+        Log.d("TuningVM_Thermal", "Stopped ThermalService")
+    }
+
+    fun setThermalProfile(profile: ThermalRepository.ThermalProfile) =
         viewModelScope.launch { setThermalProfileInternal(profile, isRestoring = false) }
 
     /* ---------------- Init ---------------- */
