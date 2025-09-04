@@ -26,9 +26,12 @@
         tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.BATTERY_STATS"
         tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.DEVICE_POWER"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:name=".XtraApp"
@@ -64,6 +67,13 @@
 
         <!-- Thermal Service -->
         <service android:name=".service.ThermalService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Battery Stats Service -->
+        <service
+            android:name=".service.BatteryStatsService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
