@@ -76,4 +76,5 @@
     <string name="language">Bahasa</string>
     <string name="select_language">Pilih Bahasa</string>
     <string name="close">Tutup</string>
+    <string name="system_info">System Info</string>
 </resources>
