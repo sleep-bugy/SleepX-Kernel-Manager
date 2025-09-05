@@ -513,17 +513,477 @@ class TuningRepository @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     fun getGpuRenderer(): Flow<String> = flow {
-        emit(readShellCommand("getprop debug.hwui.renderer").ifEmpty { "OpenGL" })
+        // First check runtime property
+        val rendererProp = readShellCommand("getprop debug.hwui.renderer").trim()
+
+        // Also check persistent settings to ensure consistency
+        val persistentRenderer = getPersistentGpuRenderer()
+
+        Log.d(TAG, "Current renderer prop: '$rendererProp', persistent: '$persistentRenderer'")
+
+        // Use persistent setting if runtime property is empty or default
+        val effectiveRenderer = if (rendererProp.isEmpty() || rendererProp == "null") {
+            persistentRenderer.ifEmpty { "" }
+        } else {
+            rendererProp
+        }
+
+        // Map system property values to user-friendly names
+        val currentRenderer = when {
+            effectiveRenderer.isEmpty() || effectiveRenderer == "null" -> "Default"
+            effectiveRenderer.equals("opengl", ignoreCase = true) -> "OpenGL"
+            effectiveRenderer.equals("vulkan", ignoreCase = true) -> "Vulkan"
+            effectiveRenderer.equals("skiagl", ignoreCase = true) -> "OpenGL (SKIA)"
+            effectiveRenderer.equals("skiavk", ignoreCase = true) -> "Vulkan (SKIA)"
+            effectiveRenderer.equals("angle", ignoreCase = true) -> "ANGLE"
+            else -> {
+                Log.w(TAG, "Unknown renderer property: '$effectiveRenderer', defaulting to OpenGL")
+                "OpenGL"
+            }
+        }
+
+        Log.d(TAG, "Mapped renderer: '$currentRenderer'")
+        emit(currentRenderer)
     }.flowOn(Dispatchers.IO)
 
-    fun setGpuRenderer(renderer: String): Flow<Boolean> = flow {
-        val command = if (renderer.equals("Default", ignoreCase = true)) {
-            "setprop debug.hwui.renderer \"\""
-        } else {
-            "setprop debug.hwui.renderer $renderer"
+    private fun getPersistentGpuRenderer(): String {
+        // Check multiple sources for persistent settings
+        val sources = listOf(
+            "/system/build.prop",
+            "/system/etc/system.prop",
+            "/vendor/build.prop"
+        )
+
+        for (source in sources) {
+            try {
+                val content = readShellCommand("cat $source 2>/dev/null || echo ''")
+                if (content.isNotEmpty()) {
+                    val lines = content.lines()
+                    val rendererLine = lines.find { it.trim().startsWith("debug.hwui.renderer=") }
+                    if (rendererLine != null) {
+                        val value = rendererLine.substringAfter("=").trim()
+                        if (value.isNotEmpty()) {
+                            Log.d(TAG, "Found persistent renderer in $source: $value")
+                            return value
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read $source", e)
+            }
         }
-        emit(executeShellCommand(command))
+
+        return ""
+    }
+
+    fun setGpuRenderer(renderer: String): Flow<Boolean> = flow {
+        Log.d(TAG, "Setting GPU renderer to: '$renderer'")
+
+        // Map user-friendly names to system property values
+        val propertyValue = when (renderer) {
+            "Default" -> ""
+            "OpenGL" -> "opengl"
+            "Vulkan" -> "vulkan"
+            "OpenGL (SKIA)" -> "skiagl"
+            "Vulkan (SKIA)" -> "skiavk"
+            "ANGLE" -> "angle"
+            else -> {
+                Log.e(TAG, "Unknown renderer type: '$renderer'")
+                emit(false)
+                return@flow
+            }
+        }
+
+        var success = true
+
+        try {
+            // First, set runtime properties for immediate effect
+            val clearCommands = listOf(
+                "setprop debug.hwui.renderer \"\"",
+                "setprop debug.hwui.skia_atrace_enabled \"\"",
+                "setprop ro.hwui.use_vulkan \"\"",
+                "setprop debug.angle.backend \"\""
+            )
+
+            clearCommands.forEach { cmd ->
+                if (!executeShellCommand(cmd)) {
+                    Log.w(TAG, "Failed to clear property with command: $cmd")
+                }
+            }
+
+            // Set the new renderer property for immediate effect
+            if (propertyValue.isNotEmpty()) {
+                val setCommand = "setprop debug.hwui.renderer \"$propertyValue\""
+                val result = executeShellCommand(setCommand)
+
+                // Set additional properties for specific renderers - SAFER approach for custom ROMs
+                when (renderer) {
+                    "Vulkan", "Vulkan (SKIA)" -> {
+                        // Only set essential Vulkan properties to avoid bootloop
+                        executeShellCommand("setprop ro.hwui.use_vulkan true")
+                        Log.i(TAG, "Set basic Vulkan properties. Additional settings will be applied via vendor prop.")
+                    }
+                    "ANGLE" -> {
+                        executeShellCommand("setprop debug.angle.backend opengl")
+                    }
+                }
+
+                if (!result) {
+                    success = false
+                }
+            }
+
+            // Now make the settings persistent by modifying system files
+            val persistentSuccess = makePersistentGpuRendererSettings(renderer, propertyValue)
+            if (!persistentSuccess) {
+                Log.w(TAG, "Failed to make GPU renderer settings persistent, but runtime settings applied")
+            }
+
+            if (renderer.contains("Vulkan") && success) {
+                Log.i(TAG, "Vulkan settings applied successfully via vendor prop")
+                Log.i(TAG, "IMPORTANT: Please REBOOT your device to fully activate Vulkan render engine")
+                Log.i(TAG, "Do NOT restart SurfaceFlinger manually as it may cause bootloop on your custom ROM")
+            }
+
+            if (success) {
+                Log.i(TAG, "Successfully set GPU renderer to: '$renderer' (property: '$propertyValue')")
+                // Verify the setting was applied
+                val verifyCommand = "getprop debug.hwui.renderer"
+                val actualValue = readShellCommand(verifyCommand).trim()
+                Log.d(TAG, "Verification - actual property value: '$actualValue'")
+            } else {
+                Log.e(TAG, "Failed to set GPU renderer to: '$renderer'")
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception while setting GPU renderer", e)
+            success = false
+        }
+
+        emit(success)
     }.flowOn(Dispatchers.IO)
+
+    private fun makePersistentGpuRendererSettings(renderer: String, propertyValue: String): Boolean {
+        Log.d(TAG, "Making GPU renderer settings persistent for: $renderer")
+
+        try {
+            val vendorSuccess = setPersistentViaVendorProp(renderer, propertyValue)
+            if (vendorSuccess) {
+                Log.i(TAG, "Successfully applied GPU settings via vendor.prop - this is the recommended approach for your custom ROM")
+                return true
+            }
+
+            Log.w(TAG, "Vendor prop approach failed, trying alternative methods...")
+            val approaches = listOf(
+                // Approach 2: build.prop modification
+                ::setPersistentViaBuildProp,
+                // Approach 3: system.prop in /system/etc/
+                ::setPersistentViaSystemProp,
+                // Approach 4: Create init.d script (for devices with init.d support)
+                ::setPersistentViaInitD
+            )
+
+            var anySuccess = false
+            approaches.forEach { approach ->
+                try {
+                    if (approach(renderer, propertyValue)) {
+                        anySuccess = true
+                        Log.i(TAG, "Successfully applied persistent setting via ${approach.javaClass.simpleName}")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Approach ${approach.javaClass.simpleName} failed", e)
+                }
+            }
+
+            return anySuccess
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in makePersistentGpuRendererSettings", e)
+            return false
+        }
+    }
+
+    private fun setPersistentViaBuildProp(renderer: String, propertyValue: String): Boolean {
+        val buildPropPath = "/system/build.prop"
+        val tempPath = "/data/local/tmp/build.prop.tmp"
+
+        try {
+            // Make system partition writable
+            if (!executeShellCommand("mount -o remount,rw /system")) {
+                Log.w(TAG, "Failed to remount /system as rw")
+                return false
+            }
+
+            // Read current build.prop
+            val currentContent = readShellCommand("cat $buildPropPath")
+            if (currentContent.isEmpty()) {
+                Log.w(TAG, "Failed to read build.prop")
+                return false
+            }
+
+            // Remove existing GPU renderer properties
+            val cleanedContent = currentContent.lines()
+                .filterNot { line ->
+                    line.trim().startsWith("debug.hwui.renderer=") ||
+                    line.trim().startsWith("ro.hwui.use_vulkan=") ||
+                    line.trim().startsWith("debug.angle.backend=")
+                }
+                .joinToString("\n")
+
+            // Add new properties if not default
+            val newContent = if (propertyValue.isNotEmpty()) {
+                val additionalProps = buildString {
+                    appendLine("debug.hwui.renderer=$propertyValue")
+                    when (renderer) {
+                        "Vulkan", "Vulkan (SKIA)" -> {
+                            appendLine("ro.hwui.use_vulkan=true")
+                        }
+                        "ANGLE" -> {
+                            appendLine("debug.angle.backend=opengl")
+                        }
+                    }
+                }
+                "$cleanedContent\n$additionalProps"
+            } else {
+                cleanedContent
+            }
+
+            // Write to temp file first
+            val writeSuccess = executeShellCommand("echo '$newContent' > $tempPath")
+            if (!writeSuccess) {
+                Log.w(TAG, "Failed to write temp file")
+                return false
+            }
+
+            // Copy temp file to build.prop
+            val copySuccess = executeShellCommand("cp $tempPath $buildPropPath")
+            if (!copySuccess) {
+                Log.w(TAG, "Failed to copy to build.prop")
+                return false
+            }
+            // Set proper permissions
+            executeShellCommand("chmod 644 $buildPropPath")
+            executeShellCommand("chown root:root $buildPropPath")
+            // Cleanup
+            executeShellCommand("rm -f $tempPath")
+            // Remount system as readonly
+            executeShellCommand("mount -o remount,ro /system")
+
+            Log.i(TAG, "Successfully updated build.prop for GPU renderer persistence")
+            return true
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in setPersistentViaBuildProp", e)
+            // Try to remount system as readonly in case of error
+            executeShellCommand("mount -o remount,ro /system")
+            executeShellCommand("rm -f $tempPath")
+            return false
+        }
+    }
+
+    private fun setPersistentViaSystemProp(renderer: String, propertyValue: String): Boolean {
+        val systemPropPath = "/system/etc/system.prop"
+        val tempPath = "/data/local/tmp/system.prop.tmp"
+
+        try {
+            // Make system partition writable
+            if (!executeShellCommand("mount -o remount,rw /system")) {
+                return false
+            }
+            // Read current system.prop if exists
+            val currentContent = readShellCommand("cat $systemPropPath 2>/dev/null || echo ''")
+            // Remove existing GPU renderer properties
+            val cleanedContent = currentContent.lines()
+                .filterNot { line ->
+                    line.trim().startsWith("debug.hwui.renderer=") ||
+                    line.trim().startsWith("ro.hwui.use_vulkan=") ||
+                    line.trim().startsWith("debug.angle.backend=")
+                }
+                .joinToString("\n")
+
+            // Add new properties if not default
+            val newContent = if (propertyValue.isNotEmpty()) {
+                val additionalProps = buildString {
+                    appendLine("debug.hwui.renderer=$propertyValue")
+                    when (renderer) {
+                        "Vulkan", "Vulkan (SKIA)" -> {
+                            appendLine("ro.hwui.use_vulkan=true")
+                        }
+                        "ANGLE" -> {
+                            appendLine("debug.angle.backend=opengl")
+                        }
+                    }
+                }
+                if (cleanedContent.isBlank()) additionalProps else "$cleanedContent\n$additionalProps"
+            } else {
+                cleanedContent
+            }
+
+            // Write the content
+            val writeSuccess = executeShellCommand("echo '$newContent' > $tempPath && cp $tempPath $systemPropPath")
+            if (writeSuccess) {
+                executeShellCommand("chmod 644 $systemPropPath")
+                executeShellCommand("chown root:root $systemPropPath")
+                executeShellCommand("rm -f $tempPath")
+                executeShellCommand("mount -o remount,ro /system")
+                Log.i(TAG, "Successfully updated system.prop")
+                return true
+            }
+
+            executeShellCommand("mount -o remount,ro /system")
+            executeShellCommand("rm -f $tempPath")
+            return false
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in setPersistentViaSystemProp", e)
+            executeShellCommand("mount -o remount,ro /system")
+            executeShellCommand("rm -f $tempPath")
+            return false
+        }
+    }
+
+    private fun setPersistentViaVendorProp(renderer: String, propertyValue: String): Boolean {
+        val vendorPropPath = "/vendor/build.prop"
+        val tempPath = "/data/local/tmp/vendor.prop.tmp"
+
+        try {
+            // Check if vendor partition exists and is writable
+            if (!executeShellCommand("test -f $vendorPropPath")) {
+                return false
+            }
+
+            if (!executeShellCommand("mount -o remount,rw /vendor")) {
+                return false
+            }
+
+            val currentContent = readShellCommand("cat $vendorPropPath")
+            if (currentContent.isEmpty()) {
+                executeShellCommand("mount -o remount,ro /vendor")
+                return false
+            }
+
+            // Process similar to build.prop
+            val cleanedContent = currentContent.lines()
+                .filterNot { line ->
+                    line.trim().startsWith("debug.hwui.renderer=") ||
+                    line.trim().startsWith("ro.hwui.use_vulkan=") ||
+                    line.trim().startsWith("debug.angle.backend=")
+                }
+                .joinToString("\n")
+
+            val newContent = if (propertyValue.isNotEmpty()) {
+                val additionalProps = buildString {
+                    appendLine("debug.hwui.renderer=$propertyValue")
+                    when (renderer) {
+                        "Vulkan", "Vulkan (SKIA)" -> {
+                            appendLine("ro.hwui.use_vulkan=true")
+                        }
+                        "ANGLE" -> {
+                            appendLine("debug.angle.backend=opengl")
+                        }
+                    }
+                }
+                "$cleanedContent\n$additionalProps"
+            } else {
+                cleanedContent
+            }
+
+            val success = executeShellCommand("echo '$newContent' > $tempPath && cp $tempPath $vendorPropPath")
+            if (success) {
+                executeShellCommand("chmod 644 $vendorPropPath")
+                executeShellCommand("chown root:root $vendorPropPath")
+            }
+
+            executeShellCommand("rm -f $tempPath")
+            executeShellCommand("mount -o remount,ro /vendor")
+
+            return success
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in setPersistentViaVendorProp", e)
+            executeShellCommand("mount -o remount,ro /vendor")
+            executeShellCommand("rm -f $tempPath")
+            return false
+        }
+    }
+
+    private fun setPersistentViaInitD(renderer: String, propertyValue: String): Boolean {
+        val initdPath = "/system/etc/init.d"
+        val scriptPath = "$initdPath/99gpu_renderer"
+
+        try {
+            // Check if init.d is supported
+            if (!executeShellCommand("test -d $initdPath")) {
+                // Try to create init.d directory
+                if (!executeShellCommand("mount -o remount,rw /system && mkdir -p $initdPath")) {
+                    return false
+                }
+            } else {
+                if (!executeShellCommand("mount -o remount,rw /system")) {
+                    return false
+                }
+            }
+
+            // Create script content
+            val scriptContent = if (propertyValue.isNotEmpty()) {
+                buildString {
+                    appendLine("#!/system/bin/sh")
+                    appendLine("# GPU Renderer Configuration Script")
+                    appendLine("# Generated by Xtra Kernel Manager")
+                    appendLine("")
+                    appendLine("setprop debug.hwui.renderer \"$propertyValue\"")
+                    when (renderer) {
+                        "Vulkan", "Vulkan (SKIA)" -> {
+                            appendLine("setprop ro.hwui.use_vulkan true")
+                        }
+                        "ANGLE" -> {
+                            appendLine("setprop debug.angle.backend opengl")
+                        }
+                    }
+                    appendLine("")
+                    appendLine("# End of GPU Renderer Configuration")
+                }
+            } else {
+                // Create empty script or remove existing properties
+                buildString {
+                    appendLine("#!/system/bin/sh")
+                    appendLine("# GPU Renderer Configuration Script - Reset to Default")
+                    appendLine("# Generated by Xtra Kernel Manager")
+                    appendLine("")
+                    appendLine("setprop debug.hwui.renderer \"\"")
+                    appendLine("setprop ro.hwui.use_vulkan \"\"")
+                    appendLine("setprop debug.angle.backend \"\"")
+                }
+            }
+
+            // Write script
+            val tempScriptPath = "/data/local/tmp/99gpu_renderer.tmp"
+            val writeSuccess = executeShellCommand("echo '$scriptContent' > $tempScriptPath")
+            if (!writeSuccess) {
+                executeShellCommand("mount -o remount,ro /system")
+                return false
+            }
+
+            // Copy to init.d and set permissions
+            val copySuccess = executeShellCommand("cp $tempScriptPath $scriptPath")
+            if (copySuccess) {
+                executeShellCommand("chmod 755 $scriptPath")
+                executeShellCommand("chown root:root $scriptPath")
+                Log.i(TAG, "Successfully created init.d script for GPU renderer")
+            }
+
+            executeShellCommand("rm -f $tempScriptPath")
+            executeShellCommand("mount -o remount,ro /system")
+
+            return copySuccess
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in setPersistentViaInitD", e)
+            executeShellCommand("mount -o remount,ro /system")
+            executeShellCommand("rm -f /data/local/tmp/99gpu_renderer.tmp")
+            return false
+        }
+    }
 
     fun getVulkanApiVersion(): Flow<String> = flow {
         emit(readShellCommand("getprop ro.hardware.vulkan.version").ifEmpty { "N/A" })
@@ -533,7 +993,177 @@ class TuningRepository @Inject constructor(
         emit(executeShellCommand("reboot"))
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * Restart SurfaceFlinger service to apply Vulkan settings properly
+     * This is especially needed for Android 16 custom ROMs
+     */
+    private fun restartSurfaceFlinger(): Boolean {
+        Log.i(TAG, "Attempting to restart SurfaceFlinger for Vulkan initialization")
 
+        return try {
+            // Method 1: Stop and start SurfaceFlinger service
+            val stopSuccess = executeShellCommand("stop surfaceflinger")
+            if (stopSuccess) {
+                // Wait a moment for service to fully stop
+                Thread.sleep(1000)
+                val startSuccess = executeShellCommand("start surfaceflinger")
+                if (startSuccess) {
+                    Log.i(TAG, "SurfaceFlinger restart via stop/start successful")
+                    return true
+                }
+            }
+
+            // Method 2: Kill SurfaceFlinger process (it will auto-restart)
+            Log.w(TAG, "Stop/start method failed, trying process kill method")
+            val killSuccess = executeShellCommand("pkill -f surfaceflinger || killall surfaceflinger")
+            if (killSuccess) {
+                Log.i(TAG, "SurfaceFlinger restart via process kill successful")
+                return true
+            }
+
+            // Method 3: Use service command
+            Log.w(TAG, "Process kill method failed, trying service command")
+            val serviceSuccess = executeShellCommand("service call SurfaceFlinger 1008")
+            if (serviceSuccess) {
+                Log.i(TAG, "SurfaceFlinger restart via service call successful")
+                return true
+            }
+
+            Log.e(TAG, "All SurfaceFlinger restart methods failed")
+            false
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during SurfaceFlinger restart", e)
+            false
+        }
+    }
+
+    /**
+     * Check if Vulkan render engine is actually enabled in SurfaceFlinger
+     * This addresses the issue where properties show true but dumpsys shows false
+     */
+    private fun checkVulkanRenderEngineStatus(): Boolean {
+        return try {
+            val dumpsysOutput = readShellCommand("dumpsys SurfaceFlinger")
+
+            // Check for various indicators that Vulkan is enabled
+            val vulkanIndicators = listOf(
+                "vulkan_renderengine: true",
+                "vulkan_renderengine:true",
+                "RenderEngine: vulkan",
+                "Vulkan API",
+                "VkInstance",
+                "Vulkan render engine active"
+            )
+
+            val vulkanEnabled = vulkanIndicators.any { indicator ->
+                dumpsysOutput.contains(indicator, ignoreCase = true)
+            }
+
+            // Also check for negative indicators
+            val negativeIndicators = listOf(
+                "vulkan_renderengine: false",
+                "vulkan_renderengine:false",
+                "RenderEngine: gl",
+                "RenderEngine: gles"
+            )
+
+            val vulkanDisabled = negativeIndicators.any { indicator ->
+                dumpsysOutput.contains(indicator, ignoreCase = true)
+            }
+
+            // Log detailed information for debugging
+            if (vulkanEnabled && !vulkanDisabled) {
+                Log.i(TAG, "Vulkan render engine confirmed as ACTIVE in SurfaceFlinger")
+                // Log which indicator was found
+                vulkanIndicators.forEach { indicator ->
+                    if (dumpsysOutput.contains(indicator, ignoreCase = true)) {
+                        Log.d(TAG, "Found Vulkan indicator: $indicator")
+                    }
+                }
+            } else if (vulkanDisabled) {
+                Log.w(TAG, "Vulkan render engine confirmed as DISABLED in SurfaceFlinger")
+                // Log which negative indicator was found
+                negativeIndicators.forEach { indicator ->
+                    if (dumpsysOutput.contains(indicator, ignoreCase = true)) {
+                        Log.d(TAG, "Found negative Vulkan indicator: $indicator")
+                    }
+                }
+            } else {
+                Log.w(TAG, "Vulkan render engine status is UNCLEAR from SurfaceFlinger output")
+            }
+
+            vulkanEnabled && !vulkanDisabled
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception while checking Vulkan render engine status", e)
+            false
+        }
+    }
+
+    /**
+     * Get detailed SurfaceFlinger and Vulkan status for debugging
+     * This helps diagnose Android 16 custom ROM compatibility issues
+     */
+    fun getVulkanRenderEngineStatus(): Flow<Map<String, String>> = flow {
+        val statusMap = mutableMapOf<String, String>()
+
+        try {
+            // Get basic properties
+            statusMap["debug.hwui.renderer"] = readShellCommand("getprop debug.hwui.renderer").ifEmpty { "not_set" }
+            statusMap["ro.hwui.use_vulkan"] = readShellCommand("getprop ro.hwui.use_vulkan").ifEmpty { "not_set" }
+            statusMap["debug.hwui.force_vulkan"] = readShellCommand("getprop debug.hwui.force_vulkan").ifEmpty { "not_set" }
+            statusMap["ro.surface_flinger.use_vk_drivers"] = readShellCommand("getprop ro.surface_flinger.use_vk_drivers").ifEmpty { "not_set" }
+
+            // Get Vulkan API version and hardware info
+            statusMap["ro.hardware.vulkan.version"] = readShellCommand("getprop ro.hardware.vulkan.version").ifEmpty { "not_available" }
+            statusMap["ro.hardware.vulkan.level"] = readShellCommand("getprop ro.hardware.vulkan.level").ifEmpty { "not_available" }
+
+            // Check SurfaceFlinger dumpsys output
+            val dumpsysOutput = readShellCommand("dumpsys SurfaceFlinger")
+            val vulkanEngineMatch = Regex("vulkan_renderengine:\\s*(true|false)", RegexOption.IGNORE_CASE)
+                .find(dumpsysOutput)
+            statusMap["surfaceflinger_vulkan_engine"] = vulkanEngineMatch?.groupValues?.get(1) ?: "not_found"
+
+            // Check for render engine type
+            val renderEngineMatch = Regex("RenderEngine:\\s*(\\w+)", RegexOption.IGNORE_CASE)
+                .find(dumpsysOutput)
+            statusMap["render_engine_type"] = renderEngineMatch?.groupValues?.get(1) ?: "not_found"
+
+            // Check Android version and build info for custom ROM detection
+            statusMap["android_version"] = readShellCommand("getprop ro.build.version.release").ifEmpty { "unknown" }
+            statusMap["android_sdk"] = readShellCommand("getprop ro.build.version.sdk").ifEmpty { "unknown" }
+            statusMap["build_type"] = readShellCommand("getprop ro.build.type").ifEmpty { "unknown" }
+            statusMap["build_tags"] = readShellCommand("getprop ro.build.tags").ifEmpty { "unknown" }
+
+            // Check for custom ROM indicators
+            val customRomIndicators = listOf(
+                "ro.modversion",
+                "ro.build.display.id",
+                "ro.custom.build.version",
+                "ro.lineage.version",
+                "ro.arrow.version"
+            )
+
+            customRomIndicators.forEach { prop ->
+                val value = readShellCommand("getprop $prop")
+                if (value.isNotEmpty()) {
+                    statusMap["custom_rom_$prop"] = value
+                }
+            }
+
+            // Check SELinux status as it can affect Vulkan
+            statusMap["selinux_status"] = getSelinuxModeInternal()
+
+            Log.d(TAG, "Vulkan status check completed. Found ${statusMap.size} properties")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception while getting Vulkan render engine status", e)
+            statusMap["error"] = e.message ?: "unknown_error"
+        }
+
+        emit(statusMap.toMap())
+    }.flowOn(Dispatchers.IO)
     /* ----------------------------------------------------------
        Fallback Shell using Runtime.exec
        ---------------------------------------------------------- */
