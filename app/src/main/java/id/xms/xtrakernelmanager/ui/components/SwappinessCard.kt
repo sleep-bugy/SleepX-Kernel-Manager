@@ -14,6 +14,9 @@ import androidx.compose.foundation.BorderStroke // Keep for Compression Dialog
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ToggleOff
@@ -47,6 +50,10 @@ fun SwappinessCard(
     val dirtyWriteback by vm.dirtyWriteback.collectAsState() // Seconds
     val dirtyExpireCentisecs by vm.dirtyExpireCentisecs.collectAsState() // Centiseconds
     val minFreeMemory by vm.minFreeMemory.collectAsState() // MB
+    val swapSize by vm.swapSize.collectAsState() // Bytes
+    val maxSwapSize by vm.maxSwapSize.collectAsState() // Bytes
+    val isSwapLoading by vm.isSwapLoading.collectAsState()
+    val swapLogs by vm.swapLogs.collectAsState()
 
     var isExpanded by remember { mutableStateOf(false) }
 
@@ -199,7 +206,7 @@ fun SwappinessCard(
                     // Adjust Swap Size Row
                     ClickableSettingRow(
                         title = "Adjust Swap Size",
-                        value = "Coming Soon",
+                        value = if (swapSize > 0) "${swapSize / (1024 * 1024)}MB" else "Disabled",
                         onClick = { showAdjustSwapSizeDialog = true }
                     )
 
@@ -377,18 +384,24 @@ fun SwappinessCard(
     }
 
     if (showAdjustSwapSizeDialog) {
-        AlertDialog(
-            onDismissRequest = { showAdjustSwapSizeDialog = false },
-            title = { Text("Adjust Swap Size") },
-            text = { Text("This feature is coming soon!") },
-            confirmButton = {
-                TextButton(onClick = { showAdjustSwapSizeDialog = false }) {
-                    Text("OK")
-                }
+        SwapSizeDialog(
+            currentSize = swapSize,
+            maxSize = maxSwapSize,
+            onDismiss = { showAdjustSwapSizeDialog = false },
+            onConfirm = { newSizeInBytes ->
+                vm.setSwapSize(newSizeInBytes)
+                showAdjustSwapSizeDialog = false
             }
         )
     }
 
+    // Show loading dialog when swap operation is in progress
+    if (isSwapLoading) {
+        SwapLoadingDialog(
+            logs = swapLogs,
+            onDismissRequest = { } // Cannot dismiss while loading
+        )
+    }
 }
 
 // Reusable Composable for clickable setting rows
@@ -658,5 +671,204 @@ fun CompressionAlgorithmDialog(
         containerColor = MaterialTheme.colorScheme.surface,
         shape = MaterialTheme.shapes.large,
         tonalElevation = 6.dp
+    )
+}
+
+@Composable
+fun SwapSizeDialog(
+    currentSize: Long,
+    maxSize: Long,
+    onDismiss: () -> Unit,
+    onConfirm: (Long) -> Unit
+) {
+    var sliderValueInBytes by remember(currentSize) { mutableFloatStateOf(currentSize.toFloat()) }
+
+    val minSwapSizeBytes = 0L // Allow disabling swap entirely
+    val stepSizeMB = 64
+    val stepSizeBytes = stepSizeMB * 1024L * 1024L
+
+    LaunchedEffect(currentSize, maxSize, minSwapSizeBytes, stepSizeBytes) {
+        // Handle the case where current size is 0 (disabled)
+        if (currentSize == 0L) {
+            sliderValueInBytes = 0f
+        } else {
+            val initialSteps = ((currentSize.toFloat() - stepSizeBytes.toFloat()) / stepSizeBytes.toFloat())
+                .coerceAtLeast(0f)
+                .roundToInt()
+            val coercedInitialValue = (stepSizeBytes + initialSteps * stepSizeBytes).toFloat()
+                .coerceIn(0f, maxSize.toFloat())
+            sliderValueInBytes = coercedInitialValue
+        }
+    }
+
+    val currentSizeMBDisplay = sliderValueInBytes.toLong() / (1024 * 1024)
+    val maximumSizeMBDisplay = maxSize / (1024 * 1024)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Adjust Swap Size",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = if (currentSizeMBDisplay == 0L) {
+                        "Disabled (Max: ${maximumSizeMBDisplay}MB, Step: ${stepSizeMB}MB)"
+                    } else {
+                        "${currentSizeMBDisplay}MB (Max: ${maximumSizeMBDisplay}MB, Step: ${stepSizeMB}MB)"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Slider(
+                    value = sliderValueInBytes,
+                    onValueChange = { newValueFromSlider ->
+                        if (newValueFromSlider <= stepSizeBytes.toFloat() / 2) {
+                            // Snap to 0 (disabled) if close to minimum
+                            sliderValueInBytes = 0f
+                        } else {
+                            // Snap to step increments
+                            val stepsCount = ((newValueFromSlider - stepSizeBytes.toFloat()) / stepSizeBytes.toFloat())
+                                .coerceAtLeast(0f)
+                                .roundToInt() + 1
+                            val newSnappedValue = (stepsCount * stepSizeBytes).toFloat()
+                            sliderValueInBytes = newSnappedValue.coerceIn(0f, maxSize.toFloat())
+                        }
+                    },
+                    valueRange = 0f..maxSize.toFloat(),
+                    steps = if (maxSize > stepSizeBytes && stepSizeBytes > 0) {
+                        ((maxSize) / stepSizeBytes).toInt().coerceAtLeast(0)
+                    } else {
+                        0
+                    },
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(sliderValueInBytes.toLong()) }) {
+                Text("OK", fontWeight = FontWeight.Medium)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCEL", fontWeight = FontWeight.Medium)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.large,
+        tonalElevation = 6.dp
+    )
+}
+
+@Composable
+fun SwapLoadingDialog(
+    logs: List<String>,
+    onDismissRequest: () -> Unit
+) {
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to bottom when new logs are added
+    LaunchedEffect(logs.size) {
+        if (logs.isNotEmpty()) {
+            listState.animateScrollToItem(logs.size - 1)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 3.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "Configuring Swap...",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Swap operation in progress. Please wait...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                if (logs.isNotEmpty()) {
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+
+                    Text(
+                        text = "Live Logs:",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    // Scrollable logs with maximum height
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 200.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                MaterialTheme.shapes.small
+                            ),
+                        contentPadding = PaddingValues(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(logs) { log ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = log,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "Scroll to see more logs",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {}, // Empty to hide button
+        dismissButton = {}, // Empty to hide button
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.large,
+        tonalElevation = 8.dp
     )
 }
