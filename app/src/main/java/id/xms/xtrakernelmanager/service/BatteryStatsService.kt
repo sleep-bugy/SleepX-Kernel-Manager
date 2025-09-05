@@ -12,15 +12,20 @@ import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
 import id.xms.xtrakernelmanager.R
 import id.xms.xtrakernelmanager.ui.MainActivity
+import id.xms.xtrakernelmanager.utils.PreferenceManager
 import kotlinx.coroutines.*
 import java.io.File
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class BatteryStatsService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var monitoringJob: Job? = null
     private val TAG = "BatteryStatsService"
+
+    @Inject
+    lateinit var preferenceManager: PreferenceManager
 
     // Add variables to track charging state and smooth out readings
     private var lastChargingState = false
@@ -30,6 +35,8 @@ class BatteryStatsService : Service() {
     // Variables for screen time and drain tracking
     private var screenOnSince = 0L
     private var screenOnTime = 0L
+    private var screenOffSince = 0L
+    private var screenOffTime = 0L
     private var lastDrainTime = 0L
     private var lastDrainLevel = 0
 
@@ -52,14 +59,25 @@ class BatteryStatsService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_ON -> {
+                    // Update screen off time if screen was off
+                    if (screenOffSince > 0L) {
+                        screenOffTime += System.currentTimeMillis() - screenOffSince
+                        screenOffSince = 0L
+                    }
+                    // Start tracking screen on time
                     if (screenOnSince == 0L) {
                         screenOnSince = System.currentTimeMillis()
                     }
                 }
                 Intent.ACTION_SCREEN_OFF -> {
+                    // Update screen on time if screen was on
                     if (screenOnSince > 0L) {
                         screenOnTime += System.currentTimeMillis() - screenOnSince
                         screenOnSince = 0L
+                    }
+                    // Start tracking screen off time
+                    if (screenOffSince == 0L) {
+                        screenOffSince = System.currentTimeMillis()
                     }
                 }
             }
@@ -68,6 +86,11 @@ class BatteryStatsService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "BatteryStatsService onCreate")
+
+        // Mark service as enabled in preferences
+        preferenceManager.setBatteryStatsEnabled(true)
+
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -77,6 +100,16 @@ class BatteryStatsService : Service() {
         }
         registerReceiver(screenStateReceiver, screenStateFilter)
         startMonitoring()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "BatteryStatsService onStartCommand")
+
+        // Mark service as enabled in preferences
+        preferenceManager.setBatteryStatsEnabled(true)
+
+        // Return START_STICKY to automatically restart the service if killed
+        return START_STICKY
     }
 
     private fun createNotificationChannel() {
@@ -101,6 +134,7 @@ class BatteryStatsService : Service() {
         chargingType: String = "",
         drain: String = "N/A",
         screenOnTime: String = "N/A",
+        screenOffTime: String = "N/A",
         deepSleep: String = "0%",
         awake: String = "0%",
         uptime: String = "0:00:00"
@@ -123,8 +157,9 @@ class BatteryStatsService : Service() {
             .bigText(
                 """
                 Battery: $batteryLevel% • $formattedTemp
-                Current: $formattedCurrent$chargingInfo
-                Drain: $drain • Screen: $screenOnTime
+                Current: $formattedCurrent$chargingInfo • Drain: $drain
+                Screen On Time: $screenOnTime
+                Screen Off Time: $screenOffTime
                 Voltage: $formattedVoltage
                 
                 Deep Sleep: $deepSleep • Awake: $awake
@@ -204,6 +239,7 @@ class BatteryStatsService : Service() {
             chargingType = getChargingTypeFromPlugged(plugged),
             drain = calculateDrain(level, plugged != 0),
             screenOnTime = getFormattedScreenOnTime(),
+            screenOffTime = getFormattedScreenOffTime(),
             deepSleep = getDeepSleepPercentage(),
             awake = getAwakePercentage(),
             uptime = getFormattedUptime()
@@ -322,6 +358,7 @@ class BatteryStatsService : Service() {
             chargingType = getChargingTypeFromPlugged(plugged),
             drain = calculateDrain(level, isActuallyCharging),
             screenOnTime = getFormattedScreenOnTime(),
+            screenOffTime = getFormattedScreenOffTime(),
             deepSleep = getDeepSleepPercentage(),
             awake = getAwakePercentage(),
             uptime = getFormattedUptime()
@@ -391,9 +428,23 @@ class BatteryStatsService : Service() {
         if (screenOnSince > 0) {
             currentScreenOnTime += System.currentTimeMillis() - screenOnSince
         }
-        val hours = TimeUnit.MILLISECONDS.toHours(currentScreenOnTime)
-        val minutes = TimeUnit.MILLISECONDS.toMinutes(currentScreenOnTime) % 60
-        return "${hours}h ${minutes}m"
+        return formatTimeWithSeconds(currentScreenOnTime)
+    }
+
+    private fun getFormattedScreenOffTime(): String {
+        var currentScreenOffTime = screenOffTime
+        if (screenOffSince > 0) {
+            currentScreenOffTime += System.currentTimeMillis() - screenOffSince
+        }
+        return formatTimeWithSeconds(currentScreenOffTime)
+    }
+
+    private fun formatTimeWithSeconds(timeInMillis: Long): String {
+        val totalSeconds = timeInMillis / 1000
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
     }
 
     private fun getDeepSleepPercentage(): String {
@@ -454,6 +505,7 @@ class BatteryStatsService : Service() {
             chargingType = stats.chargingType,
             drain = stats.drain,
             screenOnTime = stats.screenOnTime,
+            screenOffTime = stats.screenOffTime,
             deepSleep = stats.deepSleep,
             awake = stats.awake,
             uptime = stats.uptime
@@ -465,15 +517,37 @@ class BatteryStatsService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        Log.d(TAG, "BatteryStatsService onDestroy")
         try {
             unregisterReceiver(batteryReceiver)
             unregisterReceiver(screenStateReceiver)
             monitoringJob?.cancel()
             serviceScope.cancel()
+
+            // Mark service as disabled in preferences
+            preferenceManager.setBatteryStatsEnabled(false)
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up service", e)
         }
         super.onDestroy()
+
+        // Restart the service if it was killed unexpectedly
+        if (preferenceManager.getServiceAutoStart()) {
+            Log.d(TAG, "Attempting to restart BatteryStatsService")
+            val restartIntent = Intent(applicationContext, BatteryStatsService::class.java)
+            startForegroundService(restartIntent)
+        }
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.d(TAG, "BatteryStatsService onTaskRemoved")
+        super.onTaskRemoved(rootIntent)
+
+        // Keep service running even when app is removed from recent apps
+        if (preferenceManager.getServiceAutoStart()) {
+            val restartIntent = Intent(applicationContext, BatteryStatsService::class.java)
+            startForegroundService(restartIntent)
+        }
     }
 
     data class SystemStats(
@@ -484,6 +558,7 @@ class BatteryStatsService : Service() {
         val chargingType: String,
         val drain: String,
         val screenOnTime: String,
+        val screenOffTime: String,
         val deepSleep: String,
         val awake: String,
         val uptime: String
