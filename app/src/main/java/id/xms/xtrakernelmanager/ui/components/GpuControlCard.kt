@@ -21,6 +21,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
@@ -35,11 +36,9 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
-// Pastikan GlassCard diimpor jika ini adalah komponen custom Anda
-// import id.xms.xtrakernelmanager.ui.components.GlassCard
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 @Composable
@@ -270,6 +269,18 @@ private fun GpuRendererControl(
     onRendererSelected: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
+    var processingStarted by remember { mutableStateOf(false) }
+
+    // Handle processing state reset
+    LaunchedEffect(processingStarted) {
+        if (processingStarted) {
+            delay(2000)
+            isProcessing = false
+            processingStarted = false
+        }
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -282,27 +293,46 @@ private fun GpuRendererControl(
             modifier = Modifier.weight(1f)
         )
         ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded },
+            expanded = expanded && !isProcessing,
+            onExpandedChange = { if (!isProcessing) expanded = !expanded },
             modifier = Modifier.weight(1.5f)
         ) {
             OutlinedTextField(
-                value = if (currentRenderer.isBlank() || currentRenderer == "..." || currentRenderer == "Error") "Loading..." else currentRenderer,
+                value = when {
+                    isProcessing -> "Applying..."
+                    currentRenderer.isBlank() || currentRenderer == "..." || currentRenderer == "Error" -> "Loading..."
+                    else -> currentRenderer
+                },
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Select Renderer") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                trailingIcon = {
+                    if (isProcessing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                    }
+                },
                 modifier = Modifier
-                    .menuAnchor()
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                     .fillMaxWidth(),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.primary),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    color = if (isProcessing) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                           else MaterialTheme.colorScheme.primary
+                ),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                )
+                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    disabledBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                ),
+                enabled = !isProcessing
             )
             ExposedDropdownMenu(
-                expanded = expanded,
+                expanded = expanded && !isProcessing,
                 onDismissRequest = { expanded = false }
             ) {
                 if (availableRenderers.isEmpty()) {
@@ -314,16 +344,65 @@ private fun GpuRendererControl(
                 } else {
                     availableRenderers.forEach { rendererItem ->
                         DropdownMenuItem(
-                            text = { Text(rendererItem, style = MaterialTheme.typography.bodyLarge) },
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = rendererItem,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (rendererItem == currentRenderer && !isProcessing) {
+                                        Icon(
+                                            Icons.Filled.Check,
+                                            contentDescription = "Current",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            },
                             onClick = {
-                                onRendererSelected(rendererItem)
+                                if (rendererItem != currentRenderer) {
+                                    isProcessing = true
+                                    processingStarted = true
+                                    onRendererSelected(rendererItem)
+                                }
                                 expanded = false
-                            }
+                            },
+                            enabled = !isProcessing
                         )
                     }
                 }
             }
         }
+    }
+
+    // Add renderer description
+    if (currentRenderer.isNotBlank() && currentRenderer != "Loading..." && currentRenderer != "...") {
+        Text(
+            text = getRendererDescription(currentRenderer),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, start = 8.dp, end = 8.dp)
+        )
+    }
+}
+
+@Composable
+private fun getRendererDescription(renderer: String): String {
+    return when (renderer) {
+        "Default" -> "Uses system default renderer (typically OpenGL)"
+        "OpenGL" -> "Traditional OpenGL renderer for compatibility"
+        "Vulkan" -> "Modern Vulkan renderer for better performance"
+        "OpenGL (SKIA)" -> "OpenGL with Skia graphics library"
+        "Vulkan (SKIA)" -> "Vulkan with Skia graphics library (best performance)"
+        "ANGLE" -> "ANGLE OpenGL ES implementation"
+        else -> "Custom GPU renderer configuration"
     }
 }
 
@@ -570,21 +649,47 @@ private fun RebootConfirmationDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Filled.Info, contentDescription = "Information") },
-        title = { Text("Restart Required", style = MaterialTheme.typography.headlineSmall) },
+        title = { Text("Restart Required for GPU Renderer", style = MaterialTheme.typography.headlineSmall) },
         text = {
-            Text(
-                "Changing the GPU renderer requires a device restart for the changes to take effect. If the renderer doesn't change after reboot, your device may not support this specific selection.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Column {
+                Text(
+                    "The GPU renderer settings have been saved to the system and require a restart to take effect.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    "What will happen:",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Column(modifier = Modifier.padding(start = 16.dp)) {
+                    Text("• Settings are saved permanently", style = MaterialTheme.typography.bodySmall)
+                    Text("• The renderer will be active after restart", style = MaterialTheme.typography.bodySmall)
+                    Text("• If it doesn't change, the device may not support it", style = MaterialTheme.typography.bodySmall)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    "You can restart later if you have important work to do.",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            }
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Reboot Now", style = MaterialTheme.typography.labelLarge)
+                Text("Restart Now", style = MaterialTheme.typography.labelLarge)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Maybe Later", style = MaterialTheme.typography.labelLarge)
+                Text("Restart Later", style = MaterialTheme.typography.labelLarge)
             }
         }
     )
