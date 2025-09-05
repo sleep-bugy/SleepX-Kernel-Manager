@@ -1,7 +1,41 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme -->
-    <style name="Theme.XtraKernelManager" parent="android:Theme.Material.Light.NoActionBar">
-        <!-- opsional warna -->
-        <item name="android:colorPrimary">#65558F</item>
+    <!-- Light Theme - Using AppCompat base for compatibility -->
+    <style name="Theme.XtraKernelManager" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Primary Colors - Using standard AppCompat attributes -->
+        <item name="colorPrimary">@color/md_theme_light_primary</item>
+        <item name="colorPrimaryDark">@color/md_theme_light_primaryContainer</item>
+        <item name="colorAccent">@color/md_theme_light_secondary</item>
+
+        <!-- Background -->
+        <item name="android:colorBackground">@color/md_theme_light_background</item>
+        <item name="android:textColorPrimary">@color/md_theme_light_onBackground</item>
+        <item name="android:textColorSecondary">@color/md_theme_light_onSurfaceVariant</item>
+
+        <!-- Window and System UI -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="q">false</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="q">false</item>
+    </style>
+
+    <!-- Base Blur Card Style -->
+    <style name="BlurCard">
+        <item name="android:layout_margin">8dp</item>
+        <item name="android:padding">16dp</item>
+    </style>
+
+    <!-- Simplified Blur Card Styles -->
+    <style name="BlurCard.Light">
+        <item name="android:background">@drawable/blur_card_light</item>
+    </style>
+
+    <style name="BlurCard.Medium">
+        <item name="android:background">@drawable/blur_card_medium</item>
+    </style>
+
+    <style name="BlurCard.Heavy">
+        <item name="android:background">@drawable/blur_card_heavy</item>
     </style>
 </resources>
