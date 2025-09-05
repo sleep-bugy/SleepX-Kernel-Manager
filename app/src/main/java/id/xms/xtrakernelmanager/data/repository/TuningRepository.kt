@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import javax.inject.Inject
 import javax.inject.Singleton
-import java.io.DataOutputStream
 import kotlin.math.ceil
 
 @Singleton
@@ -55,6 +54,7 @@ class TuningRepository @Inject constructor(
     private val dirtyWritebackCentisecsPath = "/proc/sys/vm/dirty_writeback_centisecs"
     private val dirtyExpireCentisecsPath = "/proc/sys/vm/dirty_expire_centisecs"
     private val minFreeKbytesPath = "/proc/sys/vm/min_free_kbytes"
+    private val minFreeMemoryPath = "/proc/meminfo"
 
     /* ----------------------------------------------------------
        Helper Shell
@@ -63,7 +63,6 @@ class TuningRepository @Inject constructor(
     private fun runTuningCommand(cmd: String): Boolean {
         Log.d(TAG, "[Shell RW TUNING] Preparing to execute: '$cmd'")
         val originalSelinuxMode = getSelinuxModeInternal()
-        var success = false
         val needsSelinuxChange = originalSelinuxMode.equals("Enforcing", ignoreCase = true)
 
         if (needsSelinuxChange) {
@@ -74,7 +73,7 @@ class TuningRepository @Inject constructor(
             }
         }
 
-        success = executeShellCommand(cmd)
+        val success = executeShellCommand(cmd)
         if (needsSelinuxChange) {
             Log.i(TAG, "[Shell RW TUNING] Restoring SELinux mode to Enforcing.")
             if (!setSelinuxModeInternal(true)) { // Set kembali ke Enforcing (1)
@@ -240,7 +239,6 @@ class TuningRepository @Inject constructor(
         // Tangani SELinux untuk blok perintah ini
         val originalSelinuxMode = getSelinuxModeInternal()
         val needsSelinuxChange = originalSelinuxMode.equals("Enforcing", ignoreCase = true)
-        var success = true
 
         if (needsSelinuxChange) {
             setSelinuxModeInternal(false)
@@ -261,7 +259,7 @@ class TuningRepository @Inject constructor(
             "echo $algo > $zramCompAlgorithmPath"
         }
 
-        success = executeShellCommand(commands)
+        val success = executeShellCommand(commands)
 
         if (needsSelinuxChange) {
             setSelinuxModeInternal(true)
@@ -315,11 +313,12 @@ class TuningRepository @Inject constructor(
     fun getDirtyExpireCentisecs(): Flow<Int> = flow {
         emit((readShellCommand("cat $dirtyExpireCentisecsPath").toIntOrNull() ?: 3000) / 100)
     }.flowOn(Dispatchers.IO)
+
     fun setMinFreeMemory(valueKBytes: Int): Boolean =
         runTuningCommand("echo $valueKBytes > $minFreeKbytesPath")
 
     fun getMinFreeMemory(): Flow<Int> = flow {
-        emit((readShellCommand("cat $minFreeKbytesPath").toIntOrNull() ?: (128 * 1024)) / 1024)
+        emit(readShellCommand("cat $minFreeKbytesPath").toIntOrNull() ?: (128 * 1024))
     }.flowOn(Dispatchers.IO)
 
 
@@ -578,4 +577,54 @@ class TuningRepository @Inject constructor(
             return ""
         }
     }
+
+    // Traditional swap size management (not ZRAM)
+    fun setSwapSize(sizeBytes: Long): Boolean {
+        return try {
+            if (sizeBytes == 0L) {
+                // Disable swap
+                executeShellCommand("swapoff -a")
+            } else {
+                // Create or resize swap file
+                val swapFile = "/data/swapfile"
+                val sizeMB = sizeBytes / 1024 / 1024
+
+                // Remove existing swap file
+                executeShellCommand("swapoff $swapFile 2>/dev/null || true")
+                executeShellCommand("rm -f $swapFile")
+
+                if (sizeMB > 0) {
+                    // Create new swap file
+                    val success = executeShellCommand("dd if=/dev/zero of=$swapFile bs=1M count=$sizeMB") &&
+                                 executeShellCommand("chmod 600 $swapFile") &&
+                                 executeShellCommand("mkswap $swapFile") &&
+                                 executeShellCommand("swapon $swapFile")
+                    success
+                } else {
+                    true
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting swap size: ${e.message}")
+            false
+        }
+    }
+
+    fun getSwapSize(): Flow<Long> = flow {
+        val swapInfo = readShellCommand("cat /proc/swaps")
+        val swapFile = "/data/swapfile"
+        val lines = swapInfo.split("\n")
+
+        for (line in lines) {
+            if (line.contains(swapFile)) {
+                val parts = line.trim().split("\\s+".toRegex())
+                if (parts.size >= 3) {
+                    val sizeKB = parts[2].toLongOrNull() ?: 0L
+                    emit(sizeKB * 1024) // Convert KB to bytes
+                    return@flow
+                }
+            }
+        }
+        emit(0L) // No swap file found
+    }.flowOn(Dispatchers.IO)
 }
