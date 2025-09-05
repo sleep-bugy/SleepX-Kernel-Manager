@@ -270,11 +270,15 @@ class TuningViewModel @Inject constructor(
     }
 
     internal fun fetchCurrentGpuRenderer() = viewModelScope.launch(Dispatchers.IO) {
-        repo.getGpuRenderer().collect { _currentGpuRenderer.value = it }
+        repo.getGpuRenderer().collect { renderer ->
+            _currentGpuRenderer.value = renderer
+        }
     }
 
     internal fun fetchVulkanApiVersion() = viewModelScope.launch(Dispatchers.IO) {
-        repo.getVulkanApiVersion().collect { _vulkanApiVersion.value = it }
+        repo.getVulkanApiVersion().collect { version ->
+            _vulkanApiVersion.value = version
+        }
     }
 
     fun userSelectedGpuRenderer(renderer: String) = viewModelScope.launch(Dispatchers.IO) {
