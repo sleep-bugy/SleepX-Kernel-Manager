@@ -5,10 +5,12 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
@@ -18,6 +20,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import id.xms.xtrakernelmanager.data.repository.ThermalRepository
 import id.xms.xtrakernelmanager.service.ThermalService
 import id.xms.xtrakernelmanager.ui.components.BottomNavBar
+import id.xms.xtrakernelmanager.ui.components.ExpressiveBackground
 import id.xms.xtrakernelmanager.ui.dialog.BatteryOptDialog
 import id.xms.xtrakernelmanager.ui.screens.*
 import id.xms.xtrakernelmanager.ui.theme.XtraTheme
@@ -47,11 +50,12 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var batteryOptChecker: BatteryOptimizationChecker
     private var showBatteryOptDialog by mutableStateOf(false)
-    private var permissionDenialCount by mutableStateOf(0)
+    private var permissionDenialCount by mutableIntStateOf(0)
     private val MAX_PERMISSION_RETRIES = 2
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge() // Enable edge-to-edge display for Android 16-like experience
         rootUtils.init(this)
         batteryOptChecker = BatteryOptimizationChecker(this)
 
@@ -66,39 +70,49 @@ class MainActivity : ComponentActivity() {
         setContent {
             XtraTheme {
                 val navController = rememberNavController()
-                val items = listOf("Home", "Tuning", "Misc", "Info") // Removed Settings from here
+                val items = listOf("Home", "Tuning", "Misc", "Info")
 
-                if (showBatteryOptDialog) {
-                    BatteryOptDialog(
-                        onDismiss = {
-                            // Only allow dismiss if we haven't exceeded retry limit
-                            if (permissionDenialCount < MAX_PERMISSION_RETRIES) {
+                // Use Surface instead of ExpressiveBackground to avoid potential composition issues
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    if (showBatteryOptDialog) {
+                        BatteryOptDialog(
+                            onDismiss = {
+                                // Only allow dismiss if we haven't exceeded retry limit
+                                if (permissionDenialCount < MAX_PERMISSION_RETRIES) {
+                                    showBatteryOptDialog = false
+                                }
+                            },
+                            onConfirm = {
                                 showBatteryOptDialog = false
-                            }
-                        },
-                        onConfirm = {
-                            showBatteryOptDialog = false
-                            batteryOptChecker.checkAndRequestPermissions(this)
-                        },
-                        onExit = { finish() },
-                        showExitButton = permissionDenialCount >= MAX_PERMISSION_RETRIES
-                    )
-                }
+                                batteryOptChecker.checkAndRequestPermissions(this@MainActivity)
+                            },
+                            onExit = { finish() },
+                            showExitButton = permissionDenialCount >= MAX_PERMISSION_RETRIES
+                        )
+                    }
 
-                Scaffold(
-                    bottomBar = { BottomNavBar(navController, items) }
-                ) { innerPadding ->
-                    NavHost(
-                        navController = navController,
-                        startDestination = "home",
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-                        composable("home") { HomeScreen(navController = navController) }
-                        composable("tuning") { TuningScreen() }
-                        composable("misc") { MiscScreen() }
-                        composable("info") { InfoScreen() }
-                        // Keep settings route for potential direct navigation
-                        composable("settings") { SettingsScreen(navController = navController) }
+                    Scaffold(
+                        containerColor = Color.Transparent,
+                        bottomBar = { BottomNavBar(navController, items) },
+                        modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars)
+                    ) { innerPadding ->
+                        // Add ExpressiveBackground here to wrap the navigation content
+                        ExpressiveBackground {
+                            NavHost(
+                                navController = navController,
+                                startDestination = "home",
+                                modifier = Modifier.padding(innerPadding)
+                            ) {
+                                composable("home") { HomeScreen(navController = navController) }
+                                composable("tuning") { TuningScreen() }
+                                composable("misc") { MiscScreen() }
+                                composable("info") { InfoScreen() }
+                                composable("settings") { SettingsScreen(navController = navController) }
+                            }
+                        }
                     }
                 }
             }
