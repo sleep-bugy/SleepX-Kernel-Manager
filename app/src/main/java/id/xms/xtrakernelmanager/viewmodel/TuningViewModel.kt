@@ -114,6 +114,20 @@ class TuningViewModel @Inject constructor(
     private val _minFreeMemory = MutableStateFlow(128)
     val minFreeMemory: StateFlow<Int> = _minFreeMemory.asStateFlow()
 
+    // Add swap size state for traditional swap (not ZRAM)
+    private val _swapSize = MutableStateFlow(0L) // in bytes
+    val swapSize: StateFlow<Long> = _swapSize.asStateFlow()
+
+    private val _maxSwapSize = MutableStateFlow(8L * 1024 * 1024 * 1024) // 8GB max
+    val maxSwapSize: StateFlow<Long> = _maxSwapSize.asStateFlow()
+
+    // Add loading states for swap operations
+    private val _isSwapLoading = MutableStateFlow(false)
+    val isSwapLoading: StateFlow<Boolean> = _isSwapLoading.asStateFlow()
+
+    private val _swapLogs = MutableStateFlow<List<String>>(emptyList())
+    val swapLogs: StateFlow<List<String>> = _swapLogs.asStateFlow()
+
     /* Max ZRAM otomatis 6 GB untuk 8 GB RAM */
     private val _maxZramSize = MutableStateFlow(repo.calculateMaxZramSize())
     val maxZramSize: StateFlow<Long> = _maxZramSize.asStateFlow()
@@ -299,6 +313,7 @@ class TuningViewModel @Inject constructor(
         launch(Dispatchers.IO) { repo.getDirtyWriteback().collect { _dirtyWriteback.value = it } }
         launch(Dispatchers.IO) { repo.getDirtyExpireCentisecs().collect { _dirtyExpireCentisecs.value = it } }
         launch(Dispatchers.IO) { repo.getMinFreeMemory().collect { _minFreeMemory.value = it } }
+        launch(Dispatchers.IO) { repo.getSwapSize().collect { _swapSize.value = it } }
     }
 
     fun setZramEnabled(enabled: Boolean) = viewModelScope.launch(Dispatchers.IO) {
@@ -358,6 +373,76 @@ class TuningViewModel @Inject constructor(
         if (repo.setMinFreeMemory(value * 1024)) {
             repo.getMinFreeMemory().take(1).collect { _minFreeMemory.value = it }
         }
+    }
+
+    fun setSwapSize(sizeBytes: Long) = viewModelScope.launch(Dispatchers.IO) {
+        val maxSize = _maxSwapSize.value
+        if (sizeBytes < 0 || sizeBytes > maxSize) {
+            _rebootCommandFeedback.emit("Invalid swap size (0 - ${maxSize / 1024 / 1024 / 1024} GB)")
+            return@launch
+        }
+
+        _isSwapLoading.value = true
+        _swapLogs.value = emptyList() // Reset logs
+
+        addSwapLog("🔄 Starting swap configuration...")
+        delay(500)
+
+        if (sizeBytes == 0L) {
+            addSwapLog("🗑️ Disabling swap...")
+            delay(300)
+            addSwapLog("📋 Running: swapoff -a")
+            delay(500)
+        } else {
+            val sizeMB = sizeBytes / 1024 / 1024
+            addSwapLog("⚙️ Setting swap size to ${sizeMB}MB...")
+            delay(300)
+            addSwapLog("🗑️ Removing old swap file...")
+            delay(400)
+            addSwapLog("📋 Running: swapoff /data/swapfile")
+            delay(300)
+            addSwapLog("📋 Running: rm -f /data/swapfile")
+            delay(500)
+            addSwapLog("📝 Creating new swap file (${sizeMB}MB)...")
+            delay(800)
+            addSwapLog("📋 Running: dd if=/dev/zero of=/data/swapfile bs=1M count=${sizeMB}")
+            delay(1000)
+            addSwapLog("🔒 Setting file permissions...")
+            delay(300)
+            addSwapLog("📋 Running: chmod 600 /data/swapfile")
+            delay(400)
+            addSwapLog("🔧 Formatting as swap...")
+            delay(500)
+            addSwapLog("📋 Running: mkswap /data/swapfile")
+            delay(600)
+            addSwapLog("✅ Activating swap...")
+            delay(400)
+            addSwapLog("📋 Running: swapon /data/swapfile")
+            delay(500)
+        }
+
+        if (repo.setSwapSize(sizeBytes)) {
+            _swapSize.value = sizeBytes
+            if (sizeBytes == 0L) {
+                addSwapLog("✅ Swap successfully disabled!")
+                _rebootCommandFeedback.emit("Swap successfully disabled")
+            } else {
+                addSwapLog("✅ Swap successfully set to ${sizeBytes / 1024 / 1024}MB!")
+                _rebootCommandFeedback.emit("Swap size successfully set to ${sizeBytes / 1024 / 1024} MB")
+            }
+        } else {
+            addSwapLog("❌ Failed to configure swap!")
+            _rebootCommandFeedback.emit("Failed to set swap size")
+        }
+
+        delay(1000)
+        _isSwapLoading.value = false
+    }
+
+    private fun addSwapLog(message: String) {
+        val currentLogs = _swapLogs.value.toMutableList()
+        currentLogs.add(message)
+        _swapLogs.value = currentLogs
     }
 
     /* ---------------- Thermal ---------------- */
