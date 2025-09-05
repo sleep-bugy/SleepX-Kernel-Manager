@@ -10,5 +10,8 @@ data class BatteryInfo(
     val technology: String = "",
     val health: String = "",
     val status: String = "",
-    val chargingType: String = ""
+    val chargingType: String = "",
+    val activeDrain: Float = 0f, // mAh per hour
+    val screenOnTime: Long = 0L, // in milliseconds
+    val screenOffTime: Long = 0L // in milliseconds
 )
