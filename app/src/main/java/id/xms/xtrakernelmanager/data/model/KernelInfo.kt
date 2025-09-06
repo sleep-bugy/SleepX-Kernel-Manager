@@ -5,5 +5,9 @@ import kotlinx.serialization.Serializable
 data class KernelInfo(
     val version: String,
     val gkiType: String,
-    val scheduler: String
+    val scheduler: String,
+    val selinuxStatus: String = "Unknown",
+    val abi: String = "Unknown",
+    val architecture: String = "Unknown",
+    val kernelSuStatus: String = "Not Detected"
 )
