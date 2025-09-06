@@ -28,6 +28,9 @@
     <string name="reboot_recovery">Reboot Recovery</string>
     <string name="power_off">Power Off</string>
 
+    <!-- Settings strings -->
+    <string name="settings_language_label">Language</string>
+
     <!-- ... string lainnya ... -->
     <string name="central_proccessing_unit_cpu">Central Processing Unit (CPU)</string>
     <string name="offline">Offline</string>
@@ -49,9 +52,23 @@
     <!-- Settings Screen -->
     <string name="settings_title">Settings</string>
     <string name="settings_back_button_desc">Back</string>
-    <string name="settings_language_label">Language</string>
-    <string name="language_english">English</string>
-    <string name="language_indonesian">Indonesian</string>
+
+    <!-- Widget strings -->
+    <string name="widget_description">Toggle battery notification on/off</string>
+    <string name="widget_battery_stats_on">Battery Stats: ON</string>
+    <string name="widget_battery_stats_off">Battery Stats: OFF</string>
+
+    <!-- Battery Performance Widget strings -->
+    <string name="widget_battery_on">Battery ON</string>
+    <string name="widget_battery_off">Battery OFF</string>
+    <string name="battery_performance_widget_description">Control battery notification and performance mode</string>
+
+    <!-- Xtra Control Widget strings -->
+    <string name="widget_title">Xtra Control</string>
+    <string name="xtra_control_widget_description">Battery notification and performance mode control</string>
+    <string name="battery_toggle">Toggle Battery Stats</string>
+    <string name="performance_cycle">Cycle Performance Mode</string>
+    <string name="performance_mode_balanced">Mode: Balanced</string>
 
     <!-- CpuCard -->
     <string name="cpu_soc_label">SoC</string>
@@ -77,5 +94,12 @@
     <string name="select_language">Choose Language</string>
     <string name="close">Close</string>
     <string name="system_info">System Info</string>
+
+    <!-- FPS Overlay Strings -->
+    <string name="fps_format" translatable="false">%d FPS</string>
+
+    <!-- Language strings -->
+    <string name="language_english">English</string>
+    <string name="language_indonesian">Indonesian</string>
 
 </resources>

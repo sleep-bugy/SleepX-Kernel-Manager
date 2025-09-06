@@ -10,10 +10,10 @@
 2. Pavellc : Dukungan UI
 3. Ziyu : Dukungan Penyetelan</string>
     <string name="kernel">Kernel</string>
-    <string name="version">Versi: %1$s</string>
+    <string name="version">Version Kernel</string>
     <string name="kernel_type">Tipe Kernel: %1$s</string>
     <string name="kernel_information">Informasi Kernel</string>
-    <string name="kernel_version">Versi Kernel: %1$s</string>
+    <string name="kernel_version">Version Kernel: %1$s</string>
     <string name="xtra_kernel_manager">Xtra Kernel Manager</string>
     <string name="home">Home</string>
     <string name="tuning">Tuning</string>
