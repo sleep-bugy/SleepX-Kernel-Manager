@@ -232,13 +232,15 @@ private fun CpuCoresSection(info: RealtimeCpuInfo) {
                 freqsInRow.forEach { freq ->
                     GlassmorphismSurface(
                         modifier = Modifier.weight(1f),
-                        blurRadius = 6f, // Kurangi dari 12f ke 6f
-                        alpha = 0.25f    // Tingkatkan dari 0.15f ke 0.25f untuk visibility
+                        blurRadius = 6f,
+                        alpha = 0.25f
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(vertical = 12.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp, horizontal = 8.dp)
                         ) {
                             if (freq == 0) {
                                 Text(
@@ -247,7 +249,8 @@ private fun CpuCoresSection(info: RealtimeCpuInfo) {
                                         fontWeight = FontWeight.Bold
                                     ),
                                     color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                                    textAlign = TextAlign.Center
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             } else {
                                 Text(
@@ -256,12 +259,16 @@ private fun CpuCoresSection(info: RealtimeCpuInfo) {
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp
                                     ),
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                                 Text(
                                     text = "MHz",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
                         }
