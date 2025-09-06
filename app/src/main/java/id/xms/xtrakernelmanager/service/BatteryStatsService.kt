@@ -1,6 +1,7 @@
 package id.xms.xtrakernelmanager.service
 
 import android.app.*
+import android.appwidget.AppWidgetManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -15,7 +16,7 @@ import id.xms.xtrakernelmanager.ui.MainActivity
 import id.xms.xtrakernelmanager.utils.PreferenceManager
 import kotlinx.coroutines.*
 import java.io.File
-import java.util.concurrent.TimeUnit
+import java.util.Locale
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -39,6 +40,11 @@ class BatteryStatsService : Service() {
     private var screenOffTime = 0L
     private var lastDrainTime = 0L
     private var lastDrainLevel = 0
+
+    // Cache for accessible battery paths to avoid repeated SELinux denials
+    private val accessibleBatteryPaths = mutableSetOf<String>()
+    private val inaccessibleBatteryPaths = mutableSetOf<String>()
+    private var batteryPathsChecked = false
 
     companion object {
         const val NOTIFICATION_ID = 2
@@ -88,8 +94,11 @@ class BatteryStatsService : Service() {
         super.onCreate()
         Log.d(TAG, "BatteryStatsService onCreate")
 
-        // Mark service as enabled in preferences
+        // Mark service as enabled in preferences for auto-start on next boot
         preferenceManager.setBatteryStatsEnabled(true)
+
+        // Update widgets to reflect the new state
+        updateWidgets()
 
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
@@ -132,6 +141,13 @@ class BatteryStatsService : Service() {
         voltage: Float = 0f,
         batteryTemp: Float = 0f,
         chargingType: String = "",
+        chargingStatus: String = "Unknown",
+        batteryHealth: String = "Unknown",
+        healthPercentage: Int = 0,
+        cycleCount: Int = 0,
+        batteryCapacity: Int = 0,
+        currentCapacity: Int = 0,
+        batteryTechnology: String = "Unknown",
         drain: String = "N/A",
         screenOnTime: String = "N/A",
         screenOffTime: String = "N/A",
@@ -150,26 +166,45 @@ class BatteryStatsService : Service() {
         val formattedVoltage = if (voltage > 0) "%.2fV".format(voltage) else "N/A"
         val formattedCurrent = "%.0fmA".format(chargingCurrent / 1000)
         val formattedTemp = if (batteryTemp > 0) "%.1f°C".format(batteryTemp) else "N/A"
-        val chargingInfo = if (chargingType.isNotEmpty()) " ($chargingType)" else ""
+        val chargingInfo = if (chargingType.isNotEmpty() && chargingType != "Unknown") " ($chargingType)" else ""
+
+        // Format capacity information
+        val capacityInfo = if (batteryCapacity > 0) {
+            if (currentCapacity > 0) {
+                "$currentCapacity/$batteryCapacity mAh"
+            } else {
+                "$batteryCapacity mAh"
+            }
+        } else "N/A"
+
+        // Format health information
+        val healthInfo = if (healthPercentage > 0) {
+            "$batteryHealth ($healthPercentage%)"
+        } else {
+            batteryHealth
+        }
+
+        // Format cycle information
+        val cycleInfo = if (cycleCount > 0) "$cycleCount cycles" else "N/A"
 
         val bigTextStyle = NotificationCompat.BigTextStyle()
             .setBigContentTitle("Battery & System Statistics")
             .bigText(
                 """
-                Battery: $batteryLevel% • $formattedTemp
-                Current: $formattedCurrent$chargingInfo • Drain: $drain
-                Screen On Time: $screenOnTime
-                Screen Off Time: $screenOffTime
-                Voltage: $formattedVoltage
+                🔋 Battery: $batteryLevel% • $formattedTemp • $chargingStatus
+                ⚡ Power: $formattedCurrent$chargingInfo • Drain: $drain
+                🔬 Health: $healthInfo • Cycles: $cycleInfo
+                📊 Capacity: $capacityInfo • Tech: $batteryTechnology
+                📱 Screen: On $screenOnTime • Off $screenOffTime
+                ⚙️ Voltage: $formattedVoltage • Uptime: $uptime
                 
-                Deep Sleep: $deepSleep • Awake: $awake
-                Uptime: $uptime
+                💤 Deep Sleep: $deepSleep • Awake: $awake
                 """.trimIndent()
             )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Battery: $batteryLevel% • $formattedTemp")
-            .setContentText("Current: $formattedCurrent • Drain: $drain")
+            .setContentTitle("🔋 $batteryLevel% • $formattedTemp • $chargingStatus")
+            .setContentText("⚡ $formattedCurrent$chargingInfo • 🔬 $healthInfo")
             .setStyle(bigTextStyle)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
@@ -201,6 +236,8 @@ class BatteryStatsService : Service() {
         val voltage = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) / 1000f
         val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
         val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
+        val health = intent.getIntExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_UNKNOWN)
+        val technology = intent.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: "Unknown"
 
         // Check actual charging state to normalize current sign
         val isActuallyCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || plugged != 0
@@ -231,12 +268,27 @@ class BatteryStatsService : Service() {
             smoothed
         }
 
+        // Get enhanced battery information
+        val chargingStatus = getChargingStatusString(status, plugged)
+        val healthString = getBatteryHealthString(health)
+        val healthPercentage = getBatteryHealthPercentage()
+        val cycleCount = getBatteryCycleCount()
+        val capacity = getBatteryCapacity()
+        val currentCapacity = getCurrentCapacity()
+
         updateNotification(SystemStats(
             batteryLevel = level,
             chargingCurrent = smoothedCurrent,
             voltage = voltage,
             batteryTemp = getBatteryTemperature(),
             chargingType = getChargingTypeFromPlugged(plugged),
+            chargingStatus = chargingStatus,
+            batteryHealth = healthString,
+            healthPercentage = healthPercentage,
+            cycleCount = cycleCount,
+            batteryCapacity = capacity,
+            currentCapacity = currentCapacity,
+            batteryTechnology = technology,
             drain = calculateDrain(level, plugged != 0),
             screenOnTime = getFormattedScreenOnTime(),
             screenOffTime = getFormattedScreenOffTime(),
@@ -246,69 +298,227 @@ class BatteryStatsService : Service() {
         ))
     }
 
-    private fun getChargingTypeFromPlugged(plugged: Int): String {
-        return when (plugged) {
-            BatteryManager.BATTERY_PLUGGED_USB -> "USB"
-            BatteryManager.BATTERY_PLUGGED_AC -> "AC"
-            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless"
-            else -> ""
+    private fun getChargingStatusString(status: Int, plugged: Int): String {
+        return when (status) {
+            BatteryManager.BATTERY_STATUS_CHARGING -> "Charging"
+            BatteryManager.BATTERY_STATUS_DISCHARGING -> "Discharging"
+            BatteryManager.BATTERY_STATUS_FULL -> "Full"
+            BatteryManager.BATTERY_STATUS_NOT_CHARGING -> {
+                if (plugged != 0) "Not Charging" else "Discharging"
+            }
+            else -> "Unknown"
         }
     }
 
-    private fun getCurrentNow(): Float {
+    private fun getBatteryHealthString(health: Int): String {
+        return when (health) {
+            BatteryManager.BATTERY_HEALTH_GOOD -> "Good"
+            BatteryManager.BATTERY_HEALTH_OVERHEAT -> "Overheat"
+            BatteryManager.BATTERY_HEALTH_DEAD -> "Dead"
+            BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> "Over Voltage"
+            BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE -> "Failure"
+            BatteryManager.BATTERY_HEALTH_COLD -> "Cold"
+            else -> "Unknown"
+        }
+    }
+
+    private fun checkBatteryPathAccess(path: String): Boolean {
+        // Return cached result if already checked
+        if (batteryPathsChecked) {
+            return accessibleBatteryPaths.contains(path)
+        }
+
         try {
-            // Try BatteryManager first (most reliable)
+            val file = File(path)
+            if (file.exists() && file.canRead()) {
+                // Try to actually read the file to verify access
+                file.readText().trim()
+                accessibleBatteryPaths.add(path)
+                return true
+            }
+        } catch (e: SecurityException) {
+            // SELinux denial - cache as inaccessible to avoid future attempts
+            inaccessibleBatteryPaths.add(path)
+            Log.d(TAG, "Path $path is not accessible due to SELinux policy")
+        } catch (e: Exception) {
+            inaccessibleBatteryPaths.add(path)
+            Log.d(TAG, "Path $path is not accessible: ${e.message}")
+        }
+
+        return false
+    }
+
+    private fun getBatteryHealthPercentage(): Int {
+        try {
+            // Use only BatteryManager API first to avoid SELinux issues
             val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-            val currentFromBatteryManager = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-            if (currentFromBatteryManager != Int.MIN_VALUE) {
-                Log.d(TAG, "Current from BatteryManager: $currentFromBatteryManager µA")
-                return currentFromBatteryManager.toFloat()
+
+            // Try to get capacity info from BatteryManager
+            val designCapacity = getBatteryCapacityViaBatteryManager()
+            val currentCapacity = getCurrentCapacityViaBatteryManager()
+
+            if (designCapacity > 0 && currentCapacity > 0) {
+                val healthPercentage = ((currentCapacity.toFloat() / designCapacity) * 100).toInt()
+                Log.d(TAG, "Battery Health via BatteryManager: $healthPercentage%")
+                return healthPercentage
             }
 
-            // Try direct file reading with multiple possible locations
-            val possiblePaths = listOf(
-                "/sys/class/power_supply/battery/current_now",
-                "/sys/class/power_supply/battery/current_avg",
-                "/sys/class/power_supply/bms/current_now",
-                "/sys/class/power_supply/usb/current_now"
+            // Only try file system access if BatteryManager fails and we haven't marked paths as inaccessible
+            if (!batteryPathsChecked) {
+                val healthPaths = listOf(
+                    "/sys/class/power_supply/battery/health",
+                    "/sys/class/power_supply/battery/capacity_level",
+                    "/sys/class/power_supply/bms/battery_health"
+                )
+
+                for (path in healthPaths) {
+                    if (checkBatteryPathAccess(path)) {
+                        try {
+                            val file = File(path)
+                            val content = file.readText().trim()
+                            val percentage = content.toIntOrNull()
+                            if (percentage != null && percentage in 0..100) {
+                                return percentage
+                            }
+                        } catch (e: Exception) {
+                            // Continue to next path
+                        }
+                    }
+                }
+                batteryPathsChecked = true
+            }
+
+        } catch (e: Exception) {
+            Log.w(TAG, "Error getting battery health percentage: ${e.message}")
+        }
+        return 100 // Default to 100% if unknown
+    }
+
+    private fun getBatteryCapacityViaBatteryManager(): Int {
+        try {
+            val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            // Try to get design capacity via BatteryManager (Android 6.0+)
+            val designCapacity = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER)
+            if (designCapacity != Int.MIN_VALUE && designCapacity > 0) {
+                // Convert from nWh to mAh (approximate)
+                return (designCapacity / 3700).coerceAtLeast(1000) // Assume ~3.7V average
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "BatteryManager design capacity not available: ${e.message}")
+        }
+        return 0
+    }
+
+    private fun getCurrentCapacityViaBatteryManager(): Int {
+        try {
+            val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            val currentEnergy = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER)
+            if (currentEnergy != Int.MIN_VALUE && currentEnergy > 0) {
+                // Convert from nWh to mAh (approximate)
+                return (currentEnergy / 3700).coerceAtLeast(500)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "BatteryManager current capacity not available: ${e.message}")
+        }
+        return 0
+    }
+
+    private fun getBatteryCycleCount(): Int {
+        try {
+            val cyclePaths = listOf(
+                "/sys/class/power_supply/battery/cycle_count",
+                "/sys/class/power_supply/bms/cycle_count",
+                "/proc/driver/battery_cycle"
             )
 
-            for (path in possiblePaths) {
+            for (path in cyclePaths) {
                 try {
                     val file = File(path)
                     if (file.exists() && file.canRead()) {
-                        val currentStr = file.readText().trim()
-                        val current = currentStr.toFloatOrNull()
-                        if (current != null && current != 0f) {
-                            Log.d(TAG, "Current from $path: $current µA")
-                            return current
+                        val content = file.readText().trim()
+                        val cycles = content.toIntOrNull()
+                        if (cycles != null && cycles >= 0) {
+                            Log.d(TAG, "Found battery cycles from $path: $cycles")
+                            return cycles
                         }
                     }
                 } catch (e: Exception) {
-                    Log.d(TAG, "Failed to read from $path: ${e.message}")
+                    // Continue to next path
                 }
             }
-
-            // Try using su command as fallback
-            try {
-                val process = Runtime.getRuntime().exec("su -c cat /sys/class/power_supply/battery/current_now")
-                val output = process.inputStream.bufferedReader().readText().trim()
-                process.waitFor()
-                val current = output.toFloatOrNull()
-                if (current != null) {
-                    Log.d(TAG, "Current from su: $current µA")
-                    return current
-                }
-            } catch (e: Exception) {
-                Log.d(TAG, "Failed to read current via su: ${e.message}")
-            }
-
-            Log.w(TAG, "Could not read battery current from any source")
-            return 0f
         } catch (e: Exception) {
-            Log.e(TAG, "Error in getCurrentNow()", e)
-            return 0f
+            Log.w(TAG, "Error getting battery cycle count: ${e.message}")
         }
+        return 0
+    }
+
+    private fun getBatteryCapacity(): Int {
+        try {
+            // Try reading from system files
+            val capacityPaths = listOf(
+                "/sys/class/power_supply/battery/charge_full_design",
+                "/sys/class/power_supply/battery/energy_full_design",
+                "/sys/class/power_supply/bms/charge_full_design"
+            )
+
+            for (path in capacityPaths) {
+                try {
+                    val file = File(path)
+                    if (file.exists() && file.canRead()) {
+                        val content = file.readText().trim()
+                        val cap = content.toLongOrNull()
+                        if (cap != null && cap > 0) {
+                            val capacityMah = when {
+                                cap > 10000000 -> (cap / 1000).toInt() // µAh to mAh
+                                cap > 10000 -> (cap / 1000).toInt() // µAh to mAh
+                                else -> cap.toInt() // Already in mAh
+                            }
+                            Log.d(TAG, "Found design capacity from $path: $capacityMah mAh")
+                            return capacityMah
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Continue to next path
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error getting battery capacity: ${e.message}")
+        }
+        return 0
+    }
+
+    private fun getCurrentCapacity(): Int {
+        try {
+            val capacityPaths = listOf(
+                "/sys/class/power_supply/battery/charge_full",
+                "/sys/class/power_supply/battery/energy_full",
+                "/sys/class/power_supply/bms/charge_full"
+            )
+
+            for (path in capacityPaths) {
+                try {
+                    val file = File(path)
+                    if (file.exists() && file.canRead()) {
+                        val content = file.readText().trim()
+                        val cap = content.toLongOrNull()
+                        if (cap != null && cap > 0) {
+                            val capacityMah = when {
+                                cap > 10000000 -> (cap / 1000).toInt() // µAh to mAh
+                                cap > 10000 -> (cap / 1000).toInt() // µAh to mAh
+                                else -> cap.toInt() // Already in mAh
+                            }
+                            Log.d(TAG, "Found current capacity from $path: $capacityMah mAh")
+                            return capacityMah
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Continue to next path
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error getting current capacity: ${e.message}")
+        }
+        return 0
     }
 
     private fun getSystemStats(): SystemStats {
@@ -320,6 +530,8 @@ class BatteryStatsService : Service() {
         val voltage = batteryIntent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0)?.toFloat()?.div(1000f) ?: 0f
         val status = batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN) ?: BatteryManager.BATTERY_STATUS_UNKNOWN
         val plugged = batteryIntent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+        val health = batteryIntent?.getIntExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_UNKNOWN) ?: BatteryManager.BATTERY_HEALTH_UNKNOWN
+        val technology = batteryIntent?.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: "Unknown"
 
         // Check actual charging state to normalize current sign
         val isActuallyCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || plugged != 0
@@ -350,12 +562,27 @@ class BatteryStatsService : Service() {
             smoothed
         }
 
+        // Get enhanced battery information
+        val chargingStatus = getChargingStatusString(status, plugged)
+        val healthString = getBatteryHealthString(health)
+        val healthPercentage = getBatteryHealthPercentage()
+        val cycleCount = getBatteryCycleCount()
+        val capacity = getBatteryCapacity()
+        val currentCapacity = getCurrentCapacity()
+
         return SystemStats(
             batteryLevel = level,
             chargingCurrent = smoothedCurrent,
             voltage = voltage,
             batteryTemp = getBatteryTemperature(),
             chargingType = getChargingTypeFromPlugged(plugged),
+            chargingStatus = chargingStatus,
+            batteryHealth = healthString,
+            healthPercentage = healthPercentage,
+            cycleCount = cycleCount,
+            batteryCapacity = capacity,
+            currentCapacity = currentCapacity,
+            batteryTechnology = technology,
             drain = calculateDrain(level, isActuallyCharging),
             screenOnTime = getFormattedScreenOnTime(),
             screenOffTime = getFormattedScreenOffTime(),
@@ -444,7 +671,7 @@ class BatteryStatsService : Service() {
         val hours = totalSeconds / 3600
         val minutes = (totalSeconds % 3600) / 60
         val seconds = totalSeconds % 60
-        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+        return String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
     }
 
     private fun getDeepSleepPercentage(): String {
@@ -503,6 +730,13 @@ class BatteryStatsService : Service() {
             voltage = stats.voltage,
             batteryTemp = stats.batteryTemp,
             chargingType = stats.chargingType,
+            chargingStatus = stats.chargingStatus,
+            batteryHealth = stats.batteryHealth,
+            healthPercentage = stats.healthPercentage,
+            cycleCount = stats.cycleCount,
+            batteryCapacity = stats.batteryCapacity,
+            currentCapacity = stats.currentCapacity,
+            batteryTechnology = stats.batteryTechnology,
             drain = stats.drain,
             screenOnTime = stats.screenOnTime,
             screenOffTime = stats.screenOffTime,
@@ -512,6 +746,75 @@ class BatteryStatsService : Service() {
         )
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun getCurrentNow(): Float {
+        try {
+            // Try BatteryManager first (most reliable and doesn't trigger SELinux warnings)
+            val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            val currentFromBatteryManager = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+            if (currentFromBatteryManager != Int.MIN_VALUE) {
+                return currentFromBatteryManager.toFloat()
+            }
+
+            // Only try file system access if we haven't already determined the paths are inaccessible
+            if (!batteryPathsChecked) {
+                val possiblePaths = listOf(
+                    "/sys/class/power_supply/battery/current_now",
+                    "/sys/class/power_supply/battery/current_avg",
+                    "/sys/class/power_supply/bms/current_now",
+                    "/sys/class/power_supply/usb/current_now"
+                )
+
+                for (path in possiblePaths) {
+                    if (checkBatteryPathAccess(path)) {
+                        try {
+                            val file = File(path)
+                            val currentStr = file.readText().trim()
+                            val current = currentStr.toFloatOrNull()
+                            if (current != null && current != 0f) {
+                                return current
+                            }
+                        } catch (e: Exception) {
+                            Log.d(TAG, "Failed to read from $path: ${e.message}")
+                        }
+                    }
+                }
+                batteryPathsChecked = true
+            }
+
+            // Use cached accessible paths only
+            for (path in accessibleBatteryPaths) {
+                if (path.contains("current")) {
+                    try {
+                        val file = File(path)
+                        val currentStr = file.readText().trim()
+                        val current = currentStr.toFloatOrNull()
+                        if (current != null) {
+                            return current
+                        }
+                    } catch (e: Exception) {
+                        // Path might have become inaccessible, remove from cache
+                        accessibleBatteryPaths.remove(path)
+                        inaccessibleBatteryPaths.add(path)
+                    }
+                }
+            }
+
+            return 0f
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in getCurrentNow()", e)
+            return 0f
+        }
+    }
+
+    private fun getChargingTypeFromPlugged(plugged: Int): String {
+        return when (plugged) {
+            BatteryManager.BATTERY_PLUGGED_USB -> "USB"
+            BatteryManager.BATTERY_PLUGGED_AC -> "AC"
+            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless"
+            else -> ""
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -524,18 +827,22 @@ class BatteryStatsService : Service() {
             monitoringJob?.cancel()
             serviceScope.cancel()
 
-            // Mark service as disabled in preferences
-            preferenceManager.setBatteryStatsEnabled(false)
+            // Don't disable the preference here - keep it enabled for auto-start on boot
+            // Only disable if explicitly stopped by user through UI
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up service", e)
         }
         super.onDestroy()
 
-        // Restart the service if it was killed unexpectedly
-        if (preferenceManager.getServiceAutoStart()) {
+        // Restart the service if it was killed unexpectedly and auto-start is enabled
+        if (preferenceManager.getBatteryNotificationAutoStart() && preferenceManager.getBatteryStatsEnabled()) {
             Log.d(TAG, "Attempting to restart BatteryStatsService")
             val restartIntent = Intent(applicationContext, BatteryStatsService::class.java)
-            startForegroundService(restartIntent)
+            try {
+                startForegroundService(restartIntent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to restart service: ${e.message}")
+            }
         }
     }
 
@@ -550,12 +857,39 @@ class BatteryStatsService : Service() {
         }
     }
 
+    private fun updateWidgets() {
+        try {
+            val appWidgetManager = AppWidgetManager.getInstance(this)
+            val componentName = android.content.ComponentName(this, id.xms.xtrakernelmanager.widget.BatteryNotificationWidget::class.java)
+            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
+
+            if (appWidgetIds.isNotEmpty()) {
+                Log.d(TAG, "Updating ${appWidgetIds.size} widgets")
+                // Send broadcast to update widgets
+                val updateIntent = Intent(this, id.xms.xtrakernelmanager.widget.BatteryNotificationWidget::class.java).apply {
+                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds)
+                }
+                sendBroadcast(updateIntent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating widgets", e)
+        }
+    }
+
     data class SystemStats(
         val batteryLevel: Int,
         val chargingCurrent: Float,
         val voltage: Float,
         val batteryTemp: Float,
         val chargingType: String,
+        val chargingStatus: String = "Unknown",
+        val batteryHealth: String = "Unknown",
+        val healthPercentage: Int = 0,
+        val cycleCount: Int = 0,
+        val batteryCapacity: Int = 0,
+        val currentCapacity: Int = 0,
+        val batteryTechnology: String = "Unknown",
         val drain: String,
         val screenOnTime: String,
         val screenOffTime: String,
