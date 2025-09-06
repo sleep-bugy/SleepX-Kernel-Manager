@@ -15,17 +15,30 @@ class PreferenceManager @Inject constructor(
 
     companion object {
         private const val KEY_BATTERY_STATS_ENABLED = "battery_stats_enabled"
+        private const val KEY_BATTERY_NOTIFICATION_AUTO_START = "battery_notification_auto_start"
         private const val KEY_SERVICE_AUTO_START = "service_auto_start"
+        private const val KEY_TARGET_GAME_PACKAGES = "target_game_packages"
     }
 
     fun setBatteryStatsEnabled(enabled: Boolean) {
         sharedPreferences.edit()
             .putBoolean(KEY_BATTERY_STATS_ENABLED, enabled)
+            .putBoolean(KEY_BATTERY_NOTIFICATION_AUTO_START, enabled) // Enable auto-start when battery stats is enabled
             .apply()
     }
 
     fun getBatteryStatsEnabled(): Boolean {
         return sharedPreferences.getBoolean(KEY_BATTERY_STATS_ENABLED, false)
+    }
+
+    fun setBatteryNotificationAutoStart(enabled: Boolean) {
+        sharedPreferences.edit()
+            .putBoolean(KEY_BATTERY_NOTIFICATION_AUTO_START, enabled)
+            .apply()
+    }
+
+    fun getBatteryNotificationAutoStart(): Boolean {
+        return sharedPreferences.getBoolean(KEY_BATTERY_NOTIFICATION_AUTO_START, true) // Default to true for auto-start
     }
 
     fun setServiceAutoStart(enabled: Boolean) {
@@ -36,5 +49,15 @@ class PreferenceManager @Inject constructor(
 
     fun getServiceAutoStart(): Boolean {
         return sharedPreferences.getBoolean(KEY_SERVICE_AUTO_START, true)
+    }
+
+    fun setTargetGamePackages(packages: Set<String>) {
+        sharedPreferences.edit()
+            .putStringSet(KEY_TARGET_GAME_PACKAGES, packages)
+            .apply()
+    }
+
+    fun getTargetGamePackages(): Set<String> {
+        return sharedPreferences.getStringSet(KEY_TARGET_GAME_PACKAGES, emptySet()) ?: emptySet()
     }
 }
