@@ -5,13 +5,15 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.Image
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,7 +39,6 @@ val developers = listOf(
     Developer("Ziyu", "Tuning Supports", "Ziyu", R.drawable.ziyu)
 )
 
-
 @Composable
 fun AboutCard(
     blur: Boolean,
@@ -46,51 +47,117 @@ fun AboutCard(
     telegramLink: String = stringResource(R.string.telegram_link),
 ) {
     var showCreditsDialog by remember { mutableStateOf(false) }
-    GlassCard(blur, modifier) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                horizontalAlignment = Alignment.Start
+
+    SuperGlassCard(
+        modifier = modifier,
+        glassIntensity = GlassIntensity.Medium
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Header Section
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    stringResource(id = R.string.about),
-                    style = MaterialTheme.typography.titleLarge
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
                 )
-                Text(stringResource(id = R.string.desc_about))
+                Text(
+                    text = stringResource(id = R.string.about),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // Description
+            Text(
+                text = stringResource(id = R.string.desc_about),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
+            )
+
+            // Action Section
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Social Links Row
                 val uriHandler = LocalUriHandler.current
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(onClick = { uriHandler.openUri(telegramLink) }) {
-                        Icon(
-                            painterResource(id = R.drawable.telegram),
-                            stringResource(id = R.string.telegram)
-                        )
-                    }
-                    IconButton(onClick = { uriHandler.openUri(githubLink) }) {
-                        Icon(
-                            painterResource(id = R.drawable.github),
-                            stringResource(id = R.string.github)
-                        )
-                    }
-                }
-                Badge(
-                    modifier = Modifier
-                        .clickable { showCreditsDialog = true }
-                        .align(Alignment.Start)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        stringResource(id = R.string.credits).uppercase(),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall
+                        text = "Follow us:",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
                     )
+
+                    // Telegram Button
+                    FilledTonalIconButton(
+                        onClick = { uriHandler.openUri(telegramLink) },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.telegram),
+                            contentDescription = stringResource(id = R.string.telegram),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // GitHub Button
+                    FilledTonalIconButton(
+                        onClick = { uriHandler.openUri(githubLink) },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.github),
+                            contentDescription = stringResource(id = R.string.github),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
 
+                // Credits Badge
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+
+                    AssistChip(
+                        onClick = { showCreditsDialog = true },
+                        label = {
+                            Text(
+                                text = stringResource(id = R.string.credits),
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    )
+                }
             }
         }
     }
+
     if (showCreditsDialog) {
         AnimatedVisibility(
             visible = showCreditsDialog,
@@ -98,7 +165,19 @@ fun AboutCard(
         ) {
             AlertDialog(
                 onDismissRequest = { showCreditsDialog = false },
-                title = { Text(stringResource(id = R.string.credits)) },
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(stringResource(id = R.string.credits))
+                    }
+                },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         developers.forEach { developer ->
@@ -107,7 +186,7 @@ fun AboutCard(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showCreditsDialog = false }) {
+                    FilledTonalButton(onClick = { showCreditsDialog = false }) {
                         Text(stringResource(android.R.string.ok))
                     }
                 }
@@ -120,30 +199,49 @@ fun AboutCard(
 fun DeveloperCreditItem(developer: Developer) {
     val uriHandler = LocalUriHandler.current
     val githubProfileUrl = "https://github.com/${developer.githubUsername}"
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Image(
-            painter = painterResource(id = developer.drawableResId),
-            contentDescription = "${developer.name}'s profile picture",
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .clickable { uriHandler.openUri(githubProfileUrl) }
-        )
 
-        Column {
-            Text(text = developer.name, style = MaterialTheme.typography.titleMedium)
-            Text(text = developer.role, style = MaterialTheme.typography.bodySmall)
-            Text(
-                text = "@${developer.githubUsername}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { uriHandler.openUri(githubProfileUrl) }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { uriHandler.openUri(githubProfileUrl) },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Image(
+                painter = painterResource(id = developer.drawableResId),
+                contentDescription = "${developer.name}'s profile picture",
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
             )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = developer.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = developer.role,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "@${developer.githubUsername}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
-
