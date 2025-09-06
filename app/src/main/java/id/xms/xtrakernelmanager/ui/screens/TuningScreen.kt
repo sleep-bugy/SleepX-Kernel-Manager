@@ -9,12 +9,15 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -22,16 +25,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import id.xms.xtrakernelmanager.ui.components.CpuGovernorCard
-import id.xms.xtrakernelmanager.ui.components.GpuControlCard
-import id.xms.xtrakernelmanager.ui.components.SwappinessCard
-import id.xms.xtrakernelmanager.ui.components.ThermalCard
+import id.xms.xtrakernelmanager.ui.components.*
 import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,6 +53,12 @@ data class FeatureText(
 
 // Daftar fitur dengan terjemahannya
 val tuningFeatures = listOf(
+    FeatureText(
+        titleId = "Mode Performa",
+        titleEn = "Performance Mode",
+        descriptionId = "Menyediakan preset konfigurasi untuk mengoptimalkan sistem berdasarkan kebutuhan: Battery Saver (powersave governor), Balanced (schedutil governor), dan Performance (performance governor).",
+        descriptionEn = "Provides configuration presets to optimize the system based on needs: Battery Saver (powersave governor), Balanced (schedutil governor), and Performance (performance governor)."
+    ),
     FeatureText(
         titleId = "CPU Governor",
         titleEn = "CPU Governor",
@@ -108,6 +115,7 @@ fun TuningScreen(viewModel: TuningViewModel = hiltViewModel()) {
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            PerformanceModeCard(viewModel = viewModel, blur = true)
             CpuGovernorCard(vm = viewModel, blur = true)
             GpuControlCard(tuningViewModel = viewModel, blur = true)
             ThermalCard(viewModel = viewModel, blur = true)
@@ -315,5 +323,207 @@ fun FeatureDescription(title: String, description: String) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+fun PerformanceModeCard(
+    viewModel: TuningViewModel,
+    blur: Boolean = true
+) {
+    var performanceMode by remember { mutableStateOf("Balanced") }
+
+    // Governor mappings as specified
+    val governorMappings = mapOf(
+        "Battery Saver" to "powersave",
+        "Balanced" to "schedutil",
+        "Performance" to "performance"
+    )
+
+    // Custom color themes for each mode
+    val batteryYellow = Color(0xFFFFA726) // Orange-yellow for battery saver
+    val balancedGreen = Color(0xFF66BB6A) // Green for balanced
+    val performanceRed = Color(0xFFEF5350) // Red for performance
+
+    SuperGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        glassIntensity = if (blur) GlassIntensity.Light else GlassIntensity.Light
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Speed,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Performance Mode",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Text(
+                text = "Quick presets to optimize system performance and power consumption",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                listOf("Battery Saver", "Balanced", "Performance").forEach { mode ->
+                    SuperGlassCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                performanceMode = mode
+                                // Apply the corresponding governor to all CPU clusters
+                                val governor = governorMappings[mode] ?: "schedutil"
+                                viewModel.cpuClusters.forEach { cluster ->
+                                    viewModel.setCpuGov(cluster, governor)
+                                }
+                            },
+                        glassIntensity = GlassIntensity.Light // Keep consistent light intensity to avoid blur obstruction
+                    ) {
+                        // Add colored background for theming
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    color = when (mode) {
+                                        "Battery Saver" -> if (performanceMode == mode) batteryYellow.copy(alpha = 0.15f) else batteryYellow.copy(alpha = 0.05f)
+                                        "Balanced" -> if (performanceMode == mode) balancedGreen.copy(alpha = 0.15f) else balancedGreen.copy(alpha = 0.05f)
+                                        "Performance" -> if (performanceMode == mode) performanceRed.copy(alpha = 0.15f) else performanceRed.copy(alpha = 0.05f)
+                                        else -> Color.Transparent
+                                    },
+                                    shape = RoundedCornerShape(28.dp)
+                                )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = when (mode) {
+                                        "Battery Saver" -> Icons.Default.BatteryStd
+                                        "Balanced" -> Icons.Default.Balance
+                                        "Performance" -> Icons.Default.FlashOn
+                                        else -> Icons.Default.Speed
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = when (mode) {
+                                        "Battery Saver" -> if (performanceMode == mode) batteryYellow else MaterialTheme.colorScheme.onSurfaceVariant
+                                        "Balanced" -> if (performanceMode == mode) balancedGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                        "Performance" -> if (performanceMode == mode) performanceRed else MaterialTheme.colorScheme.onSurfaceVariant
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = mode,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = if (performanceMode == mode) FontWeight.Bold else FontWeight.Medium,
+                                        color = when (mode) {
+                                            "Battery Saver" -> if (performanceMode == mode) batteryYellow else MaterialTheme.colorScheme.onSurface
+                                            "Balanced" -> if (performanceMode == mode) balancedGreen else MaterialTheme.colorScheme.onSurface
+                                            "Performance" -> if (performanceMode == mode) performanceRed else MaterialTheme.colorScheme.onSurface
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                    Text(
+                                        text = when (mode) {
+                                            "Battery Saver" -> "Powersave governor for maximum battery life"
+                                            "Balanced" -> "Schedutil governor for balanced performance"
+                                            "Performance" -> "Performance governor for maximum speed"
+                                            else -> "Default governor"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                // Checkmark for selected mode
+                                if (performanceMode == mode) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Selected",
+                                        modifier = Modifier.size(20.dp),
+                                        tint = when (mode) {
+                                            "Battery Saver" -> batteryYellow
+                                            "Balanced" -> balancedGreen
+                                            "Performance" -> performanceRed
+                                            else -> MaterialTheme.colorScheme.primary
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (performanceMode != "Balanced") {
+                SuperGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    glassIntensity = GlassIntensity.Light
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = when (performanceMode) {
+                                    "Battery Saver" -> batteryYellow.copy(alpha = 0.1f)
+                                    "Performance" -> performanceRed.copy(alpha = 0.1f)
+                                    else -> Color.Transparent
+                                },
+                                shape = RoundedCornerShape(28.dp)
+                            )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = when (performanceMode) {
+                                    "Battery Saver" -> "🔋 Battery Saver Active"
+                                    "Performance" -> "⚡ Performance Mode Active"
+                                    else -> "Mode Active"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = when (performanceMode) {
+                                    "Battery Saver" -> batteryYellow
+                                    "Performance" -> performanceRed
+                                    else -> MaterialTheme.colorScheme.onPrimaryContainer
+                                }
+                            )
+                            Text(
+                                text = when (performanceMode) {
+                                    "Battery Saver" -> "Using powersave governor for maximum battery life"
+                                    "Performance" -> "Using performance governor for maximum speed"
+                                    else -> "Using default governor"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
