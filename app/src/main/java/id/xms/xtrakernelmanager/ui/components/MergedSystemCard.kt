@@ -448,7 +448,7 @@ private fun SystemStatsSection(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Battery Stats Row
+                // Battery Stats Row 1 - Temperature and Voltage
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -482,6 +482,69 @@ private fun SystemStatsSection(
                             "${formattedVoltage}V"
                         },
                         color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // Battery Stats Row 2 - Health and Cycles
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Battery Health
+                    SystemStatItem(
+                        icon = Icons.Default.HealthAndSafety,
+                        label = "Health",
+                        value = if (batteryInfo.healthPercentage > 0) "${batteryInfo.healthPercentage}%" else batteryInfo.health,
+                        color = when {
+                            batteryInfo.healthPercentage >= 80 -> Color(0xFF4CAF50)
+                            batteryInfo.healthPercentage >= 60 -> Color(0xFFFF9800)
+                            batteryInfo.healthPercentage > 0 -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    // Battery Cycles
+                    SystemStatItem(
+                        icon = Icons.Default.Autorenew,
+                        label = "Cycles",
+                        value = if (batteryInfo.cycleCount > 0) "${batteryInfo.cycleCount}" else "N/A",
+                        color = when {
+                            batteryInfo.cycleCount <= 300 -> Color(0xFF4CAF50)
+                            batteryInfo.cycleCount <= 500 -> Color(0xFFFF9800)
+                            batteryInfo.cycleCount > 500 -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // Battery Stats Row 3 - Capacity
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Design Capacity
+                    SystemStatItem(
+                        icon = Icons.Default.BatterySaver,
+                        label = "Capacity",
+                        value = if (batteryInfo.capacity > 0) "${batteryInfo.capacity}mAh" else "N/A",
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    // Current Capacity
+                    SystemStatItem(
+                        icon = Icons.Default.Battery6Bar,
+                        label = "Current Cap",
+                        value = if (batteryInfo.currentCapacity > 0) "${batteryInfo.currentCapacity}mAh" else "N/A",
+                        color = when {
+                            batteryInfo.currentCapacity >= (batteryInfo.capacity * 0.8f) -> Color(0xFF4CAF50)
+                            batteryInfo.currentCapacity >= (batteryInfo.capacity * 0.6f) -> Color(0xFFFF9800)
+                            batteryInfo.currentCapacity > 0 -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }
