@@ -1,6 +1,5 @@
 package id.xms.xtrakernelmanager.ui.components
 
-import android.util.Log // Tambahkan import Log jika belum ada
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -8,11 +7,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,556 +15,469 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VideogameAsset
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
-import kotlinx.coroutines.delay
-import kotlin.math.roundToInt
+import id.xms.xtrakernelmanager.ui.icons.OpenGLESIcon
+import kotlinx.coroutines.launch
+
+// Import SuperGlassCard dan GlassIntensity
+// (Pastikan import sesuai dengan lokasi file ExpressiveBackground.kt)
 
 @Composable
 fun GpuControlCard(
-    modifier: Modifier = Modifier,
     tuningViewModel: TuningViewModel = hiltViewModel(),
-    blur: Boolean
+    blur: Boolean = false
 ) {
-    val availableGpuGovernors by tuningViewModel.availableGpuGovernors.collectAsState()
-    val currentGpuGovernor by tuningViewModel.currentGpuGovernor.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
-    // Mengasumsikan StateFlow dari ViewModel ini memberikan nilai dalam kHz
-    val availableGpuFrequenciesFromVM by tuningViewModel.availableGpuFrequencies.collectAsState()
-    Log.d("GpuControlCard", "RAW availableGpuFrequencies FROM VM (LIKELY ALREADY MHz): $availableGpuFrequenciesFromVM")
+    // State variables
+    var isExpanded by remember { mutableStateOf(false) }
+    var showGovernorDialog by remember { mutableStateOf(false) }
+    var showRendererDialog by remember { mutableStateOf(false) }
 
-    val currentMinGpuFreqMHz by tuningViewModel.currentGpuMinFreq.collectAsState()
-    Log.d("GpuControlCard", "currentMinGpuFreqMHz from VM: $currentMinGpuFreqMHz")
-    val currentMaxGpuFreqMHz by tuningViewModel.currentGpuMaxFreq.collectAsState()
-    Log.d("GpuControlCard", "currentMaxGpuFreqMHz from VM: $currentMaxGpuFreqMHz")
+    // Collect GPU states from ViewModel
+    val gpuGovernor by tuningViewModel.currentGpuGovernor.collectAsState()
+    val availableGovernors by tuningViewModel.availableGpuGovernors.collectAsState()
+    val gpuMinFreq by tuningViewModel.currentGpuMinFreq.collectAsState()
+    val gpuMaxFreq by tuningViewModel.currentGpuMaxFreq.collectAsState()
+    val availableGpuFrequencies by tuningViewModel.availableGpuFrequencies.collectAsState()
+    val openGlesDriver by tuningViewModel.currentOpenGlesDriver.collectAsState()
+    val vulkanVersion by tuningViewModel.vulkanApiVersion.collectAsState()
+    val currentRenderer by tuningViewModel.currentGpuRenderer.collectAsState()
+    val availableRenderers = tuningViewModel.availableGpuRenderers
 
-    // Log untuk debugging nilai yang diterima dari ViewModel
-    Log.d("GpuControlCard", "currentMinGpuFreqMHz from VM: $currentMinGpuFreqMHz")
-    Log.d("GpuControlCard", "currentMaxGpuFreqMHz from VM: $currentMaxGpuFreqMHz")
+    // Calculate frequency ranges for sliders
+    val minFreqRange = availableGpuFrequencies.minOrNull()?.toFloat() ?: 0f
+    val maxFreqRange = availableGpuFrequencies.maxOrNull()?.toFloat() ?: 1000f
 
+    // Local state for slider values
+    var sliderMinFreq by remember { mutableStateOf(gpuMinFreq.toFloat()) }
+    var sliderMaxFreq by remember { mutableStateOf(gpuMaxFreq.toFloat()) }
 
-    val gpuPowerLevelRange by tuningViewModel.gpuPowerLevelRange.collectAsState()
-    val currentGpuPowerLevelValue by tuningViewModel.currentGpuPowerLevel.collectAsState()
-    val openGlesDriverState by tuningViewModel.currentOpenGlesDriver.collectAsState()
-    val currentGpuRenderer by tuningViewModel.currentGpuRenderer.collectAsState()
-    val availableGpuRenderers = remember {
-        listOf("Default", "OpenGL", "Vulkan", "ANGLE", "OpenGL (SKIA)", "Vulkan (SKIA)")
+    // Update slider values when GPU frequencies change
+    LaunchedEffect(gpuMinFreq, gpuMaxFreq) {
+        sliderMinFreq = gpuMinFreq.toFloat()
+        sliderMaxFreq = gpuMaxFreq.toFloat()
     }
 
-    val showRebootDialog by tuningViewModel.showRebootConfirmationDialog.collectAsState()
+    // Load GPU data when component is first composed
+    LaunchedEffect(Unit) {
+        tuningViewModel.fetchGpuData()
+        tuningViewModel.fetchOpenGlesDriver()
+        tuningViewModel.fetchVulkanApiVersion()
+        tuningViewModel.fetchCurrentGpuRenderer()
+    }
 
-    var selectedGpuGovernorState by remember(currentGpuGovernor) { mutableStateOf(currentGpuGovernor) }
-    var showMinFreqDialog by remember { mutableStateOf(false) }
-    var showMaxFreqDialog by remember { mutableStateOf(false) }
-    var sliderPosition by remember(currentGpuPowerLevelValue) { mutableFloatStateOf(currentGpuPowerLevelValue) }
-    var isExpanded by remember { mutableStateOf(false) }
-
+    // Animation values
     val rotationAngle by animateFloatAsState(
-        targetValue = if (isExpanded) 0f else -180f,
+        targetValue = if (isExpanded) 180f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
         ),
-        label = "DropdownRotation"
+        label = "arrow_rotation"
     )
 
-    LaunchedEffect(currentGpuGovernor) {
-        if (currentGpuGovernor.isNotBlank() && currentGpuGovernor != "..." && currentGpuGovernor != "Error") {
-            selectedGpuGovernorState = currentGpuGovernor
-        }
-    }
-
-
-    val availableGpuFrequenciesMHz = remember(availableGpuFrequenciesFromVM) {
-        Log.d("GpuControlCard", "Processing availableGpuFrequenciesFromVM: $availableGpuFrequenciesFromVM")
-        availableGpuFrequenciesFromVM
-            .filter { it > 0 }
-            .distinct()
-            .sorted()
-    }
-    Log.d("GpuControlCard", "FINAL availableGpuFrequenciesMHz for UI: $availableGpuFrequenciesMHz")
-
-
-    GlassCard(blur) {
-        Column(
-            Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.medium)
-                    .clickable { isExpanded = !isExpanded }
-                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "GPU Control",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    textAlign = TextAlign.Start
-                )
-                Icon(
-                    imageVector = if (isExpanded) Icons.Filled.ArrowDropUp else Icons.Filled.ArrowDropDown,
-                    contentDescription = if (isExpanded) "Collapse GPU Control" else "Expand GPU Control",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = slideInVertically(initialOffsetY = { -it / 2 }, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)) + expandVertically(expandFrom = Alignment.Top, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMedium)) + scaleIn(transformOrigin = TransformOrigin(0.5f, 0f), animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)),
-                exit = slideOutVertically(targetOffsetY = { -it / 2 }, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)) + shrinkVertically(shrinkTowards = Alignment.Top, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium)) + scaleOut(transformOrigin = TransformOrigin(0.5f, 0f), animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium))
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    SectionTitle(text = "Graphics Driver Information")
-                    val openGlEsVersion by tuningViewModel.currentOpenGlesDriver.collectAsState()
-                    InfoRow(label = "OpenGL ES Version", value = openGlEsVersion.ifBlank { "N/A" })
-                    InfoRow(label = "Vulkan API Version", value = "1.1")
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    GpuRendererControl(
-                        currentRenderer = currentGpuRenderer,
-                        availableRenderers = availableGpuRenderers,
-                        onRendererSelected = { selectedRenderer ->
-                            if (selectedRenderer != currentGpuRenderer) {
-                                tuningViewModel.userSelectedGpuRenderer(selectedRenderer)
-                            }
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    GpuGovernorControl(
-                        availableGovernors = availableGpuGovernors,
-                        currentGovernor = selectedGpuGovernorState,
-                        onGovernorSelected = { newGov ->
-                            selectedGpuGovernorState = newGov
-                            tuningViewModel.setGpuGovernor(newGov)
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    SectionTitle(text = "Frequency Control")
-                    GpuFrequencyControl(
-                        label = "Min Frequency",
-                        currentFrequencyMHz = currentMinGpuFreqMHz,
-                        availableFrequenciesMHz = availableGpuFrequenciesMHz,
-                        onFrequencySelectedMHz = { freqMHz ->
-                            tuningViewModel.setGpuMinFrequency(freqMHz)
-                        },
-                        showDialog = showMinFreqDialog,
-                        onShowDialogChange = { showMinFreqDialog = it }
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    GpuFrequencyControl(
-                        label = "Max Frequency",
-                        currentFrequencyMHz = currentMaxGpuFreqMHz,
-                        availableFrequenciesMHz = availableGpuFrequenciesMHz.filter { it >= currentMinGpuFreqMHz.coerceAtLeast(0) },
-                        onFrequencySelectedMHz = { freqMHz ->
-                            tuningViewModel.setGpuMaxFrequency(freqMHz)
-                        },
-                        showDialog = showMaxFreqDialog,
-                        onShowDialogChange = { showMaxFreqDialog = it }
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    if (gpuPowerLevelRange.first < gpuPowerLevelRange.second && (gpuPowerLevelRange.second - gpuPowerLevelRange.first > 0)) {
-                        SectionTitle(text = "Power Management")
-                        GpuPowerLevelSlider(
-                            label = "Power Level",
-                            sliderValue = sliderPosition,
-                            valueRange = gpuPowerLevelRange,
-                            steps = (gpuPowerLevelRange.second - gpuPowerLevelRange.first).toInt().coerceAtLeast(1) - 1,
-                            onValueChange = { newValue ->
-                                sliderPosition = newValue
-                            },
-                            onValueChangeFinished = {
-                                tuningViewModel.setGpuPowerLevel(sliderPosition)
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    if (showRebootDialog) {
-        RebootConfirmationDialog(
-            onDismiss = { tuningViewModel.cancelRebootConfirmation() },
-            onConfirm = { tuningViewModel.confirmAndRebootDevice() }
-        )
-    }
-}
-
-
-@Composable
-private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium),
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier
-            .padding(vertical = 8.dp)
-            .fillMaxWidth()
-    )
-}
-
-
-@Composable
-private fun InfoRow(label: String, value: String, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)),
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1.5f)
-        )
-    }
-}
-
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun GpuRendererControl(
-    currentRenderer: String,
-    availableRenderers: List<String>,
-    onRendererSelected: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    var isProcessing by remember { mutableStateOf(false) }
-    var processingStarted by remember { mutableStateOf(false) }
-
-    // Handle processing state reset
-    LaunchedEffect(processingStarted) {
-        if (processingStarted) {
-            delay(2000)
-            isProcessing = false
-            processingStarted = false
-        }
-    }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    SuperGlassCard(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp)
+            .fillMaxWidth(),
+        glassIntensity = GlassIntensity.Light
     ) {
-        Text(
-            text = "GPU Renderer",
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-            modifier = Modifier.weight(1f)
-        )
-        ExposedDropdownMenuBox(
-            expanded = expanded && !isProcessing,
-            onExpandedChange = { if (!isProcessing) expanded = !expanded },
-            modifier = Modifier.weight(1.5f)
-        ) {
-            OutlinedTextField(
-                value = when {
-                    isProcessing -> "Applying..."
-                    currentRenderer.isBlank() || currentRenderer == "..." || currentRenderer == "Error" -> "Loading..."
-                    else -> currentRenderer
-                },
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Select Renderer") },
-                trailingIcon = {
-                    if (isProcessing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    } else {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                    }
-                },
-                modifier = Modifier
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                    .fillMaxWidth(),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    color = if (isProcessing) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                           else MaterialTheme.colorScheme.primary
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                    disabledBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                ),
-                enabled = !isProcessing
-            )
-            ExposedDropdownMenu(
-                expanded = expanded && !isProcessing,
-                onDismissRequest = { expanded = false }
-            ) {
-                if (availableRenderers.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("No renderers available") },
-                        onClick = { expanded = false },
-                        enabled = false
-                    )
-                } else {
-                    availableRenderers.forEach { rendererItem ->
-                        DropdownMenuItem(
-                            text = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = rendererItem,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    if (rendererItem == currentRenderer && !isProcessing) {
-                                        Icon(
-                                            Icons.Filled.Check,
-                                            contentDescription = "Current",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                            },
-                            onClick = {
-                                if (rendererItem != currentRenderer) {
-                                    isProcessing = true
-                                    processingStarted = true
-                                    onRendererSelected(rendererItem)
-                                }
-                                expanded = false
-                            },
-                            enabled = !isProcessing
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // Add renderer description
-    if (currentRenderer.isNotBlank() && currentRenderer != "Loading..." && currentRenderer != "...") {
-        Text(
-            text = getRendererDescription(currentRenderer),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // Header Section
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 4.dp, start = 8.dp, end = 8.dp)
-        )
-    }
-}
-
-@Composable
-private fun getRendererDescription(renderer: String): String {
-    return when (renderer) {
-        "Default" -> "Uses system default renderer (typically OpenGL)"
-        "OpenGL" -> "Traditional OpenGL renderer for compatibility"
-        "Vulkan" -> "Modern Vulkan renderer for better performance"
-        "OpenGL (SKIA)" -> "OpenGL with Skia graphics library"
-        "Vulkan (SKIA)" -> "Vulkan with Skia graphics library (best performance)"
-        "ANGLE" -> "ANGLE OpenGL ES implementation"
-        else -> "Custom GPU renderer configuration"
-    }
-}
-
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun GpuGovernorControl(
-    availableGovernors: List<String>,
-    currentGovernor: String,
-    onGovernorSelected: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            text = "Governor",
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-            modifier = Modifier.weight(1f)
-        )
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded },
-            modifier = Modifier.weight(1.5f)
+                .clickable { isExpanded = !isExpanded }
+                .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
-                value = if (currentGovernor.isBlank() || currentGovernor == "..." || currentGovernor == "Error") "Loading..." else currentGovernor,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Select Governor") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth(),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.primary),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                )
-            )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (availableGovernors.isEmpty()) {
-                    val displayText = when {
-                        currentGovernor == "..." && availableGovernors.isEmpty() -> "Loading..."
-                        currentGovernor == "Error" -> "Error"
-                        currentGovernor.isNotBlank() && availableGovernors.isEmpty() && currentGovernor != "..." -> currentGovernor
-                        else -> "N/A"
-                    }
-                    DropdownMenuItem(
-                        text = { Text(displayText) },
-                        onClick = { expanded = false },
-                        enabled = false
+                Icon(
+                    imageVector = Icons.Default.Memory,
+                    contentDescription = "GPU Icon",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+
+                Column {
+                    Text(
+                        text = "GPU Control",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                } else {
-                    availableGovernors.forEach { governor ->
-                        DropdownMenuItem(
-                            text = { Text(governor, style = MaterialTheme.typography.bodyLarge) },
-                            onClick = {
-                                onGovernorSelected(governor)
-                                expanded = false
-                            }
+                    Text(
+                        text = "Graphics Processing Unit",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                modifier = Modifier
+                    .size(24.dp)
+                    .rotate(rotationAngle),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        // Quick Info Section - Layout with OpenGL ES centered in its own row
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // First row - Governor dan Frequency
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                GPUInfoChip(
+                    icon = Icons.Default.Settings,
+                    label = "Governor",
+                    value = when {
+                        gpuGovernor.isBlank() || gpuGovernor == "..." -> "Loading..."
+                        gpuGovernor.contains("N/A", ignoreCase = true) -> "N/A"
+                        else -> gpuGovernor
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+
+                GPUInfoChip(
+                    icon = Icons.Default.Speed,
+                    label = "Frequency",
+                    value = when {
+                        gpuMinFreq <= 0 && gpuMaxFreq <= 0 -> "N/A"
+                        gpuMinFreq > 0 && gpuMaxFreq > 0 -> "$gpuMinFreq-$gpuMaxFreq MHz"
+                        else -> "Loading..."
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Second row - OpenGL ES Card (wider and taller to show full driver version)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                GPUInfoChip(
+                    icon = OpenGLESIcon,
+                    label = "OpenGL ES",
+                    value = when {
+                        openGlesDriver.isBlank() || openGlesDriver == "Loading..." -> "Loading..."
+                        openGlesDriver.contains("N/A", ignoreCase = true) -> "N/A"
+                        openGlesDriver.contains("Not supported", ignoreCase = true) -> "N/A"
+                        else -> openGlesDriver.take(135) + if (openGlesDriver.length > 135) "..." else ""
+                    },
+                    modifier = Modifier.fillMaxWidth(1f), // Perlebar card menjadi 100% lebar layar
+                    isWider = true // Parameter untuk membuat card lebih tinggi
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                GPUInfoChip(
+                    icon = Icons.Filled.VideogameAsset,
+                    label = "Vulkan",
+                    value = when {
+                        vulkanVersion.isBlank() || vulkanVersion == "Loading..." -> "Loading..."
+                        vulkanVersion.contains("Available", ignoreCase = true) -> "Available"
+                        vulkanVersion.contains("Not supported", ignoreCase = true) -> "Available"
+                        vulkanVersion.contains("0.0", ignoreCase = true) -> "N/A"
+                        else -> "Yes"
+                    },
+                    modifier = Modifier.weight(1f),
+                    isWider = false
+                )
+
+                GPUInfoChip(
+                    icon = Icons.Default.Visibility,
+                    label = "GPU Renderer",
+                    value = when {
+                        currentRenderer.isBlank() || currentRenderer == "Loading..." -> "Loading..."
+                        currentRenderer.contains("N/A", ignoreCase = true) -> "N/A"
+                        currentRenderer.contains("Default", ignoreCase = true) -> "Default"
+                        else -> currentRenderer.take(12) + if (currentRenderer.length > 12) "..." else ""
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Expanded Content
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // GPU Governor Control
+                GPUControlSection(
+                    title = "GPU Governor",
+                    description = "Controls GPU frequency scaling behavior",
+                    icon = Icons.Default.Tune
+                ) {
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showGovernorDialog = true },
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                         )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Current Governor",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    text = gpuGovernor.takeIf { it != "..." && it.isNotBlank() } ?: "Unknown",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Change Governor",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // GPU Frequency Control
+                GPUControlSection(
+                    title = "GPU Frequency",
+                    description = "Minimum and maximum GPU frequencies",
+                    icon = Icons.Default.Speed
+                ) {
+                    // Sliders for GPU frequency control
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Min Frequency Slider
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Min Frequency: ${sliderMinFreq.toInt()} MHz",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Slider(
+                                value = sliderMinFreq,
+                                onValueChange = { newValue ->
+                                    sliderMinFreq = newValue
+                                    // Update ViewModel with new min frequency
+                                    coroutineScope.launch {
+                                        tuningViewModel.setGpuMinFrequency(newValue.toInt())
+                                    }
+                                },
+                                valueRange = minFreqRange..maxFreqRange,
+                                steps = ((maxFreqRange - minFreqRange) / 10).toInt(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        // Max Frequency Slider
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Max Frequency: ${sliderMaxFreq.toInt()} MHz",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Slider(
+                                value = sliderMaxFreq,
+                                onValueChange = { newValue ->
+                                    sliderMaxFreq = newValue
+                                    // Update ViewModel with new max frequency
+                                    coroutineScope.launch {
+                                        tuningViewModel.setGpuMaxFrequency(newValue.toInt())
+                                    }
+                                },
+                                valueRange = minFreqRange..maxFreqRange,
+                                steps = ((maxFreqRange - minFreqRange) / 10).toInt(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.error,
+                                    activeTrackColor = MaterialTheme.colorScheme.error,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // GPU Renderer Control
+                GPUControlSection(
+                    title = "GPU Renderer",
+                    description = "Select graphics rendering backend",
+                    icon = Icons.Default.Visibility
+                ) {
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showRendererDialog = true },
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Current Renderer",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    text = currentRenderer.takeIf { it != "Loading..." && it.isNotBlank() } ?: "Default",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Change Renderer",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
         }
     }
-}
 
-@Composable
-private fun GpuFrequencyControl(
-    label: String,
-    currentFrequencyMHz: Int, // Diperbarui untuk menerima MHz
-    availableFrequenciesMHz: List<Int>, // Diperbarui untuk menerima daftar MHz
-    onFrequencySelectedMHz: (Int) -> Unit, // Callback sekarang dengan MHz
-    showDialog: Boolean,
-    onShowDialogChange: (Boolean) -> Unit
-) {
-    // Fungsi format sekarang langsung menggunakan nilai MHz
-    fun formatMHzToString(freqMHz: Int, isCurrentValue: Boolean = false): String {
-        // Untuk nilai saat ini yang ditampilkan di Row, jika 0 atau negatif, dan bukan dari daftar pilihan, tampilkan "N/A"
-        if (isCurrentValue && freqMHz <= 0 && !availableFrequenciesMHz.contains(freqMHz)) return "N/A"
-        // Untuk item dalam dialog, jika 0 atau negatif (seharusnya tidak terjadi jika daftar difilter),
-        // atau untuk nilai saat ini yang valid tapi 0 (mis. belum dimuat), tampilkan "N/A" atau sesuai logika.
-        if (freqMHz <= 0) return "N/A" // Atau "Loading..." jika freqMHz adalah nilai awal default
-        return "$freqMHz MHz"
-    }
-
-    // tempSelected sekarang juga dalam MHz
-    var tempSelectedMHz by remember(currentFrequencyMHz, showDialog) { mutableIntStateOf(currentFrequencyMHz) }
-
-    Log.d("GpuFrequencyControl", "Label: $label, currentFrequencyMHz: $currentFrequencyMHz, availableFrequenciesMHz: $availableFrequenciesMHz, showDialog: $showDialog")
-
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onShowDialogChange(true) }
-            .padding(vertical = 8.dp)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-            modifier = Modifier.weight(1f)
-        )
-        Row(
-            modifier = Modifier.weight(1.5f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End
-        ) {
-            Text(
-                // Menggunakan formatMHzToString dengan nilai MHz
-                text = formatMHzToString(currentFrequencyMHz, isCurrentValue = true),
-                style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.primary),
-                textAlign = TextAlign.End
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                Icons.Filled.Edit,
-                contentDescription = "Edit $label",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-
-    if (showDialog) {
+    // Governor Selection Dialog
+    if (showGovernorDialog) {
         AlertDialog(
-            onDismissRequest = { onShowDialogChange(false) },
-            title = { Text("Select $label", style = MaterialTheme.typography.headlineSmall) },
+            onDismissRequest = { showGovernorDialog = false },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text("Select GPU Governor")
+                }
+            },
             text = {
-                if (availableFrequenciesMHz.isEmpty()) {
-                    Text("No frequencies available.", style = MaterialTheme.typography.bodyLarge)
-                } else {
-                    // Pastikan tempSelectedMHz direset dengan benar saat dialog dibuka
-                    LaunchedEffect(currentFrequencyMHz, showDialog) {
-                        if (showDialog) tempSelectedMHz = currentFrequencyMHz
+                if (availableGovernors.isEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Loading governors...")
                     }
-                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                        // Iterasi melalui daftar frekuensi MHz yang sudah diurutkan
-                        items(availableFrequenciesMHz) { freqMHz -> // freqMHz sudah dalam MHz
+                } else {
+                    LazyColumn {
+                        items(availableGovernors) { governor ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .selectable(
-                                        selected = (freqMHz == tempSelectedMHz),
-                                        onClick = { tempSelectedMHz = freqMHz },
-                                        role = androidx.compose.ui.semantics.Role.RadioButton
+                                        selected = governor == gpuGovernor,
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                tuningViewModel.setGpuGovernor(governor)
+                                            }
+                                            showGovernorDialog = false
+                                        }
                                     )
-                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                    .padding(vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RadioButton(
-                                    selected = (freqMHz == tempSelectedMHz),
-                                    onClick = { tempSelectedMHz = freqMHz },
-                                    colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
+                                    selected = governor == gpuGovernor,
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            tuningViewModel.setGpuGovernor(governor)
+                                        }
+                                        showGovernorDialog = false
+                                    }
                                 )
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    // Menampilkan nilai MHz secara langsung
-                                    text = formatMHzToString(freqMHz),
-                                    style = MaterialTheme.typography.bodyLarge
+                                    text = governor,
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
@@ -577,22 +485,94 @@ private fun GpuFrequencyControl(
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        // Kirim nilai tempSelectedMHz (yang sudah dalam MHz)
-                        if (tempSelectedMHz != currentFrequencyMHz && availableFrequenciesMHz.isNotEmpty()) {
-                            onFrequencySelectedMHz(tempSelectedMHz)
-                        }
-                        onShowDialogChange(false)
-                    },
-                    enabled = availableFrequenciesMHz.isNotEmpty()
+                TextButton(onClick = { showGovernorDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // Renderer Selection Dialog
+    if (showRendererDialog) {
+        AlertDialog(
+            onDismissRequest = { showRendererDialog = false },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Apply", style = MaterialTheme.typography.labelLarge)
+                    Icon(
+                        imageVector = Icons.Default.Visibility,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text("Select GPU Renderer")
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { onShowDialogChange(false) }) {
-                    Text("Cancel", style = MaterialTheme. typography.labelLarge)
+            text = {
+                LazyColumn {
+                    items(availableRenderers) { renderer ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = renderer == currentRenderer,
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            tuningViewModel.userSelectedGpuRenderer(renderer)
+                                        }
+                                        showRendererDialog = false
+                                    }
+                                )
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = renderer == currentRenderer,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        tuningViewModel.userSelectedGpuRenderer(renderer)
+                                    }
+                                    showRendererDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = renderer,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                when (renderer) {
+                                    "OpenGL" -> Text(
+                                        text = "Traditional rendering",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                    "Vulkan" -> Text(
+                                        text = "Modern low-overhead API",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                    "ANGLE" -> Text(
+                                        text = "OpenGL ES on Direct3D",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                    "Default" -> Text(
+                                        text = "System default",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showRendererDialog = false }) {
+                    Text("Close")
                 }
             }
         )
@@ -600,97 +580,87 @@ private fun GpuFrequencyControl(
 }
 
 @Composable
-private fun GpuPowerLevelSlider(
+private fun GPUInfoChip(
+    icon: ImageVector,
     label: String,
-    sliderValue: Float,
-    valueRange: Pair<Float, Float>,
-    steps: Int,
-    onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit
+    value: String,
+    modifier: Modifier = Modifier,
+    isWider: Boolean = false // Parameter untuk membuat card lebih tinggi
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 4.dp)
+    OutlinedCard(
+        modifier = modifier,
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(if (isWider) 16.dp else 12.dp), // Padding lebih besar untuk card yang lebih lebar
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(if (isWider) 28.dp else 16.dp) // Icon lebih besar lagi untuk card yang lebih lebar (OpenGL ES)
+            )
+            Spacer(modifier = Modifier.height(if (isWider) 8.dp else 4.dp)) // Spacer lebih tinggi
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                modifier = Modifier.weight(1f)
+                fontSize = if (isWider) 12.sp else 10.sp, // Font lebih besar untuk label
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
+            Spacer(modifier = Modifier.height(if (isWider) 6.dp else 2.dp)) // Spacer tambahan
             Text(
-                text = sliderValue.roundToInt().toString(),
-                style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.primary),
-                textAlign = TextAlign.End,
-                modifier = Modifier.weight(0.5f)
+                text = value,
+                fontSize = if (isWider) 14.sp else 12.sp, // Font lebih besar untuk value
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = if (isWider) 3 else 2, // Lebih banyak baris untuk text yang panjang
+                overflow = TextOverflow.Ellipsis
             )
         }
-        Slider(
-            value = sliderValue,
-            onValueChange = onValueChange,
-            valueRange = valueRange.first..valueRange.second,
-            steps = if (steps >= 0) steps else 0,
-            onValueChangeFinished = onValueChangeFinished,
-            modifier = Modifier.fillMaxWidth(),
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
-            )
-        )
     }
 }
 
 @Composable
-private fun RebootConfirmationDialog(
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+private fun GPUControlSection(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    content: @Composable () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Filled.Info, contentDescription = "Information") },
-        title = { Text("Restart Required for GPU Renderer", style = MaterialTheme.typography.headlineSmall) },
-        text = {
-            Column {
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "The GPU renderer settings have been saved to the system and require a restart to take effect.",
-                    style = MaterialTheme.typography.bodyMedium
+                    text = title,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
                 Text(
-                    "What will happen:",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                    text = description,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Column(modifier = Modifier.padding(start = 16.dp)) {
-                    Text("• Settings are saved permanently", style = MaterialTheme.typography.bodySmall)
-                    Text("• The renderer will be active after restart", style = MaterialTheme.typography.bodySmall)
-                    Text("• If it doesn't change, the device may not support it", style = MaterialTheme.typography.bodySmall)
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    "You can restart later if you have important work to do.",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text("Restart Now", style = MaterialTheme.typography.labelLarge)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Restart Later", style = MaterialTheme.typography.labelLarge)
             }
         }
-    )
+        Spacer(modifier = Modifier.height(8.dp))
+        content()
+    }
 }
