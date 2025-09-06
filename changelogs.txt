@@ -2,6 +2,7 @@ Changelogs For Xtra Kernel Manager Version 1.4
 
 Major Changes:
 - Enhanced UI/UX with improved visual design and user experience: Complete redesign of the interface with modern Material Design principles, improved navigation flow, redesigned control panels, better accessibility features, and enhanced visual feedback for user interactions
+- Add Profiler in Quick Settings Tile & Widget
 - Added comprehensive CPU frequency monitoring and control system
 - Implemented real-time CPU temperature monitoring
 - Added intelligent battery optimization features with custom power profiles
