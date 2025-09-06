@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,10 +11,12 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.background
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,9 +31,14 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -64,6 +70,9 @@ import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+// Import SuperGlassCard dan GlassIntensity
+// Karena keduanya berada di package yang sama, kita tidak perlu import explicit
+
 @Composable
 fun CpuGovernorCard(
     vm: TuningViewModel,
@@ -80,7 +89,7 @@ fun CpuGovernorCard(
     var isExpanded by remember { mutableStateOf(false) }
 
     val rotationAngle by animateFloatAsState(
-        targetValue = if (isExpanded) 0f else -180f,
+        targetValue = if (isExpanded) 180f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
@@ -88,329 +97,192 @@ fun CpuGovernorCard(
         label = "DropdownRotation"
     )
 
-    GlassCard(blur) {
+    SuperGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        glassIntensity = if (blur) GlassIntensity.Light else GlassIntensity.Light
+    ) {
         Column(
-            Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .fillMaxWidth()
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Header with expand/collapse
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.medium)
                     .clickable { isExpanded = !isExpanded }
-                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                    .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    "CPU Control",
-                    style = MaterialTheme.typography.titleLarge,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Memory,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "CPU Control",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Icon(
-                    imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = if (isExpanded) "Collapse CPU Control" else "Expand CPU Control",
-                    modifier = Modifier.rotate(rotationAngle)
+                    imageVector = Icons.Default.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    modifier = Modifier.rotate(rotationAngle),
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
 
+            Text(
+                text = "Configure CPU governor and frequency settings for each cluster",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             AnimatedVisibility(
                 visible = isExpanded,
-                enter = slideInVertically(
-                    initialOffsetY = { -it / 2 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + expandVertically(
-                    expandFrom = Alignment.Top,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeIn(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                ) + scaleIn(
-                    transformOrigin = TransformOrigin(0.5f, 0f),
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ),
-                exit = slideOutVertically(
-                    targetOffsetY = { -it / 2 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + shrinkVertically(
-                    shrinkTowards = Alignment.Top,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                ) + scaleOut(
-                    transformOrigin = TransformOrigin(0.5f, 0f),
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
+                enter = slideInVertically() + expandVertically() + fadeIn(),
+                exit = slideOutVertically() + shrinkVertically() + fadeOut()
             ) {
-                Column(modifier = Modifier.padding(top = 4.dp)) {
-                    HorizontalDivider(
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    if (availableGovernors.isEmpty() && clusters.isNotEmpty() &&
-                        showGovernorDialogForCluster == null && showFreqDialogForCluster == null
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 16.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (availableGovernors.isEmpty() && clusters.isNotEmpty()) {
+                        SuperGlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            glassIntensity = GlassIntensity.Light
                         ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(28.dp),
-                                strokeWidth = 2.5.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                "Loading CPU data...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    "Loading CPU data...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     } else if (clusters.isNotEmpty()) {
                         clusters.forEachIndexed { index, clusterName ->
-                            val currentGovernor by vm.getCpuGov(clusterName).collectAsState()
-                            val currentFreqPair by vm.getCpuFreq(clusterName).collectAsState()
-                            val availableFrequenciesForCluster by vm.getAvailableCpuFrequencies(clusterName).collectAsState()
-
-                            Text(
-                                text = clusterName.replaceFirstChar { it.titlecase() },
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                ),
-                                modifier = Modifier.padding(
-                                    bottom = 8.dp,
-                                    top = if (index > 0) 16.dp else 0.dp
-                                )
+                            CpuClusterCard(
+                                clusterName = clusterName,
+                                vm = vm,
+                                onGovernorClick = { showGovernorDialogForCluster = clusterName },
+                                onFrequencyClick = { showFreqDialogForCluster = clusterName },
+                                onCoreClick = { showCoreDialogForCluster = clusterName }
                             )
-
-                            // Pengaturan Governor
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clip(MaterialTheme.shapes.small)
-                                    .clickable(enabled = currentGovernor != "..." && currentGovernor != "Error" && availableGovernors.isNotEmpty()) {
-                                        showGovernorDialogForCluster = clusterName
-                                    }
-                                    .padding(horizontal = 8.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    text = "Governor",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Text(
-                                        text = if (currentGovernor == "..." || currentGovernor == "Error") currentGovernor else currentGovernor,
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontWeight = FontWeight.SemiBold
-                                        ),
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = "Change Governor for $clusterName",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clip(MaterialTheme.shapes.small)
-                                    .clickable(
-                                        enabled = availableFrequenciesForCluster.isNotEmpty() &&
-                                                !(currentFreqPair.first == 0 && currentFreqPair.second == 0 && availableFrequenciesForCluster.isEmpty()) &&
-                                                !(currentFreqPair.first == 0 && currentFreqPair.second == -1)
-                                    ) {
-                                        if (availableFrequenciesForCluster.isNotEmpty()) {
-                                            showFreqDialogForCluster = clusterName
-                                        }
-                                    }
-                                    .padding(horizontal = 8.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    text = "Frequency",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    val freqText = when {
-                                        currentGovernor == "..." || currentGovernor == "Error" -> currentGovernor
-                                        currentFreqPair.first == 0 && currentFreqPair.second == 0 && availableFrequenciesForCluster.isEmpty() -> "Loading..."
-                                        currentFreqPair.first == 0 && currentFreqPair.second == -1 -> "Error"
-                                        else -> "${currentFreqPair.first / 1000} - ${currentFreqPair.second / 1000} MHz"
-                                    }
-                                    Text(
-                                        text = freqText,
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontWeight = FontWeight.SemiBold
-                                        ),
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = "Change Frequency for $clusterName",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clip(MaterialTheme.shapes.small)
-                                    .clickable {
-                                        showCoreDialogForCluster = clusterName
-                                    }
-                                    .padding(horizontal = 8.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    text = "Core Status",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Text(
-                                        text = "${coreStates.count { it }}/${coreStates.size} Cores Online",
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontWeight = FontWeight.SemiBold
-                                        ),
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = "Change Core Status for $clusterName",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-
-                            if (showGovernorDialogForCluster == clusterName) {
-                                GovernorSelectionDialog(
-                                    clusterName = clusterName,
-                                    availableGovernors = availableGovernors,
-                                    currentSelectedGovernor = currentGovernor,
-                                    onGovernorSelected = { selectedGov ->
-                                        vm.setCpuGov(clusterName, selectedGov)
-                                        showGovernorDialogForCluster = null
-                                    },
-                                    onDismiss = { showGovernorDialogForCluster = null }
-                                )
-                            }
-
-                            if (showFreqDialogForCluster == clusterName && availableFrequenciesForCluster.isNotEmpty()) {
-                                val systemMinFreq = availableFrequenciesForCluster.firstOrNull() ?: currentFreqPair.first
-                                val systemMaxFreq = availableFrequenciesForCluster.lastOrNull() ?: currentFreqPair.second
-
-                                if (systemMinFreq < systemMaxFreq && systemMaxFreq > 0) {
-                                    FrequencySelectionDialog(
-                                        clusterName = clusterName,
-                                        currentMinFreq = currentFreqPair.first,
-                                        currentMaxFreq = currentFreqPair.second,
-                                        minSystemFreq = systemMinFreq,
-                                        maxSystemFreq = systemMaxFreq,
-                                        allAvailableFrequencies = availableFrequenciesForCluster,
-                                        onFrequencySelected = { newMin, newMax ->
-                                            vm.setCpuFreq(clusterName, newMin, newMax)
-                                            showFreqDialogForCluster = null
-                                        },
-                                        onDismiss = { showFreqDialogForCluster = null }
-                                    )
-                                } else {
-                                    LaunchedEffect(clusterName) {
-                                        println("CpuGovernorCard: Cannot show frequency dialog for $clusterName. Invalid system frequency range (SystemMin: $systemMinFreq, SystemMax: $systemMaxFreq). Current Freq Pair: ${currentFreqPair.first}-${currentFreqPair.second}. Available: ${availableFrequenciesForCluster.joinToString()}")
-                                        showFreqDialogForCluster = null
-                                    }
-                                }
-                            }
-
-                            if (showCoreDialogForCluster == clusterName) {
-                                CoreStatusDialog(
-                                    clusterName = clusterName,
-                                    coreStates = coreStates,
-                                    onCoreToggled = { coreId ->
-                                        vm.toggleCore(coreId)
-                                    },
-                                    onDismiss = { showCoreDialogForCluster = null }
-                                )
-                            }
-
-                            if (index < clusters.size - 1) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(vertical = 16.dp),
-                                    thickness = 0.5.dp,
-                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                                )
-                            }
                         }
-                    } else if (clusters.isEmpty()) {
-                        Text(
-                            "No CPU clusters found. Ensure the kernel provides this information.",
-                            modifier = Modifier.padding(vertical = 16.dp).fillMaxWidth(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                    } else {
-                        Text(
-                            "CPU data could not be fully loaded or is unavailable.",
-                            modifier = Modifier.padding(vertical = 16.dp).fillMaxWidth(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
                     }
                 }
             }
         }
+    }
+
+    if (showGovernorDialogForCluster != null) {
+        GovernorSelectionDialog(
+            clusterName = showGovernorDialogForCluster!!,
+            availableGovernors = availableGovernors,
+            currentSelectedGovernor = vm.getCpuGov(showGovernorDialogForCluster!!).collectAsState().value,
+            onGovernorSelected = { selectedGov ->
+                vm.setCpuGov(showGovernorDialogForCluster!!, selectedGov)
+                showGovernorDialogForCluster = null
+            },
+            onDismiss = { showGovernorDialogForCluster = null }
+        )
+    }
+
+    if (showFreqDialogForCluster != null) {
+        val clusterName = showFreqDialogForCluster!!
+        val availableFrequenciesForCluster by vm.getAvailableCpuFrequencies(clusterName).collectAsState()
+        val currentFreqPair by vm.getCpuFreq(clusterName).collectAsState()
+
+        // Show dialog even if data is not perfect - let user see what's happening
+        if (availableFrequenciesForCluster.isNotEmpty()) {
+            val systemMinFreq = availableFrequenciesForCluster.minOrNull() ?: currentFreqPair.first
+            val systemMaxFreq = availableFrequenciesForCluster.maxOrNull() ?: currentFreqPair.second
+
+            // More lenient condition - allow dialog to show even with imperfect data
+            if (systemMinFreq > 0 && systemMaxFreq > 0 && systemMinFreq <= systemMaxFreq) {
+                FrequencySelectionDialog(
+                    clusterName = clusterName,
+                    currentMinFreq = currentFreqPair.first.coerceAtLeast(systemMinFreq),
+                    currentMaxFreq = currentFreqPair.second.coerceAtMost(systemMaxFreq),
+                    minSystemFreq = systemMinFreq,
+                    maxSystemFreq = systemMaxFreq,
+                    allAvailableFrequencies = availableFrequenciesForCluster.sorted(),
+                    onFrequencySelected = { newMin, newMax ->
+                        vm.setCpuFreq(clusterName, newMin, newMax)
+                        showFreqDialogForCluster = null
+                    },
+                    onDismiss = { showFreqDialogForCluster = null }
+                )
+            } else {
+                // Show an error dialog instead of silently dismissing
+                AlertDialog(
+                    onDismissRequest = { showFreqDialogForCluster = null },
+                    title = { Text("Frequency Error") },
+                    text = {
+                        Text("Cannot adjust frequency for $clusterName.\nInvalid frequency range: $systemMinFreq - $systemMaxFreq MHz")
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showFreqDialogForCluster = null }) {
+                            Text("OK")
+                        }
+                    }
+                )
+            }
+        } else {
+            // Show loading or error dialog instead of silently dismissing
+            AlertDialog(
+                onDismissRequest = { showFreqDialogForCluster = null },
+                title = { Text("Loading Frequencies") },
+                text = {
+                    Column {
+                        if (currentFreqPair.first == 0 && currentFreqPair.second == 0) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                Text("Loading frequency data for $clusterName...")
+                            }
+                        } else {
+                            Text("No available frequencies found for $clusterName.\nCurrent: ${currentFreqPair.first/1000} - ${currentFreqPair.second/1000} MHz")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showFreqDialogForCluster = null }) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
+    }
+
+    if (showCoreDialogForCluster != null) {
+        CoreStatusDialog(
+            clusterName = showCoreDialogForCluster!!,
+            coreStates = coreStates,
+            onCoreToggled = { coreId ->
+                vm.toggleCore(coreId)
+            },
+            onDismiss = { showCoreDialogForCluster = null }
+        )
     }
 }
 
@@ -706,4 +578,244 @@ private fun findClosestFrequency(target: Int, availableFrequencies: List<Int>): 
     if (availableFrequencies.isEmpty()) return target.coerceAtLeast(0)
     if (target in availableFrequencies) return target
     return availableFrequencies.minByOrNull { abs(it - target) } ?: target.coerceAtLeast(0)
+}
+
+@Composable
+fun CpuClusterCard(
+    clusterName: String,
+    vm: TuningViewModel,
+    onGovernorClick: () -> Unit,
+    onFrequencyClick: () -> Unit,
+    onCoreClick: () -> Unit
+) {
+    val currentGovernor by vm.getCpuGov(clusterName).collectAsState()
+    val currentFreqPair by vm.getCpuFreq(clusterName).collectAsState()
+    val availableFrequenciesForCluster by vm.getAvailableCpuFrequencies(clusterName).collectAsState()
+    val coreStates by vm.coreStates.collectAsState()
+
+    // Different color themes for each CPU cluster
+    val clusterColors = when (clusterName) {
+        "cpu0" -> Pair(Color(0xFF4FC3F7), Color(0xFFE1F5FE)) // Light Blue theme
+        "cpu4" -> Pair(Color(0xFF66BB6A), Color(0xFFE8F5E8)) // Green theme
+        "cpu7" -> Pair(Color(0xFFFF7043), Color(0xFFFFF3E0)) // Orange theme
+        else -> Pair(Color(0xFF9C27B0), Color(0xFFF3E5F5)) // Purple theme as fallback
+    }
+
+    SuperGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        glassIntensity = GlassIntensity.Light
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Enhanced Header with cluster-specific styling
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Cluster icon with themed background
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                color = clusterColors.first.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Memory,
+                            contentDescription = null,
+                            tint = clusterColors.first,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = clusterName.uppercase(),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            ),
+                            color = clusterColors.first
+                        )
+                        Text(
+                            text = "Cluster Control",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Status indicator
+                SuperGlassCard(
+                    glassIntensity = GlassIntensity.Light,
+                    modifier = Modifier.padding(0.dp)
+                ) {
+                    Text(
+                        text = if (currentGovernor != "..." && currentGovernor != "Error") "ACTIVE" else "LOADING",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = if (currentGovernor != "..." && currentGovernor != "Error")
+                            clusterColors.first
+                        else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            HorizontalDivider(
+                color = clusterColors.first.copy(alpha = 0.2f),
+                thickness = 1.dp
+            )
+
+            // Enhanced Control Sections
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Governor Section
+                ControlSection(
+                    icon = Icons.Default.Tune,
+                    title = "Governor",
+                    value = if (currentGovernor == "..." || currentGovernor == "Error") currentGovernor else currentGovernor,
+                    isLoading = currentGovernor == "..." || currentGovernor == "Error",
+                    themeColor = clusterColors.first,
+                    onClick = onGovernorClick,
+                    enabled = currentGovernor != "..." && currentGovernor != "Error"
+                )
+
+                // Frequency Section
+                val freqText = when {
+                    currentGovernor == "..." || currentGovernor == "Error" -> currentGovernor
+                    currentFreqPair.first == 0 && currentFreqPair.second == 0 && availableFrequenciesForCluster.isEmpty() -> "Loading..."
+                    currentFreqPair.first == 0 && currentFreqPair.second == -1 -> "Error"
+                    else -> "${currentFreqPair.first / 1000} - ${currentFreqPair.second / 1000} MHz"
+                }
+
+                ControlSection(
+                    icon = Icons.Default.Speed,
+                    title = "Frequency",
+                    value = freqText,
+                    isLoading = freqText == "Loading..." || freqText == "Error",
+                    themeColor = clusterColors.first,
+                    onClick = onFrequencyClick,
+                    enabled = availableFrequenciesForCluster.isNotEmpty()
+                )
+
+                // Core Status Section
+                ControlSection(
+                    icon = Icons.Default.Memory,
+                    title = "Core Status",
+                    value = "${coreStates.count { it }}/${coreStates.size} Online",
+                    isLoading = false,
+                    themeColor = clusterColors.first,
+                    onClick = onCoreClick,
+                    enabled = true
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ControlSection(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    value: String,
+    isLoading: Boolean,
+    themeColor: Color,
+    onClick: () -> Unit,
+    enabled: Boolean
+) {
+    SuperGlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onClick() },
+        glassIntensity = GlassIntensity.Light
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Icon with themed background
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(
+                        color = if (enabled) themeColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(10.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (enabled) themeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            // Content
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium
+                )
+
+                if (isLoading) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = themeColor
+                        )
+                        Text(
+                            text = value,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = if (enabled) themeColor else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Arrow indicator
+            if (enabled) {
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = "Expand",
+                    tint = themeColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
 }
