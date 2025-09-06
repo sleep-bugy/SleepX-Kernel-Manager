@@ -3,9 +3,18 @@
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Root & sysfs access -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.ACCESS_SUPERUSER"/>
+    <uses-permission android:name="android.permission.DUMP" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.READ_FRAME_BUFFER" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.GET_TASKS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.REAL_GET_TASKS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.READ_SECURE_SETTINGS"
@@ -28,6 +37,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:name=".XtraApp"
@@ -39,7 +49,17 @@
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.XtraKernelManager"
         android:requestLegacyExternalStorage="true"
-        tools:targetApi="33">
+        android:forceDarkAllowed="false">
+
+        <!-- Force dark theme configuration -->
+        <meta-data
+            android:name="android.app.ui_mode"
+            android:value="night" />
+
+        <!-- Disable light mode support -->
+        <meta-data
+            android:name="android.support.ui_options"
+            android:value="forceDark" />
 
         <activity
             android:name=".ui.MainActivity"
@@ -82,6 +102,50 @@
             </intent-filter>
         </receiver>
 
+        <!-- Battery Notification Widget -->
+        <receiver
+            android:name=".widget.BatteryNotificationWidget"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="id.xms.xtrakernelmanager.TOGGLE_BATTERY_NOTIFICATION" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/battery_notification_widget_info" />
+        </receiver>
+
+        <!-- Battery Performance Widget -->
+        <receiver
+            android:name=".widget.BatteryPerformanceWidget"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="id.xms.xtrakernelmanager.TOGGLE_BATTERY_NOTIFICATION" />
+                <action android:name="id.xms.xtrakernelmanager.CYCLE_PERFORMANCE_MODE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/battery_performance_widget_info" />
+        </receiver>
+
+        <!-- Xtra Control Widget 4x4 -->
+        <receiver
+            android:name=".widget.XtraControlWidget"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="id.xms.xtrakernelmanager.TOGGLE_BATTERY" />
+                <action android:name="id.xms.xtrakernelmanager.CYCLE_PERFORMANCE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/xtra_control_widget_info" />
+        </receiver>
+
         <!-- Disable WorkManager's automatic initialization -->
         <provider
             android:name="androidx.startup.InitializationProvider"
@@ -93,6 +157,18 @@
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
+
+        <!-- Single Quick Settings Tile for Performance Mode Cycling -->
+        <service
+            android:name=".service.PerformanceModeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_balance"
+            android:label="Performance Mode"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
     </application>
 
