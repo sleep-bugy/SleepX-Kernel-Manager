@@ -64,13 +64,24 @@
     <color name="md_theme_dark_outlineVariant">#49454F</color>
     <color name="md_theme_dark_scrim">#000000</color>
 
+    <!-- Dark theme color palette -->
+    <color name="primary_dark">#90CAF9</color>
+    <color name="primary_dark_variant">#1B263B</color>
+    <color name="secondary_dark">#81C784</color>
+    <color name="background_dark">#0A0E13</color>
+    <color name="surface_dark">#121212</color>
+    <color name="on_primary_dark">#0D1B2A</color>
+    <color name="on_secondary_dark">#0A1F0A</color>
+    <color name="on_background_dark">#E3E3E3</color>
+    <color name="on_surface_dark">#E1E1E1</color>
+
     <!-- Blur and Surface Colors -->
     <color name="surface_blur_light">#F7F2FA</color>
     <color name="surface_blur_medium">#EDE7F6</color>
     <color name="surface_blur_heavy">#E1D5E7</color>
-    <color name="surface_blur_dark_light">#2B2730</color>
-    <color name="surface_blur_dark_medium">#3D3842</color>
-    <color name="surface_blur_dark_heavy">#4F4754</color>
+    <color name="surface_blur_dark_light">#1E1E1E</color>
+    <color name="surface_blur_dark_medium">#2A2A2A</color>
+    <color name="surface_blur_dark_heavy">#363636</color>
 
     <!-- Legacy colors for compatibility -->
     <color name="purple_200">#FFBB86FC</color>
