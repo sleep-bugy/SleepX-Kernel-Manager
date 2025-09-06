@@ -1,26 +1,25 @@
 package id.xms.xtrakernelmanager.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.BorderStroke // Keep for Compression Dialog
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ToggleOff
-import androidx.compose.material.icons.filled.ToggleOn
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
@@ -28,9 +27,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
 import kotlin.math.roundToInt
 
@@ -40,18 +44,18 @@ fun SwappinessCard(
     blur: Boolean
 ) {
     val zramEnabled by vm.zramEnabled.collectAsState()
-    val zramDisksize by vm.zramDisksize.collectAsState() // Bytes
-    val maxZramSize by vm.maxZramSize.collectAsState() // Bytes
+    val zramDisksize by vm.zramDisksize.collectAsState()
+    val maxZramSize by vm.maxZramSize.collectAsState()
     val swappiness by vm.swappiness.collectAsState()
     val compressionAlgorithms by vm.compressionAlgorithms.collectAsState()
     val currentCompression by vm.currentCompression.collectAsState()
     val dirtyRatio by vm.dirtyRatio.collectAsState()
     val dirtyBackgroundRatio by vm.dirtyBackgroundRatio.collectAsState()
-    val dirtyWriteback by vm.dirtyWriteback.collectAsState() // Seconds
-    val dirtyExpireCentisecs by vm.dirtyExpireCentisecs.collectAsState() // Centiseconds
-    val minFreeMemory by vm.minFreeMemory.collectAsState() // MB
-    val swapSize by vm.swapSize.collectAsState() // Bytes
-    val maxSwapSize by vm.maxSwapSize.collectAsState() // Bytes
+    val dirtyWriteback by vm.dirtyWriteback.collectAsState()
+    val dirtyExpireCentisecs by vm.dirtyExpireCentisecs.collectAsState()
+    val minFreeMemory by vm.minFreeMemory.collectAsState()
+    val swapSize by vm.swapSize.collectAsState()
+    val maxSwapSize by vm.maxSwapSize.collectAsState()
     val isSwapLoading by vm.isSwapLoading.collectAsState()
     val swapLogs by vm.swapLogs.collectAsState()
 
@@ -68,205 +72,155 @@ fun SwappinessCard(
     var showMinFreeMemoryDialog by remember { mutableStateOf(false) }
     var showAdjustSwapSizeDialog by remember { mutableStateOf(false) }
 
-
-    val rotationAngle by animateFloatAsState(
-        targetValue = if (isExpanded) 180f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+    // Animation untuk pulse effect
+    val infiniteTransition = rememberInfiniteTransition(label = "ram_control_pulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
         ),
-        label = "DropdownRotation"
+        label = "pulse_alpha"
     )
 
-    GlassCard(blur) {
+    SuperGlassCard(
+        modifier = Modifier,
+        glassIntensity = GlassIntensity.Light,
+        onClick = null
+    ) {
         Column(
-            Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.medium)
-                    .clickable { isExpanded = !isExpanded }
-                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    "RAM Control",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                )
-                Icon(
-                    imageVector = Icons.Filled.ArrowDropDown,
-                    contentDescription = if (isExpanded) "Collapse RAM Control" else "Expand RAM Control",
-                    modifier = Modifier.rotate(rotationAngle),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
+            // RAM Control Header Section
+            RamControlHeaderSection(
+                zramEnabled = zramEnabled,
+                zramDisksize = zramDisksize,
+                pulseAlpha = pulseAlpha,
+                isExpanded = isExpanded,
+                onExpandClick = { isExpanded = !isExpanded }
+            )
 
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = slideInVertically(
-                    initialOffsetY = { -it / 2 },
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-                ) + expandVertically(
-                    expandFrom = Alignment.Top,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-                ) + fadeIn(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                ),
-                exit = slideOutVertically(
-                    targetOffsetY = { -it / 2 },
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-                ) + shrinkVertically(
-                    shrinkTowards = Alignment.Top,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-                ) + fadeOut(
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                )
-            ) {
-                Column(modifier = Modifier.padding(top = 4.dp)) {
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                     HorizontalDivider(
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                        thickness = 1.dp
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // ZRAM State
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .clickable { vm.setZramEnabled(!zramEnabled) }
-                            .padding(horizontal = 4.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "ZRAM State",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            if (zramEnabled) {
-                                Text(
-                                    text = " (${zramDisksize / (1024 * 1024)}MB)",
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                            }
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = if (zramEnabled) "ON" else "OFF",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (zramEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                ),
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                            Icon(
-                                imageVector = if (zramEnabled) Icons.Filled.ToggleOn else Icons.Filled.ToggleOff,
-                                contentDescription = if (zramEnabled) "Turn ZRAM Off" else "Turn ZRAM On",
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clickable(onClick = { vm.setZramEnabled(!zramEnabled) }),
-                                tint = if (zramEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
+                    // ZRAM Toggle Section
+                    RamZramToggleSection(
+                        zramEnabled = zramEnabled,
+                        onZramToggle = { vm.setZramEnabled(!zramEnabled) }
+                    )
 
                     AnimatedVisibility(visible = zramEnabled) {
-                        Column {
-                            // Adjust ZRAM Size Row
-                            ClickableSettingRow(
-                                title = "Adjust ZRAM Size",
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // ZRAM Settings
+                            RamSettingItem(
+                                icon = Icons.Default.Storage,
+                                title = "ZRAM Size",
                                 value = "${zramDisksize / (1024 * 1024)}MB",
+                                description = "Adjust compressed RAM size",
+                                color = MaterialTheme.colorScheme.secondary,
                                 onClick = { showZramSizeDialog = true }
                             )
 
-                            // Compression Algorithm Row
-                            ClickableSettingRow(
+                            RamSettingItem(
+                                icon = Icons.Default.Compress,
                                 title = "Compression",
                                 value = currentCompression,
+                                description = "Compression algorithm",
+                                color = MaterialTheme.colorScheme.tertiary,
                                 onClick = { showCompressionDialog = true }
-                            )
-
-                            // Swappiness Row
-                            ClickableSettingRow(
-                                title = "Swappiness",
-                                value = "$swappiness%",
-                                onClick = { showSwappinessDialog = true }
                             )
                         }
                     }
 
-                    // Adjust Swap Size Row
-                    ClickableSettingRow(
-                        title = "Adjust Swap Size",
-                        value = if (swapSize > 0) "${swapSize / (1024 * 1024)}MB" else "Disabled",
-                        onClick = { showAdjustSwapSizeDialog = true }
-                    )
+                    // Always visible RAM settings (not dependent on ZRAM)
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        RamSettingItem(
+                            icon = Icons.Default.Speed,
+                            title = "Swappiness",
+                            value = "$swappiness%",
+                            description = "Memory swap aggressiveness",
+                            color = MaterialTheme.colorScheme.primary,
+                            onClick = { showSwappinessDialog = true }
+                        )
 
+                        RamSettingItem(
+                            icon = Icons.Default.DataUsage,
+                            title = "Dirty Ratio",
+                            value = "$dirtyRatio%",
+                            description = "Page cache dirty data threshold",
+                            color = MaterialTheme.colorScheme.error,
+                            onClick = { showDirtyRatioDialog = true }
+                        )
 
+                        RamSettingItem(
+                            icon = Icons.Default.Analytics,
+                            title = "Dirty Background Ratio",
+                            value = "$dirtyBackgroundRatio%",
+                            description = "Background writeback threshold",
+                            color = MaterialTheme.colorScheme.surfaceTint,
+                            onClick = { showDirtyBgRatioDialog = true }
+                        )
 
-                    // Memory Management Section
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Memory Management",
-                        style = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.tertiary),
-                        modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
-                    )
+                        RamSettingItem(
+                            icon = Icons.Default.Timer,
+                            title = "Dirty Writeback",
+                            value = "${dirtyWriteback}s",
+                            description = "Writeback interval time",
+                            color = MaterialTheme.colorScheme.outline,
+                            onClick = { showDirtyWritebackDialog = true }
+                        )
 
-                    // Dirty Ratio Row
-                    ClickableSettingRow(
-                        title = "Dirty Ratio",
-                        value = "$dirtyRatio%",
-                        onClick = { showDirtyRatioDialog = true }
-                    )
+                        RamSettingItem(
+                            icon = Icons.Default.Schedule,
+                            title = "Dirty Expire",
+                            value = "${dirtyExpireCentisecs}cs",
+                            description = "Page expiration time",
+                            color = MaterialTheme.colorScheme.secondary,
+                            onClick = { showDirtyExpireDialog = true }
+                        )
 
-                    // Dirty Background Ratio Row
-                    ClickableSettingRow(
-                        title = "Dirty Background Ratio",
-                        value = "$dirtyBackgroundRatio%",
-                        onClick = { showDirtyBgRatioDialog = true }
-                    )
+                        RamSettingItem(
+                            icon = Icons.Default.Memory,
+                            title = "Min Free Memory",
+                            value = "${minFreeMemory}MB",
+                            description = "Minimum free memory reserve",
+                            color = MaterialTheme.colorScheme.tertiary,
+                            onClick = { showMinFreeMemoryDialog = true }
+                        )
 
-                    // Dirty Writeback Row
-                    ClickableSettingRow(
-                        title = "Dirty Writeback",
-                        value = "$dirtyWriteback sec",
-                        onClick = { showDirtyWritebackDialog = true }
-                    )
-
-                    // Dirty Expire Row
-                    ClickableSettingRow(
-                        title = "Dirty Expire",
-                        value = "$dirtyExpireCentisecs cs",
-                        onClick = { showDirtyExpireDialog = true }
-                    )
-
-                    // Minimum Free Memory Row
-                    ClickableSettingRow(
-                        title = "Min Free Memory",
-                        value = "$minFreeMemory MB",
-                        onClick = { showMinFreeMemoryDialog = true }
-                    )
+                        RamSettingItem(
+                            icon = Icons.Default.SwapHoriz,
+                            title = "Swap Size",
+                            value = if (swapSize == 0L) "Disabled" else "${swapSize / (1024 * 1024)}MB",
+                            description = "Virtual memory swap file size",
+                            color = MaterialTheme.colorScheme.primary,
+                            onClick = { showAdjustSwapSizeDialog = true }
+                        )
+                    }
                 }
             }
         }
     }
 
     // --- DIALOGS ---
-
     if (showZramSizeDialog && zramEnabled) {
         ZramSizeDialog(
             currentSize = zramDisksize,
             maxSize = maxZramSize,
             onDismiss = { showZramSizeDialog = false },
-            onConfirm = { newSizeInBytes ->
+            onConfirm = { newSizeInBytes: Long ->
                 vm.setZramDisksize(newSizeInBytes)
                 showZramSizeDialog = false
             }
@@ -278,7 +232,7 @@ fun SwappinessCard(
             compressionAlgorithms = compressionAlgorithms,
             currentCompression = currentCompression,
             onDismiss = { showCompressionDialog = false },
-            onAlgorithmSelected = { algo ->
+            onAlgorithmSelected = { algo: String ->
                 if (algo != currentCompression) {
                     vm.setCompression(algo)
                 }
@@ -296,7 +250,7 @@ fun SwappinessCard(
             valueRange = 0f..100f,
             steps = 99,
             onDismissRequest = { showSwappinessDialog = false },
-            onApplyClicked = { newValue ->
+            onApplyClicked = { newValue: Int ->
                 vm.setSwappiness(newValue)
                 showSwappinessDialog = false
             }
@@ -312,7 +266,7 @@ fun SwappinessCard(
             valueRange = 0f..100f,
             steps = 99,
             onDismissRequest = { showDirtyRatioDialog = false },
-            onApplyClicked = { newValue ->
+            onApplyClicked = { newValue: Int ->
                 vm.setDirtyRatio(newValue)
                 showDirtyRatioDialog = false
             }
@@ -328,7 +282,7 @@ fun SwappinessCard(
             valueRange = 0f..100f,
             steps = 99,
             onDismissRequest = { showDirtyBgRatioDialog = false },
-            onApplyClicked = { newValue ->
+            onApplyClicked = { newValue: Int ->
                 vm.setDirtyBackgroundRatio(newValue)
                 showDirtyBgRatioDialog = false
             }
@@ -339,13 +293,13 @@ fun SwappinessCard(
         SliderSettingDialog(
             showDialog = showDirtyWritebackDialog,
             title = "Set Dirty Writeback",
-            currentValue = dirtyWriteback, // Assuming vm.dirtyWriteback is Int in seconds
+            currentValue = dirtyWriteback,
             valueSuffix = " sec",
-            valueRange = 0f..300f, // 0 to 300 seconds
+            valueRange = 0f..300f,
             steps = 299,
             onDismissRequest = { showDirtyWritebackDialog = false },
-            onApplyClicked = { newValue ->
-                vm.setDirtyWriteback(newValue) // vm.setDirtyWriteback expects Int in seconds
+            onApplyClicked = { newValue: Int ->
+                vm.setDirtyWriteback(newValue)
                 showDirtyWritebackDialog = false
             }
         )
@@ -355,13 +309,13 @@ fun SwappinessCard(
         SliderSettingDialog(
             showDialog = showDirtyExpireDialog,
             title = "Set Dirty Expire",
-            currentValue = dirtyExpireCentisecs, // Assuming vm.dirtyExpireCentisecs is Int in centiseconds
+            currentValue = dirtyExpireCentisecs,
             valueSuffix = " cs",
-            valueRange = 0f..30000f, // 0 to 30000 centiseconds
+            valueRange = 0f..30000f,
             steps = 29999,
             onDismissRequest = { showDirtyExpireDialog = false },
-            onApplyClicked = { newValue ->
-                vm.setDirtyExpireCentisecs(newValue) // vm.setDirtyExpireCentisecs expects Int in centiseconds
+            onApplyClicked = { newValue: Int ->
+                vm.setDirtyExpireCentisecs(newValue)
                 showDirtyExpireDialog = false
             }
         )
@@ -371,13 +325,13 @@ fun SwappinessCard(
         SliderSettingDialog(
             showDialog = showMinFreeMemoryDialog,
             title = "Set Min Free Memory",
-            currentValue = minFreeMemory, // Assuming vm.minFreeMemory is Int in MB
+            currentValue = minFreeMemory,
             valueSuffix = " MB",
-            valueRange = 0f..1024f, // 0 to 1024 MB
+            valueRange = 0f..1024f,
             steps = 1023,
             onDismissRequest = { showMinFreeMemoryDialog = false },
-            onApplyClicked = { newValue ->
-                vm.setMinFreeMemory(newValue) // vm.setMinFreeMemory expects Int in MB
+            onApplyClicked = { newValue: Int ->
+                vm.setMinFreeMemory(newValue)
                 showMinFreeMemoryDialog = false
             }
         )
@@ -388,7 +342,7 @@ fun SwappinessCard(
             currentSize = swapSize,
             maxSize = maxSwapSize,
             onDismiss = { showAdjustSwapSizeDialog = false },
-            onConfirm = { newSizeInBytes ->
+            onConfirm = { newSizeInBytes: Long ->
                 vm.setSwapSize(newSizeInBytes)
                 showAdjustSwapSizeDialog = false
             }
@@ -404,47 +358,254 @@ fun SwappinessCard(
     }
 }
 
-// Reusable Composable for clickable setting rows
 @Composable
-fun ClickableSettingRow(
+fun RamControlHeaderSection(
+    zramEnabled: Boolean,
+    zramDisksize: Long,
+    pulseAlpha: Float,
+    isExpanded: Boolean,
+    onExpandClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onExpandClick() },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "RAM Control",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            // RAM Status Box
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
+                                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+                            )
+                        )
+                    )
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = if (zramEnabled) "ZRAM: ${zramDisksize / (1024 * 1024)}MB Active" else "ZRAM: Disabled",
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
+                )
+            }
+        }
+
+        // Animated RAM Icon with pulse effect
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .drawBehind {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF9C27B0).copy(alpha = pulseAlpha * 0.6f),
+                                    Color.Transparent
+                                ),
+                                radius = size.minDimension * 0.8f
+                            ),
+                            radius = size.minDimension * 0.5f
+                        )
+                    }
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Memory,
+                    contentDescription = "RAM Control",
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+            }
+
+            Icon(
+                imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun RamZramToggleSection(
+    zramEnabled: Boolean,
+    onZramToggle: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (zramEnabled) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                }
+            )
+            .clickable { onZramToggle() }
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        if (zramEnabled) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (zramEnabled) Icons.Default.ToggleOn else Icons.Default.ToggleOff,
+                    contentDescription = "ZRAM Toggle",
+                    modifier = Modifier.size(24.dp),
+                    tint = if (zramEnabled) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+
+            Column {
+                Text(
+                    text = "ZRAM State",
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Text(
+                    text = if (zramEnabled) "Compressed RAM enabled" else "Compressed RAM disabled",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+        }
+
+        Text(
+            text = if (zramEnabled) "ON" else "OFF",
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.Bold
+            ),
+            color = if (zramEnabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            }
+        )
+    }
+}
+
+@Composable
+fun RamSettingItem(
+    icon: ImageVector,
     title: String,
     value: String,
+    description: String,
+    color: Color,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .clip(MaterialTheme.shapes.small)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 8.dp), // Padding inside clickable
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = title,
-            maxLines = 1,
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(color.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                modifier = Modifier.size(20.dp),
+                tint = color
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Text(
                 text = value,
-                maxLines = 1,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.primary
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = color
             )
             Icon(
-                imageVector = Icons.Filled.ArrowDropDown, // Or Icons.Filled.Edit or similar
-                contentDescription = "Change $title",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp).padding(start = 4.dp)
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "Configure",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
         }
     }
 }
 
 
-// Generic Slider Dialog - This is a new reusable Composable
+// Enhanced Slider Dialog with SuperGlassCard design
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SliderSettingDialog(
@@ -456,75 +617,297 @@ fun SliderSettingDialog(
     steps: Int,
     onDismissRequest: () -> Unit,
     onApplyClicked: (Int) -> Unit,
-    additionalInfo: String? = null // Optional for min/max/step display like ZRAM
+    additionalInfo: String? = null
 ) {
     if (showDialog) {
         var sliderTempValue by remember(currentValue) { mutableStateOf(currentValue.toFloat()) }
 
+        // Animation for value changes
+        val animatedValue by animateFloatAsState(
+            targetValue = sliderTempValue,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+            label = "slider_value_animation"
+        )
+
+        // Get feature explanation based on title
+        val featureExplanation = getFeatureExplanation(title)
+
         AlertDialog(
             onDismissRequest = onDismissRequest,
-            title = {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-                )
-            },
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (additionalInfo != null) {
-                        Text(
-                            text = additionalInfo,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight(),
+            properties = DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                SuperGlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) { },
+                    glassIntensity = GlassIntensity.Heavy,
+                    onClick = null
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        // Header with icon and title
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = getFeatureIcon(title),
+                                    contentDescription = "Settings",
+                                    modifier = Modifier.size(24.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            Column {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "RAM & Performance Control",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+
+                        // Feature explanation card
+                        SuperGlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            glassIntensity = GlassIntensity.Light
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "Info",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "About This Feature",
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Text(
+                                    text = featureExplanation,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+
+                        if (additionalInfo != null) {
+                            SuperGlassCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                glassIntensity = GlassIntensity.Light
+                            ) {
+                                Text(
+                                    text = additionalInfo,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        }
+
+                        // Enhanced value display
+                        SuperGlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            glassIntensity = GlassIntensity.Medium
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Current Value",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "${animatedValue.roundToInt()}$valueSuffix",
+                                    style = MaterialTheme.typography.headlineLarge.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        // Enhanced slider
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Slider(
+                                value = sliderTempValue,
+                                onValueChange = { sliderTempValue = it },
+                                valueRange = valueRange,
+                                steps = steps,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    activeTickColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                    inactiveTickColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                )
+                            )
+
+                            // Range indicators
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "${valueRange.start.roundToInt()}$valueSuffix",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = "${valueRange.endInclusive.roundToInt()}$valueSuffix",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+
+                        // Action buttons
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onDismissRequest,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cancel",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("CANCEL", fontWeight = FontWeight.Medium)
+                            }
+
+                            FilledTonalButton(
+                                onClick = {
+                                    onApplyClicked(sliderTempValue.roundToInt())
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Apply",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("APPLY", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
-                    Text(
-                        "${sliderTempValue.roundToInt()}$valueSuffix",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    Slider(
-                        value = sliderTempValue,
-                        onValueChange = { sliderTempValue = it },
-                        valueRange = valueRange,
-                        steps = steps,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = SliderDefaults.colors( // Consistent colors
-                            thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
-                    )
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onApplyClicked(sliderTempValue.roundToInt())
-                        // onDismissRequest() // Dialog will be closed by the caller
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text("APPLY", fontWeight = FontWeight.Medium)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = onDismissRequest,
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Text("CANCEL", fontWeight = FontWeight.Medium)
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surface,
-            shape = MaterialTheme.shapes.large,
-            tonalElevation = 6.dp
-        )
+            }
+        }
     }
 }
 
+// Helper function to get feature explanations
+private fun getFeatureExplanation(title: String): String {
+    return when {
+        title.contains("Swappiness", ignoreCase = true) ->
+            "Controls how aggressively the kernel moves data from RAM to storage. Low values (0-10) make the system focus more on using RAM, high values (60-100) use swap more frequently to save RAM."
 
+        title.contains("ZRAM", ignoreCase = true) ->
+            "Sets the size of compressed RAM to increase virtual memory capacity. ZRAM compresses data in RAM to store more applications without using slower storage."
+
+        title.contains("Dirty Ratio", ignoreCase = true) ->
+            "Sets the percentage of RAM used for write cache before forcing writes to storage. Higher values = better performance but risk of data loss during crashes."
+
+        title.contains("Dirty Background", ignoreCase = true) ->
+            "Sets when the kernel starts gradually writing cache to storage in the background. Helps maintain stable performance by reducing lag during large writes."
+
+        title.contains("Min Free Memory", ignoreCase = true) ->
+            "Sets the minimum amount of RAM that must always remain free. Higher values make the system more responsive but reduce RAM available for applications."
+
+        title.contains("Dirty Expire", ignoreCase = true) ->
+            "Sets how long cache data can persist before being forced to write to storage. Lower values = safer data but reduced performance."
+
+        title.contains("Dirty Writeback", ignoreCase = true) ->
+            "Sets the time interval for the kernel to check and write expired cache. Affects how often the system performs automatic cache cleanup."
+
+        else ->
+            "This setting affects how the system manages memory and performance. Adjust according to your device usage needs for optimal results."
+    }
+}
+
+// Helper function to get appropriate icons
+fun getFeatureIcon(title: String): ImageVector {
+    return when {
+        title.contains("Swappiness", ignoreCase = true) -> Icons.Default.SwapVert
+        title.contains("ZRAM", ignoreCase = true) -> Icons.Default.Compress
+        title.contains("Dirty", ignoreCase = true) -> Icons.Default.Storage
+        title.contains("Memory", ignoreCase = true) -> Icons.Default.Memory
+        else -> Icons.Default.Tune
+    }
+}
+
+// Placeholder dialog composables - these need to be implemented based on your existing dialogs
 @Composable
 fun ZramSizeDialog(
     currentSize: Long,
@@ -532,82 +915,21 @@ fun ZramSizeDialog(
     onDismiss: () -> Unit,
     onConfirm: (Long) -> Unit
 ) {
-    var sliderValueInBytes by remember(currentSize) { mutableFloatStateOf(currentSize.toFloat()) }
-
-    val minZramSizeMB = 128
-    val minZramSizeBytes = minZramSizeMB * 1024L * 1024L
-    val stepSizeMB = 128
-    val stepSizeBytes = stepSizeMB * 1024L * 1024L
-
-    LaunchedEffect(currentSize, maxSize, minZramSizeBytes, stepSizeBytes) {
-        val initialSteps = ((currentSize.toFloat() - minZramSizeBytes.toFloat()) / stepSizeBytes.toFloat())
-            .coerceAtLeast(0f)
-            .roundToInt()
-        val coercedInitialValue = (minZramSizeBytes + initialSteps * stepSizeBytes).toFloat()
-            .coerceIn(minZramSizeBytes.toFloat(), maxSize.toFloat())
-        sliderValueInBytes = coercedInitialValue
-    }
-
-    val currentSizeMBDisplay = sliderValueInBytes.toLong() / (1024 * 1024)
-    val maximumSizeMBDisplay = maxSize / (1024 * 1024)
-    val minimumSizeMBDisplay = minZramSizeBytes / (1024 * 1024)
-
-    AlertDialog(
+    SliderSettingDialog(
+        showDialog = true,
+        title = "Set ZRAM Size",
+        currentValue = (currentSize / (1024 * 1024)).toInt(),
+        valueSuffix = " MB",
+        valueRange = 128f..(maxSize / (1024 * 1024)).toFloat(),
+        steps = ((maxSize / (1024 * 1024)) - 128).toInt() / 128,
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Adjust ZRAM Size",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-            )
-        },
-        text = {
-            Column {
-                Text(
-                    text = "${currentSizeMBDisplay}MB (Min: ${minimumSizeMBDisplay}MB, Max: ${maximumSizeMBDisplay}MB, Step: ${stepSizeMB}MB)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                Slider(
-                    value = sliderValueInBytes,
-                    onValueChange = { newValueFromSlider ->
-                        val stepsCount = ((newValueFromSlider - minZramSizeBytes.toFloat()) / stepSizeBytes.toFloat())
-                            .coerceAtLeast(0f)
-                            .roundToInt()
-                        val newSnappedValue = (minZramSizeBytes + stepsCount * stepSizeBytes).toFloat()
-                        sliderValueInBytes = newSnappedValue.coerceIn(minZramSizeBytes.toFloat(), maxSize.toFloat())
-                    },
-                    valueRange = minZramSizeBytes.toFloat()..maxSize.toFloat(),
-                    steps = if (maxSize > minZramSizeBytes && stepSizeBytes > 0) {
-                        ((maxSize - minZramSizeBytes) / stepSizeBytes).toInt().coerceAtLeast(0) - 1
-                    } else {
-                        0
-                    },
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(sliderValueInBytes.toLong()) }) {
-                Text("OK", fontWeight = FontWeight.Medium)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("CANCEL", fontWeight = FontWeight.Medium)
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 6.dp
+        onApplyClicked = { newValue ->
+            onConfirm(newValue * 1024L * 1024L)
+        }
     )
 }
 
-// Extracted Compression Algorithm Dialog to its own Composable for clarity
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CompressionAlgorithmDialog(
     compressionAlgorithms: List<String>,
@@ -615,63 +937,248 @@ fun CompressionAlgorithmDialog(
     onDismiss: () -> Unit,
     onAlgorithmSelected: (String) -> Unit
 ) {
+    // Add animation for dialog appearance
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Select Compression Algorithm",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-            )
-        },
-        text = {
-            Column {
-                compressionAlgorithms.chunked(2).forEach { rowAlgos ->
-                    Row(Modifier.fillMaxWidth()) {
-                        rowAlgos.forEach { algo ->
-                            Row(
-                                Modifier
-                                    .weight(1f)
-                                    .clip(MaterialTheme.shapes.medium)
-                                    .clickable { onAlgorithmSelected(algo) }
-                                    .padding(vertical = 12.dp, horizontal = 8.dp)
-                                    .then(if (algo == currentCompression) Modifier.border(BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary), MaterialTheme.shapes.medium) else Modifier),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = (algo == currentCompression),
-                                    onClick = null, // Click handled by parent Row
-                                    modifier = Modifier.size(20.dp),
-                                    colors = RadioButtonDefaults.colors(
-                                        selectedColor = MaterialTheme.colorScheme.primary,
-                                        unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight(),
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(animationSpec = tween(300)) + scaleIn(
+                    initialScale = 0.8f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                ),
+                exit = fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.8f)
+            ) {
+                SuperGlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .heightIn(min = 300.dp, max = 600.dp)
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) { },
+                    glassIntensity = GlassIntensity.Heavy
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        // Enhanced Header with better styling
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+                                                Color.Transparent
+                                            ),
+                                            radius = 60f
+                                        )
                                     )
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                        RoundedCornerShape(24.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Compress,
+                                    contentDescription = "Compression",
+                                    modifier = Modifier.size(24.dp),
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
-                                Spacer(Modifier.width(8.dp))
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = algo,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    maxLines = 1,
-                                    color = if (algo == currentCompression) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    text = "Choose Compression Algorithm",
+                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "ZRAM Performance Settings",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 )
                             }
                         }
-                        if (rowAlgos.size == 1) Spacer(Modifier.weight(1f))
+
+                        // Enhanced explanation card
+                        SuperGlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            glassIntensity = GlassIntensity.Light
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "Info",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "About This Feature",
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Text(
+                                    text = "The compression algorithm used by ZRAM to compress data in memory. LZ4 prioritizes speed, ZSTD high efficiency, LZO optimal balance between speed and compression ratio.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+
+                        // Enhanced algorithm selection list
+                        LazyColumn(
+                            modifier = Modifier.heightIn(max = 280.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(compressionAlgorithms) { algorithm ->
+                                val isSelected = algorithm == currentCompression
+
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter = slideInVertically { it } + fadeIn()
+                                ) {
+                                    SuperGlassCard(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        glassIntensity = if (isSelected) GlassIntensity.Medium else GlassIntensity.Light,
+                                        onClick = { onAlgorithmSelected(algorithm) }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            RadioButton(
+                                                selected = isSelected,
+                                                onClick = { onAlgorithmSelected(algorithm) },
+                                                colors = RadioButtonDefaults.colors(
+                                                    selectedColor = MaterialTheme.colorScheme.primary,
+                                                    unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                )
+                                            )
+
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = algorithm.uppercase(),
+                                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                                                    ),
+                                                    color = if (isSelected)
+                                                        MaterialTheme.colorScheme.primary
+                                                    else
+                                                        MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = when (algorithm.lowercase()) { // ENGLISH_TRANSLATION
+                                                        "lz4" -> "Maximum speed • Low latency"
+                                                        "zstd" -> "High efficiency • Best compression ratio"
+                                                        "lzo" -> "Optimal balance • Stable"
+                                                        "lz4hc" -> "High compression • Moderate speed"
+                                                        "deflate" -> "Standard compression • Moderate speed"
+                                                        "lzma" -> "Maximum compression • Slower"
+                                                        "bzip2" -> "Better compression • Slower"
+                                                        "zlib" -> "Balanced compression • Moderate speed"
+                                                        "lzo-rle" -> "Fast compression • Low CPU usage"
+                                                        else -> "Compression algorithm • Good performance"
+                                                    },
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                )
+                                            }
+
+                                            if (isSelected) {
+                                                Icon(
+                                                    imageVector = Icons.Default.CheckCircle,
+                                                    contentDescription = "Selected",
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Enhanced action buttons
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                border = BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cancel",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("CANCEL", fontWeight = FontWeight.Medium)
+                            }
+                        }
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Text("CANCEL", fontWeight = FontWeight.Medium)
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 6.dp
-    )
+        }
+    }
 }
 
 @Composable
@@ -681,194 +1188,279 @@ fun SwapSizeDialog(
     onDismiss: () -> Unit,
     onConfirm: (Long) -> Unit
 ) {
-    var sliderValueInBytes by remember(currentSize) { mutableFloatStateOf(currentSize.toFloat()) }
-
-    val minSwapSizeBytes = 0L // Allow disabling swap entirely
-    val stepSizeMB = 64
-    val stepSizeBytes = stepSizeMB * 1024L * 1024L
-
-    LaunchedEffect(currentSize, maxSize, minSwapSizeBytes, stepSizeBytes) {
-        // Handle the case where current size is 0 (disabled)
-        if (currentSize == 0L) {
-            sliderValueInBytes = 0f
-        } else {
-            val initialSteps = ((currentSize.toFloat() - stepSizeBytes.toFloat()) / stepSizeBytes.toFloat())
-                .coerceAtLeast(0f)
-                .roundToInt()
-            val coercedInitialValue = (stepSizeBytes + initialSteps * stepSizeBytes).toFloat()
-                .coerceIn(0f, maxSize.toFloat())
-            sliderValueInBytes = coercedInitialValue
-        }
-    }
-
-    val currentSizeMBDisplay = sliderValueInBytes.toLong() / (1024 * 1024)
-    val maximumSizeMBDisplay = maxSize / (1024 * 1024)
-
-    AlertDialog(
+    SliderSettingDialog(
+        showDialog = true,
+        title = "Set Swap Size",
+        currentValue = if (currentSize == 0L) 0 else (currentSize / (1024 * 1024)).toInt(),
+        valueSuffix = " MB",
+        valueRange = 0f..(maxSize / (1024 * 1024)).toFloat(),
+        steps = (maxSize / (1024 * 1024)).toInt() / 128,
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Adjust Swap Size",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-            )
-        },
-        text = {
-            Column {
-                Text(
-                    text = if (currentSizeMBDisplay == 0L) {
-                        "Disabled (Max: ${maximumSizeMBDisplay}MB, Step: ${stepSizeMB}MB)"
-                    } else {
-                        "${currentSizeMBDisplay}MB (Max: ${maximumSizeMBDisplay}MB, Step: ${stepSizeMB}MB)"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                Slider(
-                    value = sliderValueInBytes,
-                    onValueChange = { newValueFromSlider ->
-                        if (newValueFromSlider <= stepSizeBytes.toFloat() / 2) {
-                            // Snap to 0 (disabled) if close to minimum
-                            sliderValueInBytes = 0f
-                        } else {
-                            // Snap to step increments
-                            val stepsCount = ((newValueFromSlider - stepSizeBytes.toFloat()) / stepSizeBytes.toFloat())
-                                .coerceAtLeast(0f)
-                                .roundToInt() + 1
-                            val newSnappedValue = (stepsCount * stepSizeBytes).toFloat()
-                            sliderValueInBytes = newSnappedValue.coerceIn(0f, maxSize.toFloat())
-                        }
-                    },
-                    valueRange = 0f..maxSize.toFloat(),
-                    steps = if (maxSize > stepSizeBytes && stepSizeBytes > 0) {
-                        ((maxSize) / stepSizeBytes).toInt().coerceAtLeast(0)
-                    } else {
-                        0
-                    },
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(sliderValueInBytes.toLong()) }) {
-                Text("OK", fontWeight = FontWeight.Medium)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("CANCEL", fontWeight = FontWeight.Medium)
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 6.dp
+        onApplyClicked = { newValue ->
+            onConfirm(if (newValue == 0) 0L else newValue * 1024L * 1024L)
+        }
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwapLoadingDialog(
     logs: List<String>,
     onDismissRequest: () -> Unit
 ) {
-    val listState = rememberLazyListState()
+    // Add animation for dialog appearance
+    var visible by remember { mutableStateOf(false) }
 
-    // Auto-scroll to bottom when new logs are added
-    LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty()) {
-            listState.animateScrollToItem(logs.size - 1)
-        }
+    LaunchedEffect(Unit) {
+        visible = true
     }
 
     AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+        onDismissRequest = { }, // Cannot dismiss while loading
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight(),
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(animationSpec = tween(300)) + scaleIn(
+                    initialScale = 0.9f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                )
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 3.dp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    "Configuring Swap...",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-                )
-            }
-        },
-        text = {
-            Column {
-                Text(
-                    text = "Swap operation in progress. Please wait...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-
-                if (logs.isNotEmpty()) {
-                    HorizontalDivider(
-                        thickness = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-
-                    Text(
-                        text = "Live Logs:",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    // Scrollable logs with maximum height
-                    LazyColumn(
-                        state = listState,
+                SuperGlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .heightIn(min = 300.dp, max = 600.dp),
+                    glassIntensity = GlassIntensity.Heavy
+                ) {
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 200.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                MaterialTheme.shapes.small
-                            ),
-                        contentPadding = PaddingValues(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                            .padding(24.dp)
+                            .heightIn(max = 550.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
-                        items(logs) { log ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = log,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        // Enhanced header with animated progress indicator
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+                                                Color.Transparent
+                                            ),
+                                            radius = 60f
+                                        )
+                                    )
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                        RoundedCornerShape(24.dp)
                                     ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.weight(1f)
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 3.dp
+                                )
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Processing Swap File...",
+                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Configuring Virtual Memory",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+
+                        // Enhanced explanation card
+                        SuperGlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            glassIntensity = GlassIntensity.Light
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "Info",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Process in Progress",
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Text(
+                                    text = "The system is configuring the swap file to increase virtual memory capacity. This process may take a while depending on the size of the file being configured.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+
+                        // Enhanced logs section with better styling - Always visible to prevent flickering
+                        SuperGlassCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f, false),
+                            glassIntensity = GlassIntensity.Light
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Terminal,
+                                        contentDescription = "Logs",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.secondary
+                                    )
+                                    Text(
+                                        text = "Real-time Process Log",
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+
+                                // Scrollable logs with better formatting
+                                val listState = rememberLazyListState()
+
+                                // Auto-scroll to bottom when new logs are added
+                                LaunchedEffect(logs.size) {
+                                    if (logs.isNotEmpty()) {
+                                        listState.animateScrollToItem(logs.size - 1)
+                                    }
+                                }
+
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier.heightIn(min = 80.dp, max = 250.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (logs.isEmpty()) {
+                                        item {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(8.dp),
+                                                horizontalArrangement = Arrangement.Center,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Initializing process...",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontWeight = FontWeight.Normal
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                                    lineHeight = 16.sp
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        items(logs.takeLast(50)) { log -> // Limit to last 50 logs for performance
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.Top
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(4.dp)
+                                                        .clip(CircleShape)
+                                                        .background(MaterialTheme.colorScheme.primary)
+                                                        .offset(y = 6.dp)
+                                                )
+
+                                                Text(
+                                                    text = log,
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontWeight = FontWeight.Normal
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                                    lineHeight = 16.sp,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Progress indicator section
+                        SuperGlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            glassIntensity = GlassIntensity.Light
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 2.dp
+                                )
+                                Text(
+                                    text = "Please wait, do not close the application...",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontWeight = FontWeight.Medium
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                                 )
                             }
                         }
                     }
-
-                    Text(
-                        text = "Scroll to see more logs",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
                 }
             }
-        },
-        confirmButton = {}, // Empty to hide button
-        dismissButton = {}, // Empty to hide button
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 8.dp
-    )
+        }
+    }
 }
