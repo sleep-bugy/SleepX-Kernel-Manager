@@ -1,17 +1,61 @@
 package id.xms.xtrakernelmanager.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Intent
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import id.xms.xtrakernelmanager.data.repository.RootRepository
+import id.xms.xtrakernelmanager.service.BatteryStatsService
+import id.xms.xtrakernelmanager.utils.PreferenceManager
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class MiscViewModel @Inject constructor(
-    private val rootRepo: RootRepository
-) : ViewModel()
+    private val application: Application,
+    private val preferenceManager: PreferenceManager
+) : AndroidViewModel(application) {
 
-    private val _output = MutableStateFlow("")
-    val output = _output.asStateFlow()
+    private val _batteryStatsEnabled = MutableStateFlow(false)
+    val batteryStatsEnabled: StateFlow<Boolean> = _batteryStatsEnabled.asStateFlow()
 
+    private val _batteryNotificationEnabled = MutableStateFlow(false)
+    val batteryNotificationEnabled: StateFlow<Boolean> = _batteryNotificationEnabled.asStateFlow()
+
+    init {
+        // Load saved preferences on init
+        _batteryStatsEnabled.value = preferenceManager.getBatteryStatsEnabled()
+        _batteryNotificationEnabled.value = preferenceManager.getBatteryStatsEnabled()
+    }
+
+    fun toggleBatteryStats(enabled: Boolean) {
+        viewModelScope.launch {
+            _batteryStatsEnabled.value = enabled
+            _batteryNotificationEnabled.value = enabled
+
+            // Save preference for auto-start on boot - THIS IS THE KEY!
+            preferenceManager.setBatteryStatsEnabled(enabled)
+
+            if (enabled) {
+                // Start the battery stats service
+                val serviceIntent = Intent(application, BatteryStatsService::class.java)
+                try {
+                    application.startForegroundService(serviceIntent)
+                } catch (e: Exception) {
+                    // Handle service start error
+                    _batteryStatsEnabled.value = false
+                    _batteryNotificationEnabled.value = false
+                    preferenceManager.setBatteryStatsEnabled(false)
+                }
+            } else {
+                // Stop the battery stats service and disable auto-start
+                val serviceIntent = Intent(application, BatteryStatsService::class.java)
+                application.stopService(serviceIntent)
+                preferenceManager.setBatteryStatsEnabled(false)
+            }
+        }
+    }
+}
