@@ -212,20 +212,146 @@ class SystemRepository @Inject constructor(
         } ?: 0f
 
         val cycleCountStr = readFileToString("$batteryDir/cycle_count", "Battery Cycle Count")
-        val finalCyclesForInfo = cycleCountStr?.toIntOrNull() ?: 0
+        val finalCycleCount = cycleCountStr?.toIntOrNull() ?: run {
+            // Try alternative paths for cycle count
+            val altCyclePaths = listOf(
+                "/sys/class/power_supply/bms/cycle_count",
+                "/sys/class/power_supply/battery/cycle_count_summary",
+                "/proc/driver/battery_cycle",
+                "/proc/battinfo"
+            )
 
+            for (altPath in altCyclePaths) {
+                val altCycleStr = readFileToString(altPath, "Alternative Battery Cycle Count ($altPath)")
+                val cycles = altCycleStr?.toIntOrNull()
+                if (cycles != null && cycles > 0) {
+                    Log.d(TAG, "Found cycle count from alternative path $altPath: $cycles")
+                    return@run cycles
+                }
+            }
+            0 // Default if no cycle count found
+        }
+
+        // Try multiple paths for battery capacity information
         val designCapacityUahStr = readFileToString("$batteryDir/charge_full_design", "Battery Design Capacity (uAh)")
-        val designCapacityUah = designCapacityUahStr?.toLongOrNull()
-        val finalDesignCapacityMah = if (designCapacityUah != null && designCapacityUah > 0) (designCapacityUah / 1000).toInt() else 0
+        val designCapacityUah = designCapacityUahStr?.toLongOrNull() ?: run {
+            // Try alternative paths for design capacity
+            val altCapacityPaths = listOf(
+                "/sys/class/power_supply/bms/charge_full_design",
+                "/sys/class/power_supply/battery/energy_full_design",
+                "/proc/driver/battery_capacity"
+            )
 
-        var calculatedSohPercentage: Int = BatteryManager.BATTERY_HEALTH_UNKNOWN
+            for (altPath in altCapacityPaths) {
+                val altCapStr = readFileToString(altPath, "Alternative Battery Design Capacity ($altPath)")
+                val cap = altCapStr?.toLongOrNull()
+                if (cap != null && cap > 0) {
+                    Log.d(TAG, "Found design capacity from alternative path $altPath: $cap")
+                    return@run cap
+                }
+            }
+            null
+        }
+
+        val finalDesignCapacityMah = if (designCapacityUah != null && designCapacityUah > 0) {
+            // Convert microAh to mAh, handle different units
+            when {
+                designCapacityUah > 10000000 -> (designCapacityUah / 1000).toInt() // µAh to mAh
+                designCapacityUah > 10000 -> (designCapacityUah / 1000).toInt() // µAh to mAh
+                else -> designCapacityUah.toInt() // Already in mAh
+            }
+        } else 0
+
+        var calculatedSohPercentage: Int = 0
+        var currentCapacityMah: Int = 0
+
         if (finalDesignCapacityMah > 0 && designCapacityUah != null) {
             val currentFullUahStr = readFileToString("$batteryDir/charge_full", "Battery Current Full Capacity (uAh)")
-            val currentFullUah = currentFullUahStr?.toLongOrNull()
-            if (currentFullUah != null && currentFullUah > 0) {
-                val soh = (currentFullUah.toDouble() / designCapacityUah.toDouble()) * 100.0
-                calculatedSohPercentage = soh.toInt().coerceIn(0, 100)
+            val currentFullUah = currentFullUahStr?.toLongOrNull() ?: run {
+                // Try alternative paths for current capacity
+                val altCurrentCapPaths = listOf(
+                    "/sys/class/power_supply/bms/charge_full",
+                    "/sys/class/power_supply/battery/energy_full",
+                    "/proc/driver/battery_current_capacity"
+                )
+
+                for (altPath in altCurrentCapPaths) {
+                    val altCapStr = readFileToString(altPath, "Alternative Battery Current Capacity ($altPath)")
+                    val cap = altCapStr?.toLongOrNull()
+                    if (cap != null && cap > 0) {
+                        Log.d(TAG, "Found current capacity from alternative path $altPath: $cap")
+                        return@run cap
+                    }
+                }
+                null
             }
+
+            if (currentFullUah != null && currentFullUah > 0) {
+                // Convert microAh to mAh, handle different units
+                currentCapacityMah = when {
+                    currentFullUah > 10000000 -> (currentFullUah / 1000).toInt() // µAh to mAh
+                    currentFullUah > 10000 -> (currentFullUah / 1000).toInt() // µAh to mAh
+                    else -> currentFullUah.toInt() // Already in mAh
+                }
+
+                // Calculate real battery health percentage: (Current Capacity / Design Capacity) × 100%
+                val sohDouble = (currentCapacityMah.toDouble() / finalDesignCapacityMah.toDouble()) * 100.0
+                calculatedSohPercentage = sohDouble.toInt().coerceIn(0, 100)
+
+                Log.d(TAG, "Real Battery Health Calculation:")
+                Log.d(TAG, "Design Capacity: ${finalDesignCapacityMah} mAh")
+                Log.d(TAG, "Current Capacity: ${currentCapacityMah} mAh")
+                Log.d(TAG, "Health Percentage: ${calculatedSohPercentage}% = (${currentCapacityMah} / ${finalDesignCapacityMah}) × 100%")
+            } else {
+                // If we can't read current capacity, try to get health directly from system
+                val healthPercentageStr = readFileToString("$batteryDir/health", "Direct Battery Health")
+                calculatedSohPercentage = healthPercentageStr?.toIntOrNull()?.coerceIn(0, 100) ?: run {
+                    // As last resort, try to estimate from BatteryManager health status
+                    val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                    val health = batteryIntent?.getIntExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_UNKNOWN) ?: BatteryManager.BATTERY_HEALTH_UNKNOWN
+
+                    when (health) {
+                        BatteryManager.BATTERY_HEALTH_GOOD -> 100
+                        BatteryManager.BATTERY_HEALTH_OVERHEAT -> 85
+                        BatteryManager.BATTERY_HEALTH_COLD -> 90
+                        BatteryManager.BATTERY_HEALTH_DEAD -> 0
+                        BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> 75
+                        BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE -> 50
+                        else -> 100 // Default to 100% for unknown
+                    }
+                }
+                currentCapacityMah = (finalDesignCapacityMah * calculatedSohPercentage / 100.0).toInt()
+                Log.d(TAG, "Estimated Battery Health: ${calculatedSohPercentage}% (no direct capacity measurement)")
+            }
+        } else {
+            // If no design capacity is available, try to get approximate values
+            Log.w(TAG, "No battery capacity information available from system files")
+
+            // Try to get some capacity info from BatteryManager properties
+            val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            val energyCounter = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER)
+
+            if (energyCounter != Int.MIN_VALUE && energyCounter > 0) {
+                // Energy counter is in nWh, convert to approximate mAh
+                // Assuming average voltage of 3.7V: mAh ≈ nWh / (3.7 * 1000000)
+                val estimatedCapacityMah = (energyCounter / (3.7 * 1000000)).toInt()
+                if (estimatedCapacityMah > 0) {
+                    currentCapacityMah = estimatedCapacityMah
+                    // Assume this is 100% health since we don't have design capacity
+                    calculatedSohPercentage = 100
+                    Log.d(TAG, "Estimated capacity from energy counter: ${currentCapacityMah} mAh")
+                }
+            }
+        }
+
+        // Determine health status string based on percentage
+        val healthStatus = when {
+            calculatedSohPercentage >= 90 -> "Excellent"
+            calculatedSohPercentage >= 80 -> "Good"
+            calculatedSohPercentage >= 70 -> "Fair"
+            calculatedSohPercentage >= 60 -> "Poor"
+            calculatedSohPercentage > 0 -> "Critical"
+            else -> "Unknown"
         }
 
         val finalVoltageStr = readFileToString("$batteryDir/voltage_now", "Battery Voltage Now")
@@ -257,10 +383,16 @@ class SystemRepository @Inject constructor(
             isCharging = isCharging,
             current = finalCurrent ?: 0f,
             chargingWattage = finalWattage ?: 0f,
-            technology = finalTechnology ?: "",
-            health = "${calculatedSohPercentage}%",
-            status = finalStatus ?: "",
-            chargingType = getChargingTypeFromStatus(statusString)
+            technology = finalTechnology ?: "Unknown",
+            health = healthStatus, // Use the calculated health status
+            status = finalStatus,
+            chargingType = getChargingTypeFromStatus(statusString),
+            powerSource = getChargingTypeFromStatus(statusString),
+            healthPercentage = calculatedSohPercentage,
+            cycleCount = finalCycleCount, // Use the actual cycle count
+            capacity = finalDesignCapacityMah, // Use the actual design capacity
+            currentCapacity = currentCapacityMah, // Use the actual current capacity
+            plugged = 0
         )
     }
 
@@ -318,17 +450,68 @@ class SystemRepository @Inject constructor(
 
     private fun getSystemInfoInternal(): SystemInfo {
         Log.d(TAG, "Mengambil SystemInfo (API based)...")
+
+        // Improved SoC detection with multiple property sources
         var socName = VALUE_UNKNOWN
         try {
-            val processManufacturer = Runtime.getRuntime().exec("getprop ro.soc.manufacturer")
-            val manufacturer = BufferedReader(InputStreamReader(processManufacturer.inputStream)).readLine()?.trim()
-            processManufacturer.waitFor()
-            processManufacturer.destroy()
+            // Try multiple property sources for SoC detection
+            val socProperties = listOf(
+                "ro.soc.manufacturer" to "ro.soc.model",
+                "ro.hardware" to null,
+                "ro.product.board" to null,
+                "ro.chipname" to null,
+                "ro.board.platform" to null,
+                "vendor.product.cpu" to null
+            )
 
-            val processModel = Runtime.getRuntime().exec("getprop ro.soc.model")
-            val model = BufferedReader(InputStreamReader(processModel.inputStream)).readLine()?.trim()
-            processModel.waitFor()
-            processModel.destroy()
+            var manufacturer: String? = null
+            var model: String? = null
+
+            // Try each property pair
+            for ((manufacturerProp, modelProp) in socProperties) {
+                if (manufacturer.isNullOrBlank()) {
+                    manufacturer = getSystemProperty(manufacturerProp)
+                }
+
+                if (modelProp != null && model.isNullOrBlank()) {
+                    model = getSystemProperty(modelProp)
+                }
+
+                // If we have both, break early
+                if (!manufacturer.isNullOrBlank() && !model.isNullOrBlank()) {
+                    break
+                }
+            }
+
+            // Additional fallback checks
+            if (manufacturer.isNullOrBlank()) {
+                manufacturer = getSystemProperty("ro.product.cpu.abi")?.let { abi ->
+                    when {
+                        abi.contains("arm64") || abi.contains("aarch64") -> "ARM"
+                        abi.contains("x86") -> "Intel"
+                        else -> null
+                    }
+                }
+            }
+
+            // Parse hardware string for additional info
+            val hardware = getSystemProperty("ro.hardware")
+            if (!hardware.isNullOrBlank()) {
+                when {
+                    hardware.startsWith("qcom", ignoreCase = true) -> {
+                        if (manufacturer.isNullOrBlank()) manufacturer = "QTI"
+                        if (model.isNullOrBlank()) model = hardware.uppercase()
+                    }
+                    hardware.contains("mtk", ignoreCase = true) || hardware.contains("mediatek", ignoreCase = true) -> {
+                        if (manufacturer.isNullOrBlank()) manufacturer = "Mediatek"
+                        if (model.isNullOrBlank()) model = hardware
+                    }
+                    hardware.contains("exynos", ignoreCase = true) -> {
+                        if (manufacturer.isNullOrBlank()) manufacturer = "Samsung"
+                        if (model.isNullOrBlank()) model = hardware
+                    }
+                }
+            }
 
             if (!manufacturer.isNullOrBlank() && !model.isNullOrBlank()) {
                 socName = when {
@@ -350,10 +533,19 @@ class SystemRepository @Inject constructor(
                     manufacturer.equals("Mediatek", ignoreCase = true) && model.equals("MT6989W", ignoreCase = true) -> "MediaTek Dimensity 9300+"
                     else -> "$manufacturer $model"
                 }
+            } else if (!manufacturer.isNullOrBlank()) {
+                socName = manufacturer
+            } else if (!model.isNullOrBlank()) {
+                socName = model
             }
+
+            Log.d(TAG, "Detected SoC: manufacturer=$manufacturer, model=$model, final=$socName")
         } catch (e: Exception) {
             Log.w(TAG, "Gagal mendapatkan info SOC dari getprop", e)
         }
+
+        // Get actual display information
+        val displayInfo = getDisplayInfo()
 
         return SystemInfo(
             model = android.os.Build.MODEL ?: VALUE_UNKNOWN,
@@ -361,34 +553,516 @@ class SystemRepository @Inject constructor(
             androidVersion = android.os.Build.VERSION.RELEASE ?: VALUE_UNKNOWN,
             sdk = android.os.Build.VERSION.SDK_INT,
             fingerprint = android.os.Build.FINGERPRINT ?: VALUE_UNKNOWN,
-            soc = socName
+            soc = socName,
+            screenResolution = displayInfo.resolution,
+            displayTechnology = displayInfo.technology,
+            refreshRate = displayInfo.refreshRate,
+            screenDpi = displayInfo.dpi,
+            gpuRenderer = getGpuRenderer()
         )
+    }
+
+    private fun getSystemProperty(property: String): String? {
+        return try {
+            val process = Runtime.getRuntime().exec("getprop $property")
+            val result = BufferedReader(InputStreamReader(process.inputStream)).readLine()?.trim()
+            process.waitFor()
+            process.destroy()
+            if (result.isNullOrBlank()) null else result
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to get property $property", e)
+            null
+        }
+    }
+
+    private data class DisplayInfo(
+        val resolution: String,
+        val technology: String,
+        val refreshRate: String,
+        val dpi: String
+    )
+
+    private fun getDisplayInfo(): DisplayInfo {
+        try {
+            val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+            val display = windowManager.defaultDisplay
+            val metrics = android.util.DisplayMetrics()
+            display.getRealMetrics(metrics)
+
+            val resolution = "${metrics.widthPixels}x${metrics.heightPixels}"
+            val dpi = "${metrics.densityDpi}"
+
+            // Get refresh rate
+            var refreshRate = "60Hz" // fallback
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    val mode = display.mode
+                    refreshRate = "${mode.refreshRate.toInt()}Hz"
+                } else {
+                    refreshRate = "${display.refreshRate.toInt()}Hz"
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to get refresh rate", e)
+
+                // Try alternative methods
+                try {
+                    // Try reading from system properties
+                    val propRefreshRate = getSystemProperty("ro.display.refresh_rate")
+                        ?: getSystemProperty("persist.vendor.display.refresh_rate")
+                        ?: getSystemProperty("debug.sf.frame_rate_multiple_threshold")
+
+                    if (!propRefreshRate.isNullOrBlank()) {
+                        val rate = propRefreshRate.toFloatOrNull()?.toInt()
+                        if (rate != null && rate > 0) {
+                            refreshRate = "${rate}Hz"
+                        }
+                    }
+                } catch (ex: Exception) {
+                    Log.w(TAG, "Failed to get refresh rate from properties", ex)
+                }
+            }
+
+            // Detect display technology
+            var technology = "LCD" // fallback
+            try {
+                val displayTech = getSystemProperty("ro.sf.lcd_density")
+                    ?: getSystemProperty("ro.hardware.display")
+                    ?: getSystemProperty("vendor.display.type")
+
+                technology = when {
+                    displayTech?.contains("amoled", ignoreCase = true) == true -> "AMOLED"
+                    displayTech?.contains("oled", ignoreCase = true) == true -> "OLED"
+                    displayTech?.contains("ips", ignoreCase = true) == true -> "IPS LCD"
+                    displayTech?.contains("tft", ignoreCase = true) == true -> "TFT LCD"
+                    android.os.Build.MANUFACTURER.equals("Samsung", ignoreCase = true) -> "AMOLED"
+                    android.os.Build.MANUFACTURER.equals("OnePlus", ignoreCase = true) -> "AMOLED"
+                    android.os.Build.MANUFACTURER.equals("Google", ignoreCase = true) -> "OLED"
+                    else -> "LCD"
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to detect display technology", e)
+            }
+
+            return DisplayInfo(resolution, technology, refreshRate, dpi)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get display info", e)
+            return DisplayInfo(VALUE_UNKNOWN, "LCD", "60Hz", VALUE_UNKNOWN)
+        }
+    }
+
+    private fun getGpuRenderer(): String {
+        return try {
+            // Try to get GPU info from system properties
+            val gpuInfo = getSystemProperty("ro.hardware.gpu")
+                ?: getSystemProperty("ro.opengles.version")
+                ?: getSystemProperty("ro.gpu.driver")
+
+            when {
+                gpuInfo?.contains("adreno", ignoreCase = true) == true -> "Qualcomm Adreno"
+                gpuInfo?.contains("mali", ignoreCase = true) == true -> "ARM Mali"
+                gpuInfo?.contains("powervr", ignoreCase = true) == true -> "PowerVR"
+                else -> gpuInfo ?: VALUE_UNKNOWN
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to get GPU renderer", e)
+            VALUE_UNKNOWN
+        }
+    }
+
+    private fun getChargingTypeFromStatus(statusString: String?): String {
+        return when {
+            statusString.isNullOrBlank() -> "Unknown"
+            statusString.contains("Charging", ignoreCase = true) -> "AC/USB"
+            statusString.contains("Wireless", ignoreCase = true) -> "Wireless"
+            statusString.contains("Fast", ignoreCase = true) -> "Fast Charging"
+            statusString.contains("Quick", ignoreCase = true) -> "Quick Charge"
+            statusString.contains("Turbo", ignoreCase = true) -> "Turbo Charging"
+            statusString.contains("Super", ignoreCase = true) -> "Super Charging"
+            statusString.contains("Warp", ignoreCase = true) -> "Warp Charging"
+            statusString.contains("Dash", ignoreCase = true) -> "Dash Charging"
+            statusString.contains("Full", ignoreCase = true) -> "Not Charging"
+            statusString.contains("Discharging", ignoreCase = true) -> "Not Charging"
+            else -> "Unknown"
+        }
     }
 
     fun getSystemInfo(): SystemInfo {
         return runBlocking { getCachedSystemInfo() }
     }
 
+    fun getKernelInfo(): KernelInfo {
+        Log.d(TAG, "Getting kernel information...")
+
+        // Get kernel version
+        val version = readFileToString("/proc/version", "Kernel Version")
+            ?: android.os.Build.VERSION.RELEASE
+
+        // Improved GKI type detection with version-based detection
+        val gkiType = when {
+            // Check for specific GKI patterns first (more specific)
+            version.contains("gki", ignoreCase = true) ||
+            version.contains("generic kernel image", ignoreCase = true) ||
+            android.os.Build.VERSION.RELEASE.contains("gki", ignoreCase = true) -> "Generic Kernel Image (GKI)"
+
+            // Check for Android Common Kernel patterns
+            version.contains("android-mainline", ignoreCase = true) ||
+            version.contains("android-common", ignoreCase = true) -> "Android Common Kernel (ACK)"
+
+            // GKI version detection based on Linux kernel version
+            version.contains("Linux version", ignoreCase = true) -> {
+                // Extract kernel version number
+                val versionRegex = """Linux version (\d+\.\d+)""".toRegex()
+                val kernelVersionMatch = versionRegex.find(version)
+                val kernelVersion = kernelVersionMatch?.groupValues?.get(1)?.toFloatOrNull()
+
+                when {
+                    kernelVersion != null && kernelVersion >= 6.6f -> "Generic Kernel Image (GKI 2.0)"
+                    kernelVersion != null && kernelVersion >= 5.15f -> "Generic Kernel Image (GKI 2.0)"
+                    kernelVersion != null && kernelVersion >= 5.10f -> "Generic Kernel Image (GKI 2.0)"
+                    kernelVersion != null && kernelVersion >= 5.4f -> "Generic Kernel Image (GKI 1.0)"
+                    kernelVersion != null && kernelVersion >= 4.19f &&
+                    (version.contains("android", ignoreCase = true) ||
+                     android.os.Build.VERSION.SDK_INT >= 29) -> "Generic Kernel Image (GKI)"
+                    version.contains("android", ignoreCase = true) -> "Android Kernel"
+                    else -> "Linux Kernel $kernelVersion"
+                }
+            }
+
+            // Check build fingerprint for additional clues
+            android.os.Build.FINGERPRINT.contains("gki", ignoreCase = true) -> "Generic Kernel Image (GKI)"
+
+            // Fallback check for android (less specific) - moved to lower priority
+            version.contains("android", ignoreCase = true) -> "Android Kernel"
+
+            else -> "Custom/OEM Kernel"
+        }
+
+        // Get scheduler information with better fallback paths
+        val scheduler = readFileToString("/sys/block/sda/queue/scheduler", "I/O Scheduler")
+            ?.let { schedulerLine ->
+                // Extract currently active scheduler (marked with brackets)
+                val activeSchedulerRegex = """\[([^\]]+)\]""".toRegex()
+                activeSchedulerRegex.find(schedulerLine)?.groupValues?.get(1) ?: schedulerLine.trim()
+            } ?: run {
+                // Try alternative block devices
+                val alternativeDevices = listOf("mmcblk0", "nvme0n1", "sdb", "sdc")
+                for (device in alternativeDevices) {
+                    val altScheduler = readFileToString("/sys/block/$device/queue/scheduler", "I/O Scheduler ($device)")
+                    if (altScheduler != null) {
+                        val activeSchedulerRegex = """\[([^\]]+)\]""".toRegex()
+                        val result = activeSchedulerRegex.find(altScheduler)?.groupValues?.get(1) ?: altScheduler.trim()
+                        if (result.isNotBlank()) return@run result
+                    }
+                }
+                "Unknown"
+            }
+
+        // Get SELinux status
+        val selinuxStatus = readFileToString("/sys/fs/selinux/enforce", "SELinux Status")
+            ?.let { enforceValue ->
+                when (enforceValue.trim()) {
+                    "1" -> "Enforcing"
+                    "0" -> "Permissive"
+                    else -> "Unknown"
+                }
+            } ?: run {
+            // Fallback: try getenforce command
+            try {
+                val process = Runtime.getRuntime().exec("getenforce")
+                val result = BufferedReader(InputStreamReader(process.inputStream)).readLine()?.trim()
+                process.waitFor()
+                process.destroy()
+                result ?: "Unknown"
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to get SELinux status", e)
+                "Unknown"
+            }
+        }
+
+        // Get ABI
+        val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "Unknown"
+
+        // Get architecture
+        val architecture = when {
+            abi.contains("arm64") || abi.contains("aarch64") -> "ARM64"
+            abi.contains("arm") -> "ARM"
+            abi.contains("x86_64") -> "x86_64"
+            abi.contains("x86") -> "x86"
+            else -> abi
+        }
+
+        // Enhanced KernelSU detection - improved with better logging and error handling
+        val kernelSuStatus = when {
+            // Method 1: Check kernel version for KernelSU signature (primary method)
+            version.contains("KernelSU", ignoreCase = true) -> {
+                // Extract KernelSU version if available
+                val ksuVersionRegex = """KernelSU[ -]?v?(\d+\.\d+\.\d+)""".toRegex()
+                val ksuMatch = ksuVersionRegex.find(version)
+                if (ksuMatch != null) {
+                    "Active (${ksuMatch.groupValues[1]})"
+                } else {
+                    "Active"
+                }
+            }
+
+            // Method 2: Check KernelSU directory
+            File("/data/adb/ksu").exists() -> "Active"
+
+            // Method 3: Check for KernelSU binary
+            File("/system/bin/ksu").exists() -> "Active"
+
+            // Method 4: Try various detection methods
+            else -> {
+                // Helper function for additional KernelSU checks
+                fun checkOtherKsuMethods(): String {
+                    // Check kernel cmdline
+                    val cmdline = readFileToString("/proc/cmdline", "Kernel Command Line")
+                    if (cmdline?.contains("ksu", ignoreCase = true) == true) {
+                        return "Active"
+                    }
+
+                    // Check for KernelSU manager app
+                    try {
+                        context.packageManager.getPackageInfo("me.weishu.kernelsu", 0)
+                        return "Detected (Manager Installed)"
+                    } catch (e: Exception) {
+                        // Ignore and continue
+                    }
+
+                    // Check system properties
+                    if (getSystemProperty("ro.kernel.su")?.isNotEmpty() == true) {
+                        return "Active"
+                    }
+
+                    // Default case - not detected
+                    return "Not Detected"
+                }
+
+                // Enhanced function to execute KernelSU commands with better error handling
+                fun executeKsuCommand(command: Array<String>, description: String): String? {
+                    var process: Process? = null
+                    try {
+                        process = Runtime.getRuntime().exec(command)
+                        val reader = BufferedReader(InputStreamReader(process.inputStream))
+                        val errorReader = BufferedReader(InputStreamReader(process.errorStream))
+
+                        val output = StringBuilder()
+                        val errorOutput = StringBuilder()
+                        var line: String?
+
+                        // Read output
+                        while (reader.readLine().also { line = it } != null) {
+                            output.append(line).append("\n")
+                        }
+
+                        // Read error stream
+                        while (errorReader.readLine().also { line = it } != null) {
+                            errorOutput.append(line).append("\n")
+                        }
+
+                        val exitCode = process.waitFor()
+
+                        Log.d(TAG, "$description - Exit Code: $exitCode")
+                        Log.d(TAG, "$description - Output: ${output.toString().trim()}")
+                        if (errorOutput.isNotEmpty()) {
+                            Log.d(TAG, "$description - Error: ${errorOutput.toString().trim()}")
+                        }
+
+                        reader.close()
+                        errorReader.close()
+
+                        if (exitCode == 0) {
+                            val result = output.toString().trim()
+                            return if (result.isNotBlank()) result else null
+                        }
+
+                    } catch (e: Exception) {
+                        Log.w(TAG, "$description - Exception: ${e.message}", e)
+                    } finally {
+                        process?.destroy()
+                    }
+                    return null
+                }
+
+                // Try ksu -V command first
+                Log.d(TAG, "KernelSU Detection: Trying ksu -V command")
+                val ksuVOutput = executeKsuCommand(arrayOf("ksu", "-V"), "ksu -V")
+                if (ksuVOutput != null) {
+                    Log.d(TAG, "KernelSU Detection: Found via ksu -V: $ksuVOutput")
+                    "Active ($ksuVOutput)"
+                } else {
+                    // Try su -c "ksu -V" command
+                    Log.d(TAG, "KernelSU Detection: Trying su -c 'ksu -V' command")
+                    val suKsuVOutput = executeKsuCommand(arrayOf("su", "-c", "ksu -V"), "su -c ksu -V")
+                    if (suKsuVOutput != null) {
+                        Log.d(TAG, "KernelSU Detection: Found via su -c ksu -V: $suKsuVOutput")
+                        "Active ($suKsuVOutput)"
+                    } else {
+                        // Try /data/adb/ksud --version command
+                        Log.d(TAG, "KernelSU Detection: Trying su -c '/data/adb/ksud --version' command")
+                        val ksudOutput = executeKsuCommand(arrayOf("su", "-c", "/data/adb/ksud --version"), "su -c /data/adb/ksud --version")
+                        if (ksudOutput != null) {
+                            Log.d(TAG, "KernelSU Detection: Found via ksud --version: $ksudOutput")
+                            "Active ($ksudOutput)"
+                        } else {
+                            // Try alternative ksud paths
+                            val alternativeKsudPaths = listOf(
+                                "/data/adb/ksud version",
+                                "/data/adb/ksu/bin/ksud --version",
+                                "/data/adb/modules/kernelsu/bin/ksud --version"
+                            )
+
+                            var foundOutput: String? = null
+                            for (ksudPath in alternativeKsudPaths) {
+                                Log.d(TAG, "KernelSU Detection: Trying alternative path: $ksudPath")
+                                val altOutput = executeKsuCommand(arrayOf("su", "-c", ksudPath), "su -c $ksudPath")
+                                if (altOutput != null) {
+                                    Log.d(TAG, "KernelSU Detection: Found via alternative path: $altOutput")
+                                    foundOutput = altOutput
+                                    break
+                                }
+                            }
+
+                            if (foundOutput != null) {
+                                "Active ($foundOutput)"
+                            } else {
+                                // Check if we can find ksud binary directly
+                                Log.d(TAG, "KernelSU Detection: Checking for ksud binary existence")
+                                val ksudPaths = listOf(
+                                    "/data/adb/ksud",
+                                    "/data/adb/ksu/bin/ksud",
+                                    "/data/adb/modules/kernelsu/bin/ksud"
+                                )
+
+                                var binaryFound = false
+                                for (ksudPath in ksudPaths) {
+                                    if (File(ksudPath).exists()) {
+                                        Log.d(TAG, "KernelSU Detection: Found ksud binary at: $ksudPath")
+                                        binaryFound = true
+                                        break
+                                    }
+                                }
+
+                                if (binaryFound) {
+                                    "Active (Binary Found)"
+                                } else {
+                                    // Final fallback checks
+                                    Log.d(TAG, "KernelSU Detection: Trying fallback methods")
+                                    checkOtherKsuMethods()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return KernelInfo(
+            version = version,
+            gkiType = gkiType,
+            scheduler = scheduler,
+            selinuxStatus = selinuxStatus,
+            abi = abi,
+            architecture = architecture,
+            kernelSuStatus = kernelSuStatus
+        )
+    }
+
+    fun getCpuClusters(): List<CpuCluster> {
+        Log.d(TAG, "Getting CPU cluster information...")
+
+        val clusters = mutableListOf<CpuCluster>()
+        val cores = Runtime.getRuntime().availableProcessors()
+
+        // Group cores by their frequency ranges to identify clusters
+        val coreFreqRanges = mutableMapOf<Int, Pair<Int, Int>>() // core -> (min, max)
+        val coreGovernors = mutableMapOf<Int, String>() // core -> governor
+        val coreAvailableGovernors = mutableMapOf<Int, List<String>>() // core -> available governors
+
+        for (coreIndex in 0 until cores) {
+            val minFreqStr = readFileToString("/sys/devices/system/cpu/cpu$coreIndex/cpufreq/cpuinfo_min_freq", "CPU$coreIndex Min Freq")
+            val maxFreqStr = readFileToString("/sys/devices/system/cpu/cpu$coreIndex/cpufreq/cpuinfo_max_freq", "CPU$coreIndex Max Freq")
+            val governor = readFileToString("/sys/devices/system/cpu/cpu$coreIndex/cpufreq/scaling_governor", "CPU$coreIndex Governor")
+            val availableGovernorsStr = readFileToString("/sys/devices/system/cpu/cpu$coreIndex/cpufreq/scaling_available_governors", "CPU$coreIndex Available Governors")
+
+            val minFreq = (minFreqStr?.toLongOrNull()?.div(1000))?.toInt() ?: 0 // Convert kHz to MHz
+            val maxFreq = (maxFreqStr?.toLongOrNull()?.div(1000))?.toInt() ?: 0 // Convert kHz to MHz
+
+            if (minFreq > 0 && maxFreq > 0) {
+                coreFreqRanges[coreIndex] = Pair(minFreq, maxFreq)
+                coreGovernors[coreIndex] = governor ?: "Unknown"
+                coreAvailableGovernors[coreIndex] = availableGovernorsStr?.split("\\s+".toRegex())?.filter { it.isNotBlank() } ?: emptyList()
+            }
+        }
+
+        // Group cores with similar frequency ranges into clusters
+        val frequencyGroups = coreFreqRanges.values.distinct().sortedBy { it.second } // Sort by max frequency
+
+        frequencyGroups.forEachIndexed { index, (minFreq, maxFreq) ->
+            val coresInCluster = coreFreqRanges.filter { it.value == Pair(minFreq, maxFreq) }.keys
+
+            if (coresInCluster.isNotEmpty()) {
+                val representativeCore = coresInCluster.first()
+                val clusterName = when (index) {
+                    0 -> "Efficiency Cluster" // Lowest frequency cluster
+                    frequencyGroups.size - 1 -> "Performance Cluster" // Highest frequency cluster
+                    else -> "Mid Cluster ${index + 1}"
+                }
+
+                val governor = coreGovernors[representativeCore] ?: "Unknown"
+                val availableGovernors = coreAvailableGovernors[representativeCore] ?: emptyList()
+
+                clusters.add(
+                    CpuCluster(
+                        name = clusterName,
+                        minFreq = minFreq,
+                        maxFreq = maxFreq,
+                        governor = governor,
+                        availableGovernors = availableGovernors
+                    )
+                )
+            }
+        }
+
+        // If no clusters found (fallback), create a single cluster
+        if (clusters.isEmpty()) {
+            val fallbackGovernor = readFileToString("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "CPU0 Governor") ?: "Unknown"
+            val fallbackAvailableGovernors = readFileToString("/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors", "CPU0 Available Governors")
+                ?.split("\\s+".toRegex())?.filter { it.isNotBlank() } ?: emptyList()
+
+            clusters.add(
+                CpuCluster(
+                    name = "CPU Cluster",
+                    minFreq = 0,
+                    maxFreq = 0,
+                    governor = fallbackGovernor,
+                    availableGovernors = fallbackAvailableGovernors
+                )
+            )
+        }
+
+        Log.d(TAG, "Found ${clusters.size} CPU clusters")
+        return clusters
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
     val realtimeAggregatedInfoFlow: Flow<RealtimeAggregatedInfo> = callbackFlow {
         Log.d(TAG, "callbackFlow started for realtimeAggregatedInfoFlow")
 
-        // Dapatkan SystemInfo sekali di awal (terutama untuk SoC Name)
-        // Ini akan mengisi cache jika belum ada
-        // getCachedSystemInfo() adalah suspend, jadi panggil dalam konteks coroutine jika perlu
-        // Namun, callbackFlow sudah berjalan dalam konteks coroutine.
-        getCachedSystemInfo() // Memastikan cache terisi
+        // Get SystemInfo once at the beginning (especially for SoC Name)
+        // This will fill the cache if not already present
+        getCachedSystemInfo() // Ensure cache is filled
 
-        // Kirim nilai awal segera
+        // Send initial value immediately
         val initialData = RealtimeAggregatedInfo(
-            cpuInfo = getCpuRealtimeInternal(), // Akan menggunakan cache jika socModel diperlukan
+            cpuInfo = getCpuRealtimeInternal(),
             batteryInfo = getBatteryInfoInternal(),
             memoryInfo = getMemoryInfoInternal(),
             uptimeMillis = getUptimeMillisInternal(),
             deepSleepMillis = getDeepSleepMillisInternal()
         )
 
-        // Menggunakan trySend yang mengembalikan ChannelResult
         val initialSendResult: ChannelResult<Unit> = trySend(initialData)
         if (initialSendResult.isFailure) {
             Log.e(TAG, "Failed to send initial data to flow", initialSendResult.exceptionOrNull())
@@ -398,16 +1072,13 @@ class SystemRepository @Inject constructor(
             Log.d(TAG, "Initial data sent successfully to flow.")
         }
 
-        // job untuk update periodik
-        val updateJob = launch(Dispatchers.IO) { // Gunakan Dispatchers.IO untuk delay dan I/O
+        // Job for periodic updates
+        val updateJob = launch(Dispatchers.IO) {
             Log.d(TAG, "Realtime update job started in callbackFlow. isActive: $isActive")
             try {
-                while (isActive) { // Loop selama Flow (dan job ini) aktif
+                while (isActive) {
                     delay(REALTIME_UPDATE_INTERVAL_MS)
-                    // Tidak perlu cek isActive lagi di sini karena delay akan throw CancellationException
-                    // jika scope atau job di-cancel.
 
-                    // Log.d(TAG, "Preparing to send updated realtime data...")
                     val updatedData = RealtimeAggregatedInfo(
                         cpuInfo = getCpuRealtimeInternal(),
                         batteryInfo = getBatteryInfoInternal(),
@@ -415,185 +1086,32 @@ class SystemRepository @Inject constructor(
                         uptimeMillis = getUptimeMillisInternal(),
                         deepSleepMillis = getDeepSleepMillisInternal()
                     )
-                    val sendResult: ChannelResult<Unit> = trySend(updatedData)
 
-                    when {
-                        sendResult.isSuccess -> { /* Log.d(TAG, "Realtime data sent successfully.") */ }
-                        sendResult.isClosed -> {
-                            Log.w(TAG, "Flow closed while trying to send realtime data. Loop will terminate.")
-                            break // Keluar dari loop jika channel ditutup
-                        }
-                        sendResult.isFailure -> {
-                            Log.e(TAG, "Error sending realtime data to flow", sendResult.exceptionOrNull())
-                            // Pertimbangkan apa yang harus dilakukan jika terjadi error. Mungkin coba lagi atau hentikan.
-                        }
+                    val sendResult: ChannelResult<Unit> = trySend(updatedData)
+                    if (sendResult.isFailure) {
+                        Log.e(TAG, "Failed to send updated data to flow", sendResult.exceptionOrNull())
+                    } else if (sendResult.isClosed) {
+                        Log.w(TAG, "Flow was closed during update.")
+                        break
                     }
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                Log.d(TAG, "Realtime update job cancelled: ${e.message}")
-                // Ini normal jika flow ditutup
-            } finally {
-                Log.d(TAG, "Realtime update job finished. isActive: $isActive")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in realtime update job", e)
             }
         }
 
-        // awaitClose akan dipanggil ketika flow di-cancel atau scope-nya di-cancel
         awaitClose {
-            Log.d(TAG, "RealtimeAggregatedInfoFlow (awaitClose) triggered, cancelling update job.")
-            updateJob.cancel("Flow was closed") // Batalkan job yang melakukan update periodik
-            Log.d(TAG, "Realtime update job cancellation requested.")
+            Log.d(TAG, "callbackFlow awaitClose() called, cancelling update job.")
+            updateJob.cancel()
         }
     }.shareIn(
         scope = repositoryScope,
-        started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5000L, replayExpirationMillis = 0L),
+        started = SharingStarted.WhileSubscribed(5000),
         replay = 1
     )
 
-    fun onCleared() {
-        Log.d(TAG, "SystemRepository onCleared, cancelling repositoryScope.")
-        repositoryScope.cancel("Repository is being cleared")
-    }
-
-    fun getKernelInfo(): KernelInfo {
-        Log.d(TAG, "Memulai pengambilan KernelInfo...")
-        val rawKernelVersionOutput = readFileToString("/proc/version", "Full Kernel Version String")
-
-        val parsedVersion = if (!rawKernelVersionOutput.isNullOrBlank()) {
-            rawKernelVersionOutput.substringBefore("\n").trim().ifEmpty { VALUE_NOT_AVAILABLE }
-        } else {
-            VALUE_NOT_AVAILABLE
-        }
-        Log.d(TAG, "Versi Kernel (baris pertama terparsir): $parsedVersion")
-
-        val gkiType: String
-        if (rawKernelVersionOutput == null || parsedVersion == VALUE_NOT_AVAILABLE) {
-            gkiType = VALUE_NOT_AVAILABLE
-            Log.w(TAG, "Tidak bisa menentukan GKI Type karena rawKernelVersionOutput null atau versi tidak tersedia.")
-        } else {
-            val kernelVersionRegex = "Linux version (\\d+\\.\\d+)".toRegex()
-            val matchResult = kernelVersionRegex.find(rawKernelVersionOutput)
-            val linuxKernelBaseVersion = matchResult?.groups?.get(1)?.value
-            Log.d(TAG, "Ekstraksi Versi Linux Kernel dari raw: $linuxKernelBaseVersion (Full raw: '$rawKernelVersionOutput')")
-
-            gkiType = when (linuxKernelBaseVersion) {
-                "6.1" -> "GKI 2.0 (6.1)"
-                "5.15" -> "GKI 2.0 (5.15)"
-                "5.10" -> "GKI 2.0 (5.10)"
-                "5.4" -> "GKI 2.0 (5.4)"
-                "4.19" -> "GKI 1.0 (4.19)"
-                "4.14" -> "GKI 1.0 (4.14)"
-                "4.9" -> "EAS (4.9)"
-                else -> {
-                    when {
-                        rawKernelVersionOutput.contains("android14-") -> "GKI 2.0 (Android 14 based)"
-                        rawKernelVersionOutput.contains("android13-") -> "GKI 2.0 (Android 13 based)"
-                        rawKernelVersionOutput.contains("android12-") -> "GKI 2.0 (Android 12 based)"
-                        rawKernelVersionOutput.contains("android11-") -> "GKI 1.0 (Android 11 based)"
-                        rawKernelVersionOutput.contains("perf-") -> "EAS (Perf-based)"
-                        else -> {
-                            Log.d(TAG, "Tidak ada pola GKI yang cocok untuk versi Linux '$linuxKernelBaseVersion' atau string 'androidXX-'. Menganggap Non-GKI atau Unknown.")
-                            if (linuxKernelBaseVersion != null) "Non-GKI ($linuxKernelBaseVersion)" else VALUE_UNKNOWN
-                        }
-                    }
-                }
-            }
-        }
-        Log.d(TAG, "Tipe GKI Terdeteksi: $gkiType")
-
-        val schedulerPath = "/sys/block/sda/queue/scheduler"
-        val rawSchedulerOutput = readFileToString(schedulerPath, "I/O Scheduler String")
-        var parsedSchedulerName = if (rawSchedulerOutput != null && rawSchedulerOutput != "0" && rawSchedulerOutput.isNotBlank()) {
-            rawSchedulerOutput.substringAfterLast("[").substringBefore("]").trim()
-        } else {
-            val altSchedulerPath = "/sys/block/mmcblk0/queue/scheduler"
-            val altRawScheduler = readFileToString(altSchedulerPath, "Alt I/O Scheduler (mmcblk0)")
-            if (altRawScheduler != null && altRawScheduler != "0" && altRawScheduler.isNotBlank()) {
-                altRawScheduler.substringAfterLast("[").substringBefore("]").trim()
-            } else {
-                VALUE_NOT_AVAILABLE
-            }
-        }
-        if (parsedSchedulerName.isEmpty()) parsedSchedulerName = VALUE_NOT_AVAILABLE
-
-        val parsedScheduler = when (parsedSchedulerName.lowercase()) {
-            "bfq" -> "BFQ (Budget Fair Queueing)"
-            "cfq" -> "CFQ (Completely Fair Queuing)"
-            else -> if (parsedSchedulerName != VALUE_NOT_AVAILABLE) parsedSchedulerName else VALUE_NOT_AVAILABLE
-        }
-        Log.d(TAG, "Scheduler I/O Terparsir: $parsedScheduler (mentah utama: '$rawSchedulerOutput')")
-
-        return KernelInfo(
-            version = parsedVersion,
-            gkiType = gkiType,
-            scheduler = parsedScheduler
-        )
-    }
-
-    private fun getChargingTypeFromStatus(statusString: String?): String {
-        return try {
-            val intentFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-            val batteryStatusIntent = context.applicationContext.registerReceiver(null, intentFilter)
-            val plugged = batteryStatusIntent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
-
-            when (plugged) {
-                BatteryManager.BATTERY_PLUGGED_USB -> "USB"
-                BatteryManager.BATTERY_PLUGGED_AC -> "AC"
-                BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless"
-                else -> ""
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting charging type", e)
-            ""
-        }
-    }
-
-    fun getCpuClusters(): List<CpuCluster> {
-        Log.d(TAG, "Memulai pengambilan CPU Clusters...")
-        val cpuPolicyDir = File("/sys/devices/system/cpu/policy")
-        val clusters = mutableListOf<CpuCluster>()
-
-        if (!cpuPolicyDir.exists() || !cpuPolicyDir.isDirectory) {
-            Log.w(TAG, "Direktori CPU policy tidak ditemukan: ${cpuPolicyDir.path}")
-            return emptyList()
-        }
-
-        cpuPolicyDir.listFiles()
-            ?.filter { it.isDirectory && it.name.startsWith("policy") && it.name.length > "policy".length && it.name.substring("policy".length).toIntOrNull() != null }
-            ?.sortedBy { it.name.removePrefix("policy").toInt() }
-            ?.forEachIndexed { index, policyFile ->
-                val policyNum = policyFile.name.removePrefix("policy")
-                val policyDesc = "Policy$policyNum"
-                // Log.d(TAG, "Memproses CPU Cluster: $policyDesc (${policyFile.path})") // Optional: kurangi log spam
-
-                val relatedCpus = readFileToString("${policyFile.path}/related_cpus", "$policyDesc Related CPUs", attemptSu = false)?.trim()
-                val firstCpuInCluster = relatedCpus?.split(" ")?.firstOrNull()?.toIntOrNull()
-
-                val clusterNameSuggestion = when (index) { // Penamaan cluster bisa lebih kompleks tergantung arsitektur
-                    0 -> "Little"
-                    1 -> if (cpuPolicyDir.listFiles()?.count { it.name.startsWith("policy") } == 2) "Big" else "Mid" // Contoh sederhana
-                    2 -> "Big" // Atau Prime
-                    else -> "Cluster ${index + 1}"
-                }
-                val clusterName = "$clusterNameSuggestion" + (if (firstCpuInCluster != null) " (CPU$firstCpuInCluster+)" else " ($policyDesc)")
-
-
-                val governor = readFileToString("${policyFile.path}/scaling_governor", "$policyDesc Governor") ?: VALUE_UNKNOWN
-                val minFreqStr = readFileToString("${policyFile.path}/cpuinfo_min_freq", "$policyDesc Min Freq")
-                val minFreq = minFreqStr?.toIntOrNull()?.div(1000) ?: 0
-                val maxFreqStr = readFileToString("${policyFile.path}/cpuinfo_max_freq", "$policyDesc Max Freq")
-                val maxFreq = maxFreqStr?.toIntOrNull()?.div(1000) ?: 0
-
-                val availableGovernorsStr = readFileToString("${policyFile.path}/scaling_available_governors", "$policyDesc Available Governors")
-                val availableGovernors = availableGovernorsStr?.split(Regex("\\s+"))?.filter { it.isNotBlank() } ?: emptyList()
-
-                clusters.add(CpuCluster(clusterName, minFreq, maxFreq, governor, availableGovernors))
-                // Log.d(TAG, "Cluster '$clusterName': Gov=$governor, Min=${minFreq}MHz, Max=${maxFreq}MHz, AvailGov=$availableGovernors")
-            }
-
-        if (clusters.isEmpty()) {
-            Log.w(TAG, "Tidak ada CPU cluster yang terdeteksi atau dapat diproses di ${cpuPolicyDir.path}")
-        }
-        // Log.i(TAG, "CPU Clusters hasil akhir: $clusters") // Optional: kurangi log spam
-        return clusters
+    fun onDestroy() {
+        Log.d(TAG, "SystemRepository onDestroy() called, cancelling repositoryScope.")
+        repositoryScope.cancel()
     }
 }

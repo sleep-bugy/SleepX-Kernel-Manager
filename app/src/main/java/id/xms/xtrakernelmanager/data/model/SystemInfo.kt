@@ -9,5 +9,10 @@ data class SystemInfo(
     val sdk: Int,
     val soc: String,
     val fingerprint: String,
-
+    // Display Information
+    val screenResolution: String,
+    val displayTechnology: String,
+    val refreshRate: String,
+    val screenDpi: String,
+    val gpuRenderer: String
 )
