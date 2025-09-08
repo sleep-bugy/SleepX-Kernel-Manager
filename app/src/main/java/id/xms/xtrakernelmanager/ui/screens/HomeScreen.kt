@@ -5,6 +5,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -12,7 +13,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
@@ -24,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import id.xms.xtrakernelmanager.R
 import id.xms.xtrakernelmanager.ui.components.*
+import id.xms.xtrakernelmanager.ui.viewmodel.ThemeViewModel
 import id.xms.xtrakernelmanager.viewmodel.HomeViewModel
 import kotlinx.coroutines.delay
 import java.io.BufferedReader
@@ -547,6 +548,7 @@ private fun String.capitalizeWords(): String {
 fun HomeScreen(navController: NavController) {
     val vm: HomeViewModel = hiltViewModel()
     val storageViewModel: id.xms.xtrakernelmanager.ui.viewmodel.StorageInfoViewModel = hiltViewModel()
+    val themeViewModel: ThemeViewModel = hiltViewModel() // Tambahkan ini
 
     // Kumpulkan semua state dari ViewModel
     val cpuInfo by vm.cpuInfo.collectAsState()
@@ -644,15 +646,18 @@ fun HomeScreen(navController: NavController) {
                         style = MaterialTheme.typography.titleLarge,
                         color = Color.White,
                         modifier = Modifier
-                            .background(Color(0xFF006400), shape = MaterialTheme.shapes.medium)
-                            .clip(MaterialTheme.shapes.large)
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-
-
+                            .background(
+                                color = Color(0xFF1B5E20), // Dark green background
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 actions = {
                     IconButton(onClick = { navController.navigate("settings") }) {
@@ -663,7 +668,8 @@ fun HomeScreen(navController: NavController) {
                     }
                 }
             )
-        }
+        },
+        containerColor = Color.Transparent
     ) { paddingValues ->
 
         Column(
@@ -767,3 +773,4 @@ private fun SmallFabWithLabel(
         }
     }
 }
+

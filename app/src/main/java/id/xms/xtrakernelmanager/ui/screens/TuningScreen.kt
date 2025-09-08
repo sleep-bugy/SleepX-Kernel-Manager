@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -99,13 +98,20 @@ fun TuningScreen(viewModel: TuningViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Tuning Control", style = TextStyle(fontSize = 27.sp)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
+                ),
                 actions = {
                     IconButton(onClick = { showInfoDialog = true }) {
                         Icon(Icons.Filled.Info, contentDescription = "Informasi Fitur")
                     }
                 }
             )
-        }
+        },
+        containerColor = Color.Transparent
     ) { paddingValues ->
         Column(
             Modifier

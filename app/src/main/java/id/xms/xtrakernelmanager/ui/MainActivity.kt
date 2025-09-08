@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.*
 import dagger.hilt.android.AndroidEntryPoint
@@ -25,6 +26,7 @@ import id.xms.xtrakernelmanager.ui.components.ExpressiveBackground
 import id.xms.xtrakernelmanager.ui.dialog.BatteryOptDialog
 import id.xms.xtrakernelmanager.ui.screens.*
 import id.xms.xtrakernelmanager.ui.theme.XtraTheme
+import id.xms.xtrakernelmanager.ui.viewmodel.ThemeViewModel
 import id.xms.xtrakernelmanager.util.BatteryOptimizationChecker
 import id.xms.xtrakernelmanager.util.LanguageManager
 import id.xms.xtrakernelmanager.util.RootUtils
@@ -73,7 +75,10 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            XtraTheme {
+            val themeViewModel: ThemeViewModel = hiltViewModel()
+            val currentTheme by themeViewModel.currentTheme.collectAsState()
+
+            XtraTheme(themeType = currentTheme) {
                 val navController = rememberNavController()
                 val items = listOf("Home", "Tuning", "Misc", "Info")
 
