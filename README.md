@@ -10,6 +10,9 @@
 
 **Xtra Kernel Manager** is a Modern apps, Rooted Android application built with Kotlin and Jetpack Compose, designed for real-time monitoring and tuning of CPU performance, thermal behavior, and power-saving configurations on devices running custom kernels.
 
+## Created
+*Xtra Kernel Manager Created on February 21, 2025*
+
 
 ## ✨ Features
 
