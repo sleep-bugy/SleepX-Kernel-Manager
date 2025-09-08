@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -94,7 +95,7 @@ private fun BottomNavItem(
     )
 
     val iconTint by animateColorAsState(
-        targetValue = if (selected) color else color.copy(alpha = 0.6f),
+        targetValue = if (selected) Color.White else color.copy(alpha = 0.6f),
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy),
         label = "icon_tint_animation"
     )
@@ -108,31 +109,39 @@ private fun BottomNavItem(
         label = "text_color_animation"
     )
 
+    // Background animation for the green shape
+    val backgroundAlpha by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "background_animation"
+    )
+
     Column(
         modifier = Modifier
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             ) { onClick() }
-            .padding(horizontal = 1.dp, vertical = 1.dp) // Minimal padding
+            .padding(horizontal = 8.dp, vertical = 6.dp)
             .scale(scale),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(1.dp) // Minimal spacing
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        // Icon container with glass effect
+        // Main container with green background shape when selected
         Box(
             modifier = Modifier
-                .size(32.dp) // Much smaller background container
-                .clip(RoundedCornerShape(16.dp))
+                .size(width = 60.dp, height = 36.dp)
+                .clip(RoundedCornerShape(18.dp))
                 .background(
                     if (selected) {
-                        Brush.radialGradient(
+                        Brush.linearGradient(
                             colors = listOf(
-                                color.copy(alpha = 0.3f),
-                                color.copy(alpha = 0.1f),
-                                Color.Transparent
-                            ),
-                            radius = 50f
+                                Color(0xFF4CAF50).copy(alpha = backgroundAlpha * 0.9f),
+                                Color(0xFF66BB6A).copy(alpha = backgroundAlpha * 0.7f)
+                            )
                         )
                     } else {
                         Brush.radialGradient(
@@ -149,15 +158,30 @@ private fun BottomNavItem(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                modifier = Modifier.size(24.dp), // Adjusted icon size to fit the smaller container
+                modifier = Modifier.size(22.dp),
                 tint = iconTint
             )
         }
 
+        // Blue capsule indicator at the bottom when selected
+        Box(
+            modifier = Modifier
+                .width(20.dp)
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(
+                    if (selected) {
+                        Color(0xFF2196F3).copy(alpha = backgroundAlpha)
+                    } else {
+                        Color.Transparent
+                    }
+                )
+        )
+
         // Label text
         Text(
             text = label.uppercase(),
-            fontSize = 16.sp, // Even smaller font size
+            fontSize = 10.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             textAlign = TextAlign.Center,
             color = textColor,
