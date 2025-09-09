@@ -30,10 +30,23 @@ android {
         versionCode = 1
         versionName = "1.5.-Release"
     }
+
+    signingConfigs {
+        create("release") {
+            storeFile = project.findProperty("myKeystorePath")?.let { file(it) }
+            storePassword = project.findProperty("myKeystorePassword") as String?
+            keyAlias = project.findProperty("myKeyAlias") as String?
+            keyPassword = project.findProperty("myKeyPassword") as String?
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
