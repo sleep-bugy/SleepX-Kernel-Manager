@@ -1,4 +1,6 @@
 #!/bin/bash
+
+# --- Membersihkan Proyek (Langkah Awal Anda) ---
 echo "Membersihkan cache build..."
 rm -rf app/build/
 rm -rf build/
@@ -6,8 +8,48 @@ rm -rf .gradle/
 
 echo "Membersihkan cache Gradle..."
 ./gradlew clean
+echo "Pembersihan selesai."
+echo ""
 
-echo "Melakukan build release yang bersih..."
-./gradlew assembleRelease
+# --- Meminta Informasi Keystore Secara Interaktif ---
+echo "Silakan masukkan detail keystore untuk menandatangani aplikasi:"
 
-echo "Build release selesai!"
+# 1. Meminta path keystore
+read -p "Masukkan path ke file keystore Anda: " KEYSTORE_PATH
+
+# Validasi sederhana untuk memeriksa apakah file ada
+if [ ! -f "$KEYSTORE_PATH" ]; then
+    echo "Error: File keystore tidak ditemukan di '$KEYSTORE_PATH'"
+    exit 1
+fi
+
+# 2. Meminta alias key
+read -p "Masukkan alias key Anda: " KEY_ALIAS
+
+# 3. Meminta password keystore (input disembunyikan)
+read -s -p "Masukkan password keystore Anda: " KEYSTORE_PASSWORD
+echo "" # Pindah ke baris baru setelah input password
+
+# 4. Meminta password key alias (input disembunyikan)
+read -s -p "Masukkan password untuk alias '$KEY_ALIAS': " KEY_PASSWORD
+echo "" # Pindah ke baris baru setelah input password
+echo ""
+
+# --- Menjalankan Build Gradle dengan Properti ---
+echo "Memulai build release dengan informasi keystore yang diberikan..."
+
+# Menjalankan gradlew dengan meneruskan variabel sebagai properti (-P)
+./gradlew assembleRelease \
+    -PmyKeystorePath="$KEYSTORE_PATH" \
+    -PmyKeystorePassword="$KEYSTORE_PASSWORD" \
+    -PmyKeyAlias="$KEY_ALIAS" \
+    -PmyKeyPassword="$KEY_PASSWORD"
+
+# Cek status build
+if [ $? -eq 0 ]; then
+    echo "✅ Build release selesai!"
+    echo "Anda bisa menemukan APK di folder: app/build/outputs/apk/release/"
+else
+    echo "❌ Build gagal. Silakan periksa log di atas."
+    exit 1
+fi
