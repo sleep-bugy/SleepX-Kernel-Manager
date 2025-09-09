@@ -50,7 +50,8 @@
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.XtraKernelManager"
         android:requestLegacyExternalStorage="true"
-        android:forceDarkAllowed="false">
+        android:forceDarkAllowed="false"
+        tools:targetApi="33">
 
         <!-- Force dark theme configuration -->
         <meta-data
@@ -72,6 +73,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Boot Receiver for auto-start functionality -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- BatteryStatsService - Persistent foreground service -->
         <service
             android:name=".service.BatteryStatsService"
@@ -87,21 +99,6 @@
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
-
-        <!-- Boot Receiver for auto-start functionality -->
-        <receiver
-            android:name=".receiver.BootReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:directBootAware="true">
-            <intent-filter android:priority="1000">
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.PACKAGE_REPLACED" />
-                <data android:scheme="package" />
-            </intent-filter>
-        </receiver>
 
         <!-- Battery Notification Widget -->
         <receiver
