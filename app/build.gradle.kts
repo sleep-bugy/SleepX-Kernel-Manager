@@ -1,5 +1,3 @@
-
-
 import org.apache.http.client.methods.HttpPost
 import org.apache.http.client.config.RequestConfig
 import org.apache.http.entity.StringEntity
@@ -19,6 +17,7 @@ plugins {
     id("com.google.dagger.hilt.android")
     id("kotlinx-serialization")
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -29,7 +28,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 1
-        versionName = "1.4.-Release"
+        versionName = "1.5.-Release"
     }
     buildTypes {
         release {
@@ -104,6 +103,17 @@ dependencies {
     implementation("com.google.guava:guava:32.1.3-jre") {
         exclude(mapOf("group" to "com.google.guava", "module" to "listenablefuture"))
     }
+
+    // Firebase BOM (Bill of Materials) for version management
+    implementation(platform("com.google.firebase:firebase-bom:33.0.0"))
+    // Add Firebase Analytics (core dependency, you can add more as needed)
+    implementation("com.google.firebase:firebase-analytics-ktx")
+    // Add other Firebase dependencies as needed, e.g.:
+    // implementation("com.google.firebase:firebase-auth-ktx")
+    // implementation("com.google.firebase:firebase-firestore-ktx")
+    // Firebase Realtime Database
+    implementation("com.google.firebase:firebase-database-ktx")
+    implementation("com.google.firebase:firebase-common-ktx:20.4.0")
 }
 
 
@@ -159,6 +169,50 @@ abstract class SendTelegramMessageTask : DefaultTask() {
         val currentProjectName = appProjectName.get()
 
         val kotlinVersion = project.getKotlinPluginVersion() ?: "N/A"
+        // --- Progress message for build ---
+        fun sendTelegramMessage(text: String, parseMode: String = "MarkdownV2", disableNotification: Boolean = false): Int? {
+            val url = "https://botapi.arasea.dpdns.org/bot${telegramBotToken.get()}/sendMessage"
+            val jsonPayload = """
+            {\n  \"chat_id\": \"${telegramChatId.get()}\",\n  \"text\": \"${text.replace("\"", "\\\"")}\",\n  \"parse_mode\": \"$parseMode\",\n  \"disable_notification\": $disableNotification\n}\n""".trimIndent()
+            HttpClients.createDefault().use { httpClient ->
+                val post = HttpPost(url)
+                post.entity = StringEntity(jsonPayload, "UTF-8")
+                post.setHeader("Content-Type", "application/json")
+                val response = httpClient.execute(post)
+                val responseBody = EntityUtils.toString(response.entity, "UTF-8")
+                EntityUtils.consumeQuietly(response.entity)
+                val idRegex = "\\\"message_id\\\":(\\d+)".toRegex()
+                return idRegex.find(responseBody)?.groupValues?.get(1)?.toIntOrNull()
+            }
+        }
+        fun editTelegramMessage(messageId: Int, text: String, parseMode: String = "MarkdownV2") {
+            val url = "https://botapi.arasea.dpdns.org/bot${telegramBotToken.get()}/editMessageText"
+            val jsonPayload = """
+            {\n  \"chat_id\": \"${telegramChatId.get()}\",\n  \"message_id\": $messageId,\n  \"text\": \"${text.replace("\"", "\\\"")}\",\n  \"parse_mode\": \"$parseMode\"\n}\n""".trimIndent()
+            HttpClients.createDefault().use { httpClient ->
+                val post = HttpPost(url)
+                post.entity = StringEntity(jsonPayload, "UTF-8")
+                post.setHeader("Content-Type", "application/json")
+                val response = httpClient.execute(post)
+                EntityUtils.consumeQuietly(response.entity)
+            }
+        }
+        fun pinTelegramMessage(messageId: Int) {
+            val url = "https://botapi.arasea.dpdns.org/bot${telegramBotToken.get()}/pinChatMessage"
+            val jsonPayload = """
+            {\n  \"chat_id\": \"${telegramChatId.get()}\",\n  \"message_id\": $messageId,\n  \"disable_notification\": true\n}\n""".trimIndent()
+            HttpClients.createDefault().use { httpClient ->
+                val post = HttpPost(url)
+                post.entity = StringEntity(jsonPayload, "UTF-8")
+                post.setHeader("Content-Type", "application/json")
+                val response = httpClient.execute(post)
+                EntityUtils.consumeQuietly(response.entity)
+            }
+        }
+
+        val buildMsgId = sendTelegramMessage("Processing build...", disableNotification = true)
+        if (buildMsgId != null) pinTelegramMessage(buildMsgId)
+
         val javaVersion = JavaVersion.current().toString()
         val gradleVersion = project.gradle.gradleVersion
         // val osName = System.getProperty("os.name")
@@ -324,6 +378,10 @@ abstract class SendTelegramMessageTask : DefaultTask() {
             val post = HttpPost(url)
             val jsonPayload = """
             {
+        // Update the progress message to final build status
+        if (buildMsgId != null) {
+            editTelegramMessage(buildMsgId, if (buildStatus == "SUCCESS") "✅ Build finished successfully!" else "❌ Build failed!", parseMode = "MarkdownV2")
+        }
                 "chat_id": "${telegramChatId.get().replace("\"", "\\\"")}",
                 "text": "${message.replace("\"", "\\\"")}", // Gunakan message langsung
                 "parse_mode": "MarkdownV2"
@@ -434,13 +492,33 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
 }
 
 
-tasks.register("uploadDebugApkToTelegram", UploadApkToTelegramTask::class) {
+// Task to rename/copy app-release.apk to XKM-versionName.apk after assembleRelease
+val renameReleaseApk by tasks.registering(Copy::class) {
     group = "custom"
-    description = "Builds and uploads the debug APK to Telegram."
-    //dependsOn("assembleDebug")
+    description = "Renames/copies app-release.apk to XKM-versionName.apk after build."
+    val versionName = android.defaultConfig.versionName ?: "N/A"
+    val srcFile = file("release/app-release.apk")
+    val destFile = file("release/XKM-$versionName.apk")
+    from(srcFile)
+    into("release")
+    rename { "XKM-$versionName.apk" }
     dependsOn("assembleRelease")
-    //apkFile.set(project.layout.projectDirectory.file("build/outputs/apk/debug/app-debug.apk"))
-    apkFile.set(project.layout.projectDirectory.file("release/app-release.apk"))
+    doFirst {
+        if (!srcFile.exists()) {
+            throw GradleException("Source APK not found: ${srcFile.absolutePath}")
+        }
+    }
+}
+
+// Update the upload task to use the renamed APK
+// Rename the task for clarity
+
+tasks.register("uploadReleaseApkToTelegram", UploadApkToTelegramTask::class) {
+    group = "custom"
+    description = "Uploads the renamed release APK to Telegram."
+    dependsOn(renameReleaseApk)
+    val versionName = project.android.defaultConfig.versionName ?: "N/A"
+    apkFile.set(project.layout.projectDirectory.file("release/XKM-$versionName.apk"))
     telegramBotToken.convention(project.findProperty("telegramBotToken")?.toString() ?: "")
     telegramChatId.convention(project.findProperty("telegramChatId")?.toString() ?: "")
     appVersionName.convention(project.provider { project.android.defaultConfig.versionName ?: "N/A" })
@@ -460,14 +538,15 @@ project.afterEvaluate {
     }
 }
 
-// DEFER HOOKING INTO PLUGIN TASKS:
+// Hook the tasks in the correct order: assembleRelease -> rename -> upload -> sendTelegramMessage
 project.afterEvaluate {
     tasks.named("assembleRelease") {
+        finalizedBy(renameReleaseApk)
+    }
+    tasks.named(renameReleaseApk.name) {
+        finalizedBy("uploadReleaseApkToTelegram")
+    }
+    tasks.named("uploadReleaseApkToTelegram") {
         finalizedBy("sendTelegramMessage")
-    } // Add this closing brace
-
-    // Run uploadDebugApkToTelegram after assembleDebug
-    tasks.named("assembleRelease") {
-        finalizedBy("uploadDebugApkToTelegram")
     }
 }

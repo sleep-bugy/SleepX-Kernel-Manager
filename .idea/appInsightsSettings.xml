@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="id.xms.xtrakernelmanager" />
+                  <option name="mobileSdkAppId" value="1:234012707950:android:c4e3a64566e834515fea7f" />
+                  <option name="projectId" value="xtrakernelmanager" />
+                  <option name="projectNumber" value="234012707950" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
