@@ -747,7 +747,6 @@ private fun findClosestFrequency(target: Int, availableFrequencies: List<Int>): 
     if (target in availableFrequencies) return target
     return availableFrequencies.minByOrNull { abs(it - target) } ?: target.coerceAtLeast(0)
 }
-
 @Composable
 fun CpuClusterCard(
     clusterName: String,
@@ -761,12 +760,16 @@ fun CpuClusterCard(
     val availableFrequenciesForCluster by vm.getAvailableCpuFrequencies(clusterName).collectAsState()
     val coreStates by vm.coreStates.collectAsState()
 
-    // Different color themes for each CPU cluster
     val clusterColors = when (clusterName) {
-        "cpu0" -> Pair(Color(0xFF4FC3F7), Color(0xFFE1F5FE)) // Light Blue theme
-        "cpu4" -> Pair(Color(0xFF66BB6A), Color(0xFFE8F5E8)) // Green theme
-        "cpu7" -> Pair(Color(0xFFFF7043), Color(0xFFFFF3E0)) // Orange theme
-        else -> Pair(Color(0xFF9C27B0), Color(0xFFF3E5F5)) // Purple theme as fallback
+        "cpu0" -> Color(0xFF20BD9D) // Teal
+        "cpu1" -> Color(0xFFFFCA28) // Amber
+        "cpu2" -> Color(0xFF891637) // Dark Red
+        "cpu3" -> Color(0xFF29B6F6) // Blue
+        "cpu4" -> Color(0xFF66BB6A) // Green
+        "cpu5" -> Color(0xFFFFA726) // Orange
+        "cpu6" -> Color(0xFFEC407A) // Red Pink
+        "cpu7" -> Color(0xFFDB5430) // Deep Orange
+        else -> Color(0xFF9C27B0)   // Purple fallback
     }
 
     SuperGlassCard(
@@ -774,10 +777,9 @@ fun CpuClusterCard(
         glassIntensity = GlassIntensity.Light
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(16.dp)
         ) {
-            // Enhanced Header with cluster-specific styling
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -787,106 +789,145 @@ fun CpuClusterCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Cluster icon with themed background
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(38.dp)
                             .background(
-                                color = clusterColors.first.copy(alpha = 0.15f),
-                                shape = RoundedCornerShape(12.dp)
+                                color = clusterColors.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(10.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Memory,
-                            contentDescription = null,
-                            tint = clusterColors.first,
-                            modifier = Modifier.size(24.dp)
+                            contentDescription = "Cluster Icon",
+                            tint = clusterColors,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
-
-                    Column {
-                        Text(
-                            text = clusterName.uppercase(),
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            ),
-                            color = clusterColors.first
-                        )
-                        Text(
-                            text = "Cluster Control",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                // Status indicator
-                SuperGlassCard(
-                    glassIntensity = GlassIntensity.Light,
-                    modifier = Modifier.padding(0.dp)
-                ) {
                     Text(
-                        text = if (currentGovernor != "..." && currentGovernor != "Error") "ACTIVE" else "LOADING",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold
+                        text = clusterName.uppercase(),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
                         ),
-                        color = if (currentGovernor != "..." && currentGovernor != "Error")
-                            clusterColors.first
-                        else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        color = clusterColors
                     )
                 }
             }
 
-            HorizontalDivider(
-                color = clusterColors.first.copy(alpha = 0.2f),
-                thickness = 1.dp
-            )
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Enhanced Control Sections
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Governor Section
-                ControlSection(
-                    icon = Icons.Default.Tune,
+            // --- KONTROL DENGAN LAYOUT PADAT YANG BARU ---
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Governor Control
+                val govIsLoading = currentGovernor == "..." || currentGovernor == "Error"
+                CompactControlItem(
                     title = "Governor",
-                    value = if (currentGovernor == "..." || currentGovernor == "Error") currentGovernor else currentGovernor,
-                    isLoading = currentGovernor == "..." || currentGovernor == "Error",
-                    themeColor = clusterColors.first,
-                    onClick = onGovernorClick,
-                    enabled = currentGovernor != "..." && currentGovernor != "Error"
+                    icon = Icons.Default.Tune,
+                    value = currentGovernor,
+                    isLoading = govIsLoading,
+                    themeColor = clusterColors,
+                    enabled = !govIsLoading,
+                    onClick = onGovernorClick
                 )
 
-                // Frequency Section
+                // Frequency Control
                 val freqText = when {
-                    currentGovernor == "..." || currentGovernor == "Error" -> currentGovernor
-                    currentFreqPair.first == 0 && currentFreqPair.second == 0 && availableFrequenciesForCluster.isEmpty() -> "Loading..."
-                    currentFreqPair.first == 0 && currentFreqPair.second == -1 -> "Error"
+                    currentGovernor == "..." -> "..."
+                    currentGovernor == "Error" -> "Error"
+                    currentFreqPair.first == 0 && currentFreqPair.second == 0 -> "Loading..."
                     else -> "${currentFreqPair.first / 1000} - ${currentFreqPair.second / 1000} MHz"
                 }
-
-                ControlSection(
-                    icon = Icons.Default.Speed,
+                val freqIsLoading = freqText == "Loading..." || freqText == "..." || freqText == "Error"
+                CompactControlItem(
                     title = "Frequency",
+                    icon = Icons.Default.Speed,
                     value = freqText,
-                    isLoading = freqText == "Loading..." || freqText == "Error",
-                    themeColor = clusterColors.first,
-                    onClick = onFrequencyClick,
-                    enabled = availableFrequenciesForCluster.isNotEmpty()
+                    isLoading = freqIsLoading,
+                    themeColor = clusterColors,
+                    enabled = availableFrequenciesForCluster.isNotEmpty() && !freqIsLoading,
+                    onClick = onFrequencyClick
                 )
 
-                // Core Status Section
-                ControlSection(
-                    icon = Icons.Default.Memory,
+                // Core Status Control
+                CompactControlItem(
                     title = "Core Status",
+                    icon = Icons.Default.Memory,
                     value = "${coreStates.count { it }}/${coreStates.size} Online",
                     isLoading = false,
-                    themeColor = clusterColors.first,
-                    onClick = onCoreClick,
-                    enabled = true
+                    themeColor = clusterColors,
+                    enabled = true,
+                    onClick = onCoreClick
+                )
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun CompactControlItem(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    isLoading: Boolean,
+    themeColor: Color,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    SuperGlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        glassIntensity = GlassIntensity.Light
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Icon
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = if (enabled) themeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
+            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = themeColor
+                    )
+                } else {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (enabled) themeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
+            // Chevron Icon
+            if (enabled) {
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = "Open Settings",
+                    tint = themeColor.copy(alpha = 0.7f),
+                    modifier = Modifier.rotate(-90f)
                 )
             }
         }
