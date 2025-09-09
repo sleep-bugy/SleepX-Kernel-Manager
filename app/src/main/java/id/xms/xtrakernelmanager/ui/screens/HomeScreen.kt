@@ -1,5 +1,9 @@
 package id.xms.xtrakernelmanager.ui.screens
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -24,17 +28,29 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import id.xms.xtrakernelmanager.R
 import id.xms.xtrakernelmanager.ui.components.*
+import id.xms.xtrakernelmanager.ui.dialog.UpdateDialog
 import id.xms.xtrakernelmanager.ui.viewmodel.ThemeViewModel
 import id.xms.xtrakernelmanager.viewmodel.HomeViewModel
 import kotlinx.coroutines.delay
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import android.util.Log
+import android.app.Activity
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import id.xms.xtrakernelmanager.data.model.SystemInfo
+import id.xms.xtrakernelmanager.model.UpdateInfo
 import kotlin.text.isNotBlank
+import androidx.core.net.toUri
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.window.DialogProperties
 
 
 @Composable
@@ -542,13 +558,19 @@ private fun String.capitalizeWords(): String {
     }
 }
 
+fun isInternetAvailable(context: Context): Boolean {
+    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = connectivityManager.activeNetwork ?: return false
+    val networkCapabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
     val vm: HomeViewModel = hiltViewModel()
     val storageViewModel: id.xms.xtrakernelmanager.ui.viewmodel.StorageInfoViewModel = hiltViewModel()
-    val themeViewModel: ThemeViewModel = hiltViewModel() // Tambahkan ini
 
     // Kumpulkan semua state dari ViewModel
     val cpuInfo by vm.cpuInfo.collectAsState()
@@ -560,10 +582,12 @@ fun HomeScreen(navController: NavController) {
     val appVersion by vm.appVersion.collectAsState()
     val systemInfoState by vm.systemInfo.collectAsState()
     val storageInfo by storageViewModel.storageInfo.collectAsState()
+    val updateInfo by vm.updateInfo.collectAsState()
 
     var showFabMenu by remember { mutableStateOf(false) }
-
-
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    var showNoInternetDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     val fullTitle = stringResource(R.string.xtra_kernel_manager)
     val isTitleAnimationDone by vm.isTitleAnimationDone.collectAsState()
@@ -581,6 +605,63 @@ fun HomeScreen(navController: NavController) {
             }
             vm.onTitleAnimationFinished()
         }
+    }
+
+    LaunchedEffect(updateInfo) {
+        if (updateInfo != null) {
+            if (!isInternetAvailable(context)) {
+                showNoInternetDialog = true
+            } else {
+                showUpdateDialog = true
+            }
+        } else {
+            showUpdateDialog = false
+            showNoInternetDialog = false
+        }
+    }
+    if (showNoInternetDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {
+                Button(onClick = {
+                    showNoInternetDialog = false
+                    // Exit the app
+                    (context as? Activity)?.finishAffinity()
+                }) {
+                    Text("OK")
+                }
+            },
+            title = { Text("Update Required") },
+            text = {
+                Text(
+                    "A new update is available, but you are offline. Please connect to the internet to update. The app will now close.",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(8.dp)
+                )
+            },
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        )
+    }
+
+    if (showUpdateDialog && updateInfo != null) {
+        val context = LocalContext.current
+        UpdateDialog(
+            version = updateInfo!!.version,
+            changelog = updateInfo!!.changelog,
+            url = updateInfo!!.url,
+            force = updateInfo!!.force,
+            onDismiss = { showUpdateDialog = false },
+            onUpdateClick = {
+                showUpdateDialog = false
+                // Open the update URL in browser
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, updateInfo!!.url.toUri())
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            }
+        )
     }
 
     Scaffold(
@@ -773,4 +854,3 @@ private fun SmallFabWithLabel(
         }
     }
 }
-
