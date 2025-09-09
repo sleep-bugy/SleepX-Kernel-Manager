@@ -5,11 +5,13 @@ import android.content.Context
 import android.util.Log // Import Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.database.FirebaseDatabase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import id.xms.xtrakernelmanager.data.model.*
 import id.xms.xtrakernelmanager.data.repository.RootRepository
 import id.xms.xtrakernelmanager.data.repository.SystemRepository
+import id.xms.xtrakernelmanager.model.UpdateInfo
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -58,6 +60,44 @@ class HomeViewModel @Inject constructor(
 
     private val _cpuClusters = MutableStateFlow<List<CpuCluster>>(emptyList())
 
+    private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
+    val updateInfo: StateFlow<UpdateInfo?> = _updateInfo.asStateFlow()
+
+    private var lastShownVersion: String? = null
+
+    private fun checkForUpdate() {
+        val dbRef = FirebaseDatabase.getInstance().getReference("update")
+        dbRef.get().addOnSuccessListener { snapshot ->
+            val update = snapshot.getValue(UpdateInfo::class.java)
+            val localVersion = try {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
+            } catch (e: Exception) { "" }
+            if (update != null && update.version.isNotBlank() && isNewerVersion(update.version, localVersion)) {
+                if (lastShownVersion != update.version) {
+                    _updateInfo.value = update
+                    lastShownVersion = update.version
+                }
+            } else {
+                _updateInfo.value = null
+            }
+        }.addOnFailureListener {
+            _updateInfo.value = null
+        }
+    }
+
+    private fun isNewerVersion(remote: String, local: String): Boolean {
+        // Only compare numbers, ignore suffixes like -Release
+        val remoteParts = remote.split(".", "-").mapNotNull { it.toIntOrNull() }
+        val localParts = local.split(".", "-").mapNotNull { it.toIntOrNull() }
+        for (i in 0 until maxOf(remoteParts.size, localParts.size)) {
+            val r = remoteParts.getOrNull(i) ?: 0
+            val l = localParts.getOrNull(i) ?: 0
+            if (r > l) return true
+            if (r < l) return false
+        }
+        return false
+    }
+
     init {
         viewModelScope.launch {
             systemRepo.realtimeAggregatedInfoFlow
@@ -91,6 +131,8 @@ class HomeViewModel @Inject constructor(
                 Log.e("HomeViewModel", "Error getting app version", e)
             }
         }
+
+        checkForUpdate()
     }
 
     override fun onCleared() {
