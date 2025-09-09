@@ -119,12 +119,10 @@ fun SuperGlassCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.7f
-
-    // iOS 26 liquid glass inspired parameters with dynamic transparency
     val backdropAlpha = when (glassIntensity) {
-        GlassIntensity.Medium -> 0.16f
-        GlassIntensity.Heavy -> 0.21f
-        GlassIntensity.Light -> 0.12f
+        GlassIntensity.Medium -> 0.80f
+        GlassIntensity.Heavy -> 0.120f
+        GlassIntensity.Light -> 0.40f
     }
 
     // Ultra-clean card modifier with minimal effects
