@@ -1,5 +1,8 @@
 package id.xms.xtrakernelmanager.ui.components
 
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -24,9 +28,11 @@ import id.xms.xtrakernelmanager.data.model.DeepSleepInfo
 import id.xms.xtrakernelmanager.data.model.MemoryInfo
 import id.xms.xtrakernelmanager.data.model.StorageInfo
 import id.xms.xtrakernelmanager.data.model.SystemInfo
+import kotlinx.coroutines.delay
+import java.io.File
 import java.util.Locale
 
-// Helper function to format time duration with seconds
+/* ---------- helper ---------- */
 private fun formatTimeWithSeconds(timeInMillis: Long): String {
     val totalSeconds = timeInMillis / 1000
     val hours = totalSeconds / 3600
@@ -35,13 +41,11 @@ private fun formatTimeWithSeconds(timeInMillis: Long): String {
     return String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
 }
 
-// Helper function to format storage size
 private fun formatStorageSize(bytes: Long): String {
     val tb = 1024L * 1024L * 1024L * 1024L
     val gb = 1024L * 1024L * 1024L
     val mb = 1024L * 1024L
     val kb = 1024L
-
     return when {
         bytes >= tb -> String.format(Locale.getDefault(), "%.1f TB", bytes.toDouble() / tb)
         bytes >= gb -> String.format(Locale.getDefault(), "%.1f GB", bytes.toDouble() / gb)
@@ -51,6 +55,7 @@ private fun formatStorageSize(bytes: Long): String {
     }
 }
 
+/* ---------- main ---------- */
 @Composable
 fun MergedSystemCard(
     b: BatteryInfo,
@@ -63,30 +68,13 @@ fun MergedSystemCard(
     storageInfo: StorageInfo,
     modifier: Modifier = Modifier
 ) {
-    // Main container with separated cards
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Separate Battery Card
-        BatteryCard(
-            batteryInfo = b,
-            blur = blur
-        )
-
-        // Separate Memory Card
-        MemoryCard(
-            memoryInfo = mem,
-            blur = blur
-        )
-
-        // Separate Storage Card - reads actual device storage capacity
-        StorageCard(
-            storageInfo = storageInfo,
-            blur = blur
-        )
-
-        // Device Information Card
+        BatteryCard(batteryInfo = b, blur = blur)
+        MemoryCard(memoryInfo = mem, blur = blur)
+        StorageCard(storageInfo = storageInfo, blur = blur)
         DeviceInfoCard(
             systemInfo = systemInfo,
             rooted = rooted,
@@ -97,13 +85,13 @@ fun MergedSystemCard(
     }
 }
 
+/* ---------- cards ---------- */
 @Composable
 private fun BatteryCard(
     batteryInfo: BatteryInfo,
     blur: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Animation untuk pulse effect
     val infiniteTransition = rememberInfiniteTransition(label = "battery_pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
@@ -124,13 +112,8 @@ private fun BatteryCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Battery Header Section
             BatteryHeaderSection(batteryInfo = batteryInfo, pulseAlpha = pulseAlpha)
-
-            // Battery Progress Section
             BatteryProgressSection(batteryInfo = batteryInfo)
-
-            // Battery Stats Section
             BatteryStatsSection(batteryInfo = batteryInfo)
         }
     }
@@ -143,8 +126,6 @@ private fun MemoryCard(
     modifier: Modifier = Modifier
 ) {
     val usedPercentage = ((memoryInfo.used.toDouble() / memoryInfo.total.toDouble()) * 100).toInt()
-
-    // Animation untuk pulse effect
     val infiniteTransition = rememberInfiniteTransition(label = "memory_pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
@@ -165,13 +146,8 @@ private fun MemoryCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Memory Header Section
             MemoryHeaderSection(memoryInfo = memoryInfo, usedPercentage = usedPercentage, pulseAlpha = pulseAlpha)
-
-            // Memory Progress Section
             MemoryProgressSection(memoryInfo = memoryInfo, usedPercentage = usedPercentage)
-
-            // Memory Stats Section
             MemoryStatsSection(memoryInfo = memoryInfo)
         }
     }
@@ -184,8 +160,6 @@ private fun StorageCard(
     modifier: Modifier = Modifier
 ) {
     val usedPercentage = ((storageInfo.usedSpace.toDouble() / storageInfo.totalSpace.toDouble()) * 100).toInt()
-
-    // Animation untuk pulse effect
     val infiniteTransition = rememberInfiniteTransition(label = "storage_pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
@@ -206,23 +180,33 @@ private fun StorageCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Storage Header Section
             StorageHeaderSection(storageInfo = storageInfo, usedPercentage = usedPercentage, pulseAlpha = pulseAlpha)
-
-            // Storage Progress Section
             StorageProgressSection(storageInfo = storageInfo)
-
-            // Storage Stats Section
             StorageStatsSection(storageInfo = storageInfo)
         }
     }
 }
 
+/* ---------- battery header ---------- */
 @Composable
 private fun BatteryHeaderSection(
     batteryInfo: BatteryInfo,
     pulseAlpha: Float
 ) {
+    /* ====== PERBAIKAN UTAMA ====== */
+    val hardCharging = rememberHardCharging()
+    val statusText = when {
+        hardCharging -> "Charging"
+        batteryInfo.status.contains("Full", ignoreCase = true) -> "Full"
+        else -> "Not Charging"
+    }
+    val icon = when {
+        hardCharging                                -> Icons.Default.BatteryChargingFull
+        batteryInfo.status.contains("Full", true)   -> Icons.Default.BatteryFull
+        else                                        -> Icons.Default.BatteryStd
+    }
+    /* ============================== */
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -238,7 +222,6 @@ private fun BatteryHeaderSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            // Battery Status Box
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
@@ -253,14 +236,13 @@ private fun BatteryHeaderSection(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
-                    text = "${batteryInfo.level}% • ${if (batteryInfo.isCharging) "Charging" else "Discharging"}",
+                    text = "${batteryInfo.level}% • $statusText",
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
                 )
             }
         }
 
-        // Animated Battery Icon with pulse effect
         Box(
             modifier = Modifier
                 .size(56.dp)
@@ -288,7 +270,7 @@ private fun BatteryHeaderSection(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (batteryInfo.isCharging) Icons.Default.BatteryChargingFull else Icons.Default.BatteryFull,
+                imageVector = icon,
                 contentDescription = "Battery",
                 modifier = Modifier.size(28.dp),
                 tint = MaterialTheme.colorScheme.primary
@@ -297,6 +279,7 @@ private fun BatteryHeaderSection(
     }
 }
 
+/* ---------- memory header ---------- */
 @Composable
 private fun MemoryHeaderSection(
     memoryInfo: MemoryInfo,
@@ -318,7 +301,6 @@ private fun MemoryHeaderSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            // Memory Status Box
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
@@ -350,7 +332,6 @@ private fun MemoryHeaderSection(
             }
         }
 
-        // Animated Memory Icon with pulse effect
         Box(
             modifier = Modifier
                 .size(56.dp)
@@ -387,6 +368,7 @@ private fun MemoryHeaderSection(
     }
 }
 
+/* ---------- storage header ---------- */
 @Composable
 private fun StorageHeaderSection(
     storageInfo: StorageInfo,
@@ -408,7 +390,6 @@ private fun StorageHeaderSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            // Storage Status Box
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
@@ -430,7 +411,6 @@ private fun StorageHeaderSection(
             }
         }
 
-        // Animated Storage Icon with pulse effect
         Box(
             modifier = Modifier
                 .size(56.dp)
@@ -467,10 +447,9 @@ private fun StorageHeaderSection(
     }
 }
 
+/* ---------- progress sections ---------- */
 @Composable
-private fun BatteryProgressSection(
-    batteryInfo: BatteryInfo
-) {
+private fun BatteryProgressSection(batteryInfo: BatteryInfo) {
     GlassmorphismSurface(
         modifier = Modifier.fillMaxWidth(),
         blurRadius = 0f,
@@ -506,22 +485,17 @@ private fun BatteryProgressSection(
                         )
                         Text(
                             text = "Charge Level",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Text(
                         text = "${batteryInfo.level}%",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold
-                        ),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
 
-                // Battery Progress Bar
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -558,10 +532,7 @@ private fun BatteryProgressSection(
 }
 
 @Composable
-private fun MemoryProgressSection(
-    memoryInfo: MemoryInfo,
-    usedPercentage: Int
-) {
+private fun MemoryProgressSection(memoryInfo: MemoryInfo, usedPercentage: Int) {
     GlassmorphismSurface(
         modifier = Modifier.fillMaxWidth(),
         blurRadius = 0f,
@@ -580,7 +551,6 @@ private fun MemoryProgressSection(
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // RAM Usage Progress Bar
                 Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -601,17 +571,13 @@ private fun MemoryProgressSection(
                             )
                             Text(
                                 text = "RAM Usage",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.SemiBold
-                                ),
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Text(
                             text = "${usedPercentage}%",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.tertiary
                         )
                     }
@@ -648,10 +614,8 @@ private fun MemoryProgressSection(
                     }
                 }
 
-                // ZRAM Usage Progress Bar (only show if zram is available)
                 if (memoryInfo.zramTotal > 0) {
                     val zramUsedPercentage = ((memoryInfo.zramUsed.toDouble() / memoryInfo.zramTotal.toDouble()) * 100).toInt()
-
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -672,17 +636,13 @@ private fun MemoryProgressSection(
                                 )
                                 Text(
                                     text = "ZRAM Usage",
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                             Text(
                                 text = "${zramUsedPercentage}%",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.Bold
-                                ),
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = Color(0xFF9C27B0)
                             )
                         }
@@ -712,10 +672,8 @@ private fun MemoryProgressSection(
                     }
                 }
 
-                // Swap Usage Progress Bar (only show if swap is available)
                 if (memoryInfo.swapTotal > 0) {
                     val swapUsedPercentage = ((memoryInfo.swapUsed.toDouble() / memoryInfo.swapTotal.toDouble()) * 100).toInt()
-
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -736,17 +694,13 @@ private fun MemoryProgressSection(
                                 )
                                 Text(
                                     text = "Swap Usage",
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                             Text(
                                 text = "${swapUsedPercentage}%",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.Bold
-                                ),
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = Color(0xFFFF5722)
                             )
                         }
@@ -780,10 +734,16 @@ private fun MemoryProgressSection(
     }
 }
 
+
+/* ---------- stats sections ---------- */
 @Composable
-private fun BatteryStatsSection(
-    batteryInfo: BatteryInfo
-) {
+private fun BatteryStatsSection(batteryInfo: BatteryInfo) {
+    val hardCharging = rememberHardCharging()
+    val statusText = when {
+        hardCharging                                -> "Charging"
+        batteryInfo.status.contains("Full", true)   -> "Full"
+        else                                        -> "Not Charging"
+    }
     GlassmorphismSurface(
         modifier = Modifier.fillMaxWidth(),
         blurRadius = 0f,
@@ -802,12 +762,10 @@ private fun BatteryStatsSection(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Battery Stats Row 1 - Temperature and Voltage
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Temperature
                     SystemStatItem(
                         icon = Icons.Default.Thermostat,
                         label = "Temperature",
@@ -820,7 +778,6 @@ private fun BatteryStatsSection(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Voltage
                     SystemStatItem(
                         icon = Icons.Default.ElectricBolt,
                         label = "Voltage",
@@ -840,12 +797,10 @@ private fun BatteryStatsSection(
                     )
                 }
 
-                // Battery Stats Row 2 - Health and Cycles
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Battery Health
                     SystemStatItem(
                         icon = Icons.Default.HealthAndSafety,
                         label = "Health",
@@ -859,7 +814,6 @@ private fun BatteryStatsSection(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Battery Cycles
                     SystemStatItem(
                         icon = Icons.Default.Autorenew,
                         label = "Cycles",
@@ -874,12 +828,10 @@ private fun BatteryStatsSection(
                     )
                 }
 
-                // Battery Stats Row 3 - Technology and Status
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Battery Technology
                     SystemStatItem(
                         icon = Icons.Default.Science,
                         label = "Technology",
@@ -894,13 +846,18 @@ private fun BatteryStatsSection(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Battery Status
                     SystemStatItem(
-                        icon = if (batteryInfo.isCharging) Icons.Default.BatteryChargingFull else Icons.Default.BatteryStd,
+                        icon = when {
+                            batteryInfo.health.contains("Overvoltage", ignoreCase = true) -> Icons.Default.BatteryAlert
+                            hardCharging -> Icons.Default.BatteryChargingFull
+                            batteryInfo.status.contains("Full", ignoreCase = true) -> Icons.Default.BatteryFull
+                            else -> Icons.Default.BatteryStd
+                        },
                         label = "Status",
-                        value = batteryInfo.status,
+                        value = statusText,
                         color = when {
-                            batteryInfo.status.contains("Charging", ignoreCase = true) -> Color(0xFF4CAF50)
+                            batteryInfo.health.contains("Overvoltage", ignoreCase = true) -> MaterialTheme.colorScheme.error
+                            hardCharging -> Color(0xFF4CAF50)
                             batteryInfo.status.contains("Full", ignoreCase = true) -> Color(0xFF2196F3)
                             batteryInfo.status.contains("Discharging", ignoreCase = true) -> Color(0xFFFF9800)
                             else -> MaterialTheme.colorScheme.onSurface
@@ -909,12 +866,10 @@ private fun BatteryStatsSection(
                     )
                 }
 
-                // Battery Stats Row 4 - Current Capacity and Design Capacity (combined in one row)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Current Capacity
                     SystemStatItem(
                         icon = Icons.Default.Battery6Bar,
                         label = "Current Cap",
@@ -928,7 +883,6 @@ private fun BatteryStatsSection(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Design Capacity (moved to same row to utilize space efficiently)
                     SystemStatItem(
                         icon = Icons.Default.BatterySaver,
                         label = "Design Cap",
@@ -938,15 +892,29 @@ private fun BatteryStatsSection(
                     )
                 }
 
-                // Additional info if current is available
                 if (batteryInfo.current != 0f) {
-                    val currentMa = batteryInfo.current / 1000
-                    val displayCurrent = kotlin.math.abs(currentMa)
+                    val rawCurrentMa = batteryInfo.current
+                    val isDeviceConsideredCharging = hardCharging // Use hardCharging here
+                    val correctedSignedMa = if (rawCurrentMa == 0f) {
+                        0f
+                    } else if (isDeviceConsideredCharging) {
+                        kotlin.math.abs(rawCurrentMa)
+                    } else {
+                        -kotlin.math.abs(rawCurrentMa)
+                    }
+                    val displayCurrentText = String.format(Locale.getDefault(), "%.0f", correctedSignedMa)
+                    val iconForCurrent = if (isDeviceConsideredCharging) Icons.Default.BatteryChargingFull else Icons.Default.BatteryAlert
+                    val colorForCurrent = when {
+                        correctedSignedMa > 0f -> Color(0xFF4CAF50)
+                        correctedSignedMa < 0f -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurface
+                    }
+
                     SystemStatItem(
-                        icon = if (batteryInfo.isCharging) Icons.Default.BatteryChargingFull else Icons.Default.BatteryAlert,
+                        icon = iconForCurrent,
                         label = "Current",
-                        value = "${String.format(Locale.getDefault(), "%.0f", displayCurrent)}mA",
-                        color = if (batteryInfo.isCharging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        value = "${displayCurrentText}mA",
+                        color = colorForCurrent,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -956,9 +924,7 @@ private fun BatteryStatsSection(
 }
 
 @Composable
-private fun MemoryStatsSection(
-    memoryInfo: MemoryInfo
-) {
+private fun MemoryStatsSection(memoryInfo: MemoryInfo) {
     GlassmorphismSurface(
         modifier = Modifier.fillMaxWidth(),
         blurRadius = 0f,
@@ -977,12 +943,10 @@ private fun MemoryStatsSection(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Memory Stats Row 1 - Used and Free RAM
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Used RAM
                     SystemStatItem(
                         icon = Icons.Default.Memory,
                         label = "Used RAM",
@@ -991,7 +955,6 @@ private fun MemoryStatsSection(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Free RAM
                     SystemStatItem(
                         icon = Icons.Default.Storage,
                         label = "Free RAM",
@@ -1001,12 +964,10 @@ private fun MemoryStatsSection(
                     )
                 }
 
-                // Memory Stats Row 2 - Total RAM and Usage Percentage
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Total RAM
                     SystemStatItem(
                         icon = Icons.Default.Widgets,
                         label = "Total RAM",
@@ -1015,7 +976,6 @@ private fun MemoryStatsSection(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Usage Percentage
                     SystemStatItem(
                         icon = Icons.Default.Analytics,
                         label = "Usage %",
@@ -1025,13 +985,11 @@ private fun MemoryStatsSection(
                     )
                 }
 
-                // Memory Stats Row 3 - ZRAM Stats (only show if zram is available)
                 if (memoryInfo.zramTotal > 0) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // ZRAM Used
                         SystemStatItem(
                             icon = Icons.Default.Compress,
                             label = "ZRAM Used",
@@ -1040,7 +998,6 @@ private fun MemoryStatsSection(
                             modifier = Modifier.weight(1f)
                         )
 
-                        // ZRAM Total
                         SystemStatItem(
                             icon = Icons.Default.Compress,
                             label = "ZRAM Total",
@@ -1051,13 +1008,11 @@ private fun MemoryStatsSection(
                     }
                 }
 
-                // Memory Stats Row 4 - Swap Stats (only show if swap is available)
                 if (memoryInfo.swapTotal > 0) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Swap Used
                         SystemStatItem(
                             icon = Icons.Default.SwapHoriz,
                             label = "Swap Used",
@@ -1066,7 +1021,6 @@ private fun MemoryStatsSection(
                             modifier = Modifier.weight(1f)
                         )
 
-                        // Swap Total
                         SystemStatItem(
                             icon = Icons.Default.SwapHoriz,
                             label = "Swap Total",
@@ -1082,315 +1036,7 @@ private fun MemoryStatsSection(
 }
 
 @Composable
-private fun SystemStatItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    value: String,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = color,
-            modifier = Modifier.size(16.dp)
-        )
-        Column {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = FontWeight.SemiBold
-                ),
-                color = color,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun DeviceInfoCard(
-    systemInfo: SystemInfo,
-    rooted: Boolean,
-    version: String,
-    blur: Boolean,
-    storageInfo: StorageInfo,
-    modifier: Modifier = Modifier
-) {
-    SuperGlassCard(
-        modifier = modifier,
-        glassIntensity = GlassIntensity.Light,
-        onClick = null
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Device Info Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Device Information",
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Root Status Box
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    if (rooted) {
-                                        Brush.horizontalGradient(
-                                            colors = listOf(
-                                                Color(0xFF4CAF50).copy(alpha = 0.8f),
-                                                Color(0xFF66BB6A).copy(alpha = 0.6f)
-                                            )
-                                        )
-                                    } else {
-                                        Brush.horizontalGradient(
-                                            colors = listOf(
-                                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
-                                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
-                                            )
-                                        )
-                                    }
-                                )
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = if (rooted) "Rooted" else "Not Rooted",
-                                color = if (rooted) Color.White else MaterialTheme.colorScheme.onErrorContainer,
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
-                            )
-                        }
-
-                        // Version Box
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
-                                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
-                                        )
-                                    )
-                                )
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "v$version",
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
-                            )
-                        }
-                    }
-                }
-
-                // Device Icon
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
-                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Smartphone,
-                        contentDescription = "Device",
-                        modifier = Modifier.size(28.dp),
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                }
-            }
-
-            // Device Stats (Storage Progress Section dihapus karena sudah ada Storage Card terpisah)
-            GlassmorphismSurface(
-                modifier = Modifier.fillMaxWidth(),
-                blurRadius = 0f,
-                alpha = 0.4f
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .padding(16.dp)
-                ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        // Device Info Row 1
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            SystemStatItem(
-                                icon = Icons.Default.PhoneAndroid,
-                                label = "Model",
-                                value = systemInfo.model,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            SystemStatItem(
-                                icon = Icons.Default.Code,
-                                label = "Codename",
-                                value = systemInfo.codename,
-                                color = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        // Device Info Row 2
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            SystemStatItem(
-                                icon = Icons.Default.Android,
-                                label = "Android",
-                                value = systemInfo.androidVersion,
-                                color = Color(0xFF4CAF50),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            SystemStatItem(
-                                icon = Icons.Default.Build,
-                                label = "SDK",
-                                value = systemInfo.sdk.toString(),
-                                color = MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        // Device Info Row 3 - SoC and Fingerprint
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            SystemStatItem(
-                                icon = Icons.Default.DeveloperBoard,
-                                label = "SoC",
-                                value = systemInfo.soc,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            SystemStatItem(
-                                icon = Icons.Default.Fingerprint,
-                                label = "Fingerprint",
-                                value = systemInfo.fingerprint.substringAfterLast("/").substringBefore(":"),
-                                color = Color(0xFF2196F3),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        // Device Info Row 4 - Display Resolution and Technology
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            SystemStatItem(
-                                icon = Icons.Default.AspectRatio,
-                                label = "Resolution",
-                                value = systemInfo.screenResolution,
-                                color = Color(0xFFFF9800),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            SystemStatItem(
-                                icon = Icons.Default.DisplaySettings,
-                                label = "Technology",
-                                value = systemInfo.displayTechnology,
-                                color = Color(0xFF9C27B0),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        // Device Info Row 5 - Refresh Rate and DPI
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            SystemStatItem(
-                                icon = Icons.Default.Speed,
-                                label = "Refresh Rate",
-                                value = systemInfo.refreshRate,
-                                color = Color(0xFF00BCD4),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            SystemStatItem(
-                                icon = Icons.Default.PhotoSizeSelectSmall,
-                                label = "DPI",
-                                value = systemInfo.screenDpi,
-                                color = Color(0xFF795548),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        // Device Info Row 6 - GPU Renderer
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            SystemStatItem(
-                                icon = Icons.Default.Videocam,
-                                label = "GPU Renderer",
-                                value = systemInfo.gpuRenderer,
-                                color = Color(0xFFE91E63),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            // Empty placeholder to maintain layout balance
-                            Box(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StorageProgressSection(
-    storageInfo: StorageInfo
-) {
+private fun StorageProgressSection(storageInfo: StorageInfo) {
     val usedPercentage = if (storageInfo.totalSpace > 0) {
         ((storageInfo.usedSpace.toDouble() / storageInfo.totalSpace.toDouble()) * 100).toInt()
     } else 0
@@ -1430,17 +1076,14 @@ private fun StorageProgressSection(
                         )
                         Text(
                             text = "Internal Storage",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+
                     Text(
                         text = "${formatStorageSize(storageInfo.usedSpace)} / ${formatStorageSize(storageInfo.totalSpace)}",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold
-                        ),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
@@ -1499,9 +1142,7 @@ private fun StorageProgressSection(
 }
 
 @Composable
-private fun StorageStatsSection(
-    storageInfo: StorageInfo
-) {
+private fun StorageStatsSection(storageInfo: StorageInfo) {
     GlassmorphismSurface(
         modifier = Modifier.fillMaxWidth(),
         blurRadius = 0f,
@@ -1520,12 +1161,10 @@ private fun StorageStatsSection(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Storage Stats Row 1 - Used and Free
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Used Storage
                     SystemStatItem(
                         icon = Icons.Default.Storage,
                         label = "Used Storage",
@@ -1534,7 +1173,6 @@ private fun StorageStatsSection(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Free Storage
                     SystemStatItem(
                         icon = Icons.Default.Storage,
                         label = "Free Storage",
@@ -1544,12 +1182,10 @@ private fun StorageStatsSection(
                     )
                 }
 
-                // Storage Stats Row 2 - Total and Usage Percentage
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Total Storage
                     SystemStatItem(
                         icon = Icons.Default.Storage,
                         label = "Total Storage",
@@ -1558,7 +1194,6 @@ private fun StorageStatsSection(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Usage Percentage
                     SystemStatItem(
                         icon = Icons.Default.Analytics,
                         label = "Usage %",
@@ -1570,4 +1205,334 @@ private fun StorageStatsSection(
             }
         }
     }
+}
+
+/* ---------- device info ---------- */
+@Composable
+private fun DeviceInfoCard(
+    systemInfo: SystemInfo,
+    rooted: Boolean,
+    version: String,
+    blur: Boolean,
+    storageInfo: StorageInfo,
+    modifier: Modifier = Modifier
+) {
+    SuperGlassCard(
+        modifier = modifier,
+        glassIntensity = GlassIntensity.Light,
+        onClick = null
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Device Information",
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (rooted) {
+                                        Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color(0xFF4CAF50).copy(alpha = 0.8f),
+                                                Color(0xFF66BB6A).copy(alpha = 0.6f)
+                                            )
+                                        )
+                                    } else {
+                                        Brush.horizontalGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
+                                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+                                            )
+                                        )
+                                    }
+                                )
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = if (rooted) "Rooted" else "Not Rooted",
+                                color = if (rooted) Color.White else MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
+                                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+                                        )
+                                    )
+                                )
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "v$version",
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
+                            )
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
+                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Smartphone,
+                        contentDescription = "Device",
+                        modifier = Modifier.size(28.dp),
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            }
+
+            GlassmorphismSurface(
+                modifier = Modifier.fillMaxWidth(),
+                blurRadius = 0f,
+                alpha = 0.4f
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .padding(16.dp)
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            SystemStatItem(
+                                icon = Icons.Default.PhoneAndroid,
+                                label = "Model",
+                                value = systemInfo.model,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            SystemStatItem(
+                                icon = Icons.Default.Code,
+                                label = "Codename",
+                                value = systemInfo.codename,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            SystemStatItem(
+                                icon = Icons.Default.Android,
+                                label = "Android",
+                                value = systemInfo.androidVersion,
+                                color = Color(0xFF4CAF50),
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            SystemStatItem(
+                                icon = Icons.Default.Build,
+                                label = "SDK",
+                                value = systemInfo.sdk.toString(),
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            SystemStatItem(
+                                icon = Icons.Default.DeveloperBoard,
+                                label = "SoC",
+                                value = systemInfo.soc,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            SystemStatItem(
+                                icon = Icons.Default.Fingerprint,
+                                label = "Fingerprint",
+                                value = systemInfo.fingerprint.substringAfterLast("/").substringBefore(":"),
+                                color = Color(0xFF2196F3),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            SystemStatItem(
+                                icon = Icons.Default.AspectRatio,
+                                label = "Resolution",
+                                value = systemInfo.screenResolution,
+                                color = Color(0xFFFF9800),
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            SystemStatItem(
+                                icon = Icons.Default.DisplaySettings,
+                                label = "Technology",
+                                value = systemInfo.displayTechnology,
+                                color = Color(0xFF9C27B0),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            SystemStatItem(
+                                icon = Icons.Default.Speed,
+                                label = "Refresh Rate",
+                                value = systemInfo.refreshRate,
+                                color = Color(0xFF00BCD4),
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            SystemStatItem(
+                                icon = Icons.Default.PhotoSizeSelectSmall,
+                                label = "DPI",
+                                value = systemInfo.screenDpi,
+                                color = Color(0xFF795548),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            SystemStatItem(
+                                icon = Icons.Default.Videocam,
+                                label = "GPU Renderer",
+                                value = systemInfo.gpuRenderer,
+                                color = Color(0xFFE91E63),
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            Box(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* ---------- small composables ---------- */
+@Composable
+private fun SystemStatItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = color,
+            modifier = Modifier.size(16.dp)
+        )
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+//private fun isRootGranted(): Boolean =
+//    try {
+//        Runtime.getRuntime().exec("su -c id").waitFor() == 0
+//    } catch (e: Exception) { false }
+//
+//private object PowerSupply {
+//    fun readInt(path: String): Int =
+//        File(path).bufferedReader().use { it.readText().trim().toIntOrNull() ?: -1 }
+//
+//    fun readString(path: String): String =
+//        File(path).bufferedReader().use { it.readText().trim() }
+//
+//    /* true = cable masih nyambung, false = sudah dicabut */
+//    fun isChargingSysfs(): Boolean =
+//        when {
+//            readInt("/sys/class/power_supply/battery/online") == 1 -> true
+//            readString("/sys/class/power_supply/battery/status").equals("charging", true) -> true
+//            else -> false
+//        }
+//}
+
+/* -------------------------------------------------
+   DETEKSI CHARGING DARI API ANDROID (NO ROOT)
+   ------------------------------------------------- */
+@Composable
+private fun rememberHardCharging(): Boolean {
+    val context = LocalContext.current
+    /* sticky intent tidak perlu register/unregister */
+    val intent: Intent? = remember {
+        context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+    }
+    val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+    return status == BatteryManager.BATTERY_STATUS_CHARGING ||
+            status == BatteryManager.BATTERY_STATUS_FULL
 }
