@@ -7,12 +7,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,8 +25,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Speed
@@ -37,14 +35,10 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -62,16 +56,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
 import kotlin.math.abs
 import kotlin.math.roundToInt
-
-// Import SuperGlassCard dan GlassIntensity
-// Karena keduanya berada di package yang sama, kita tidak perlu import explicit
 
 @Composable
 fun CpuGovernorCard(
@@ -177,7 +167,7 @@ fun CpuGovernorCard(
                             }
                         }
                     } else if (clusters.isNotEmpty()) {
-                        clusters.forEachIndexed { index, clusterName ->
+                        clusters.forEachIndexed { _, clusterName ->
                             CpuClusterCard(
                                 clusterName = clusterName,
                                 vm = vm,
@@ -231,27 +221,82 @@ fun CpuGovernorCard(
                     onDismiss = { showFreqDialogForCluster = null }
                 )
             } else {
-                // Show an error dialog instead of silently dismissing
                 AlertDialog(
                     onDismissRequest = { showFreqDialogForCluster = null },
-                    title = { Text("Frequency Error") },
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Speed,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Text(
+                                text = "Frequency Error",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    },
                     text = {
-                        Text("Cannot adjust frequency for $clusterName.\nInvalid frequency range: $systemMinFreq - $systemMaxFreq MHz")
+                        Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                            Text("Cannot adjust frequency for $clusterName.\nInvalid frequency range: $systemMinFreq - $systemMaxFreq MHz")
+                        }
                     },
                     confirmButton = {
-                        TextButton(onClick = { showFreqDialogForCluster = null }) {
-                            Text("OK")
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp, end = 8.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { showFreqDialogForCluster = null }) {
+                                Text("OK")
+                            }
                         }
                     }
                 )
             }
         } else {
-            // Show loading or error dialog instead of silently dismissing
             AlertDialog(
                 onDismissRequest = { showFreqDialogForCluster = null },
-                title = { Text("Loading Frequencies") },
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Speed,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Text(
+                            text = "Loading Frequencies",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                },
                 text = {
-                    Column {
+                    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
                         if (currentFreqPair.first == 0 && currentFreqPair.second == 0) {
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -266,8 +311,13 @@ fun CpuGovernorCard(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showFreqDialogForCluster = null }) {
-                        Text("OK")
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp, end = 8.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showFreqDialogForCluster = null }) {
+                            Text("OK")
+                        }
                     }
                 }
             )
@@ -295,62 +345,98 @@ private fun GovernorSelectionDialog(
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
-        shape = MaterialTheme.shapes.large,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
         title = {
-            Text(
-                "Select Governor for ${clusterName.replaceFirstChar { it.titlecase() }}",
-                style = MaterialTheme.typography.headlineSmall
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = "Select Governor for ${clusterName.replaceFirstChar { it.titlecase() }}",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         },
         text = {
-            Column(modifier = Modifier.padding(top = 8.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(16.dp))
-                availableGovernors.sorted().forEach { governor -> // Urutkan daftar governor
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.medium)
-                            .clickable { onGovernorSelected(governor) }
-                            .padding(vertical = 12.dp, horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = (governor == currentSelectedGovernor),
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    availableGovernors.sorted().forEach { governor ->
+                        val isSelected = governor == currentSelectedGovernor
+                        androidx.compose.material3.FilledTonalButton(
                             onClick = { onGovernorSelected(governor) },
-                            modifier = Modifier.size(20.dp),
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = MaterialTheme.colorScheme.primary,
-                                unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                        Spacer(Modifier.width(16.dp))
-                        Text(
-                            governor,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = if (governor == currentSelectedGovernor) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = if (isSelected) Color.Red else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                contentColor = if (isSelected) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            enabled = !isSelected
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Selected",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Text(
+                                    governor,
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium),
+                                    maxLines = 1
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(
+            androidx.compose.material3.FilledTonalButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Text("CANCEL", fontWeight = FontWeight.SemiBold)
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close",
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Cancel")
             }
-        },
-        dismissButton = null // Tidak perlu dismiss button eksplisit, onDismissRequest sudah cukup
+        }
     )
 }
 
@@ -404,16 +490,43 @@ private fun FrequencySelectionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Set Frequency", style = MaterialTheme.typography.headlineSmall) },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Speed,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = "Set Frequency",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
         text = {
-            Column {
+            Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
                 Text(
                     clusterName.replaceFirstChar { it.titlecase() },
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 16.dp, top = 4.dp)
                 )
-
                 // Min Frequency
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -442,7 +555,6 @@ private fun FrequencySelectionDialog(
                     colors = sliderColors
                 )
                 Spacer(Modifier.height(24.dp))
-
                 // Max Frequency
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -474,27 +586,51 @@ private fun FrequencySelectionDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    val finalMin = findClosestFrequency(sliderMinValue.roundToInt(), allAvailableFrequencies)
-                    val finalMax = findClosestFrequency(sliderMaxValue.roundToInt(), allAvailableFrequencies)
-                    if (finalMin <= finalMax) {
-                        onFrequencySelected(finalMin, finalMax)
-                    } else {
-                        onFrequencySelected(finalMin, finalMin)
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.End
             ) {
-                Text("APPLY")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.secondary)
-            ) {
-                Text("CANCEL")
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = {
+                        val finalMin = findClosestFrequency(sliderMinValue.roundToInt(), allAvailableFrequencies)
+                        val finalMax = findClosestFrequency(sliderMaxValue.roundToInt(), allAvailableFrequencies)
+                        if (finalMin <= finalMax) {
+                            onFrequencySelected(finalMin, finalMax)
+                        } else {
+                            onFrequencySelected(finalMin, finalMin)
+                        }
+                    },
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Apply",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("APPLY")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Cancel",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("CANCEL")
+                }
             }
         }
     )
@@ -507,44 +643,65 @@ private fun CoreStatusDialog(
     onCoreToggled: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val GreenOnline = Color(0xFF4CAF50)
-    val RedOffline = Color(0xFFF44336)
+    val greenOnline = Color(0xFF4CAF50)
+    val redOffline = Color(0xFFF44336)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Core Status", style = MaterialTheme.typography.headlineSmall) },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Memory,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = "Core Status",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
         text = {
-            Column {
+            Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
                 Text(
                     clusterName.replaceFirstChar { it.titlecase() },
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 12.dp, top = 4.dp)
+                    modifier = Modifier.padding(bottom = 16.dp, top = 4.dp)
                 )
                 coreStates.forEachIndexed { index, isOnline ->
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .clickable { onCoreToggled(index) }
-                            .padding(vertical = 8.dp, horizontal = 8.dp),
+                            .padding(vertical = 10.dp, horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Custom Button with rounded shape instead of RadioButton
                         Button(
                             onClick = { onCoreToggled(index) },
-                            shape = RoundedCornerShape(50), // Fully rounded
+                            shape = RoundedCornerShape(50),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isOnline) GreenOnline else RedOffline,
-                                contentColor = Color.White // Text color for the button
+                                containerColor = if (isOnline) greenOnline else redOffline,
+                                contentColor = Color.White
                             ),
                             modifier = Modifier
-                                .size(24.dp) // Maintain size
-                                .padding(0.dp), // Ensure no extra padding inside the button
-                        ) {
-                            // Empty content as the color itself indicates the state
-                            // Alternatively, you can put a small check icon or something similar
-                        }
-
+                                .size(24.dp)
+                                .padding(0.dp),
+                        ) {}
                         Spacer(Modifier.width(16.dp))
                         Text(
                             text = "Core $index",
@@ -555,20 +712,31 @@ private fun CoreStatusDialog(
                         Text(
                             text = if (isOnline) "Online" else "Offline",
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                color = if (isOnline) GreenOnline else RedOffline,
+                                color = if (isOnline) greenOnline else redOffline,
                                 fontWeight = FontWeight.SemiBold
                             ),
                         )
                     }
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
             }
         },
         confirmButton = {
-            TextButton(
+            androidx.compose.material3.FilledTonalButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Text("DONE", fontWeight = FontWeight.Medium)
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Done",
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("DONE")
             }
         }
     )
