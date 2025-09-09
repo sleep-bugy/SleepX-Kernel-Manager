@@ -27,7 +27,8 @@ class TuningViewModel @Inject constructor(
     }
     private val KEY_LAST_APPLIED_THERMAL_INDEX = "last_applied_thermal_index"
 
-    val cpuClusters = listOf("cpu0", "cpu4", "cpu7")
+    // Ganti inisialisasi cpuClusters agar dinamis dari repository
+    val cpuClusters: List<String> = repo.getCpuClusters()
 
     /* ---------------- CPU ---------------- */
     private val _coreStates = MutableStateFlow(List(8) { true })

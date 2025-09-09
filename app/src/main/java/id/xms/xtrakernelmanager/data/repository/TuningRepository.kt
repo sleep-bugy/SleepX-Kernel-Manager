@@ -11,6 +11,13 @@ import kotlinx.coroutines.flow.flowOn
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.ceil
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.delay
+import java.io.File
+import kotlinx.coroutines.launch
 
 @Singleton
 class TuningRepository @Inject constructor(
@@ -41,6 +48,19 @@ class TuningRepository @Inject constructor(
     private val gpuCurrentPowerLevelPath = "$gpuBaseSysfsPath/default_pwrlevel"
     private val gpuMinPowerLevelPath = "$gpuBaseSysfsPath/min_pwrlevel"
     private val gpuMaxPowerLevelPath = "$gpuBaseSysfsPath/max_pwrlevel"
+
+    // Thermal nodes to check for existence
+    private val thermalNodes = listOf(
+        "/sys/class/thermal/thermal_zone0/trip_point_0_temp",
+        "/sys/class/thermal/thermal_zone0/trip_point_1_temp",
+        "/sys/class/thermal/thermal_zone1/trip_point_0_temp",
+        "/sys/class/thermal/thermal_zone1/trip_point_1_temp",
+        "/sys/module/msm_thermal/core_limit/cpus",
+        "/sys/module/msm_thermal/vdd_restriction/cpus",
+        "/sys/kernel/msm_thermal/enabled",
+        "/sys/kernel/msm_thermal/zone0",
+        "/sys/kernel/msm_thermal/zone1"
+    )
 
     // RAM
     private val zramControlPath = "/sys/block/zram0"
@@ -160,6 +180,19 @@ class TuningRepository @Inject constructor(
     fun getCurrentSelinuxMode(): Flow<String> = flow {
         emit(getSelinuxModeInternal())
     }.flowOn(Dispatchers.IO)
+
+
+    // Thermal Bypass
+    private fun disableThermalVeto() {
+        thermalNodes.forEach { p ->
+            when {
+                "trip_point" in p -> runTuningCommand("echo 2147483647 > $p") // INT_MAX
+                "enabled" in p    -> runTuningCommand("echo 0 > $p")
+                "cpus" in p       -> runTuningCommand("echo '' > $p")         // kosongkan mask
+            }
+        }
+        runTuningCommand("echo 0 > /sys/module/msm_thermal/parameters/enabled")
+    }
 
 
     /* ----------------------------------------------------------
@@ -330,8 +363,20 @@ class TuningRepository @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     fun setCpuGov(cluster: String, gov: String): Boolean {
-        val chmodSuccess = runTuningCommand("chmod 666 ${cpuGovPath.format(cluster)}")
-        return chmodSuccess && runTuningCommand("echo $gov > ${cpuGovPath.format(cluster)}")
+        val originalSelinuxMode = getSelinuxModeInternal()
+        val needsSelinuxChange = originalSelinuxMode.equals("Enforcing", ignoreCase = true)
+        var selinuxPermissiveOk = true
+        if (needsSelinuxChange) selinuxPermissiveOk = setSelinuxModeInternal(false)
+        val chmodOk = runTuningCommand("chmod 666 ${cpuGovPath.format(cluster)}")
+        var writeOk = false
+        repeat(3) {
+            writeOk = runTuningCommand("echo $gov > ${cpuGovPath.format(cluster)}")
+            if (writeOk) return@repeat
+            Thread.sleep(100)
+        }
+        var selinuxRestoreOk = true
+        if (needsSelinuxChange) selinuxRestoreOk = setSelinuxModeInternal(true)
+        return selinuxPermissiveOk && chmodOk && writeOk && selinuxRestoreOk
     }
 
     fun getCpuFreq(cluster: String): Flow<Pair<Int, Int>> = flow {
@@ -341,11 +386,23 @@ class TuningRepository @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     fun setCpuFreq(cluster: String, min: Int, max: Int): Boolean {
-        val chmodMinSuccess = runTuningCommand("chmod 666 ${cpuMinFreqPath.format(cluster)}")
-        val chmodMaxSuccess = runTuningCommand("chmod 666 ${cpuMaxFreqPath.format(cluster)}")
-        val setMinSuccess = runTuningCommand("echo $min > ${cpuMinFreqPath.format(cluster)}")
-        val setMaxSuccess = runTuningCommand("echo $max > ${cpuMaxFreqPath.format(cluster)}")
-        return chmodMinSuccess && chmodMaxSuccess && setMinSuccess && setMaxSuccess
+        val originalSelinuxMode = getSelinuxModeInternal()
+        val needsSelinuxChange = originalSelinuxMode.equals("Enforcing", ignoreCase = true)
+        var selinuxPermissiveOk = true
+        if (needsSelinuxChange) selinuxPermissiveOk = setSelinuxModeInternal(false)
+        val chmodMinOk = runTuningCommand("chmod 666 ${cpuMinFreqPath.format(cluster)}")
+        val chmodMaxOk = runTuningCommand("chmod 666 ${cpuMaxFreqPath.format(cluster)}")
+        var setMinOk = false
+        var setMaxOk = false
+        repeat(3) {
+            setMinOk = runTuningCommand("echo $min > ${cpuMinFreqPath.format(cluster)}")
+            setMaxOk = runTuningCommand("echo $max > ${cpuMaxFreqPath.format(cluster)}")
+            if (setMinOk && setMaxOk) return@repeat
+            Thread.sleep(100)
+        }
+        var selinuxRestoreOk = true
+        if (needsSelinuxChange) selinuxRestoreOk = setSelinuxModeInternal(true)
+        return selinuxPermissiveOk && chmodMinOk && chmodMaxOk && setMinOk && setMaxOk && selinuxRestoreOk
     }
 
     fun getAvailableCpuGovernors(cluster: String): Flow<List<String>> = flow {
@@ -382,6 +439,7 @@ class TuningRepository @Inject constructor(
             try {
                 return presentCores.split("-").last().toInt() + 1
             } catch (e: NumberFormatException) {
+                Log.e(TAG, "Failed to parse present cores: $presentCores", e)
             }
         }
 
@@ -390,6 +448,21 @@ class TuningRepository @Inject constructor(
             count++
         }
         return if (count > 0) count else 8
+    }
+
+    /**
+     * Mendapatkan daftar cluster CPU yang valid secara dinamis.
+     * Akan mengembalikan list seperti ["cpu0", "cpu4"] sesuai dengan folder cpufreq yang ada.
+     */
+    fun getCpuClusters(): List<String> {
+        val clusters = mutableListOf<String>()
+        // Cek dari cpu0 sampai cpu9 (maksimal 10 cluster, bisa diubah sesuai kebutuhan)
+        for (i in 0..9) {
+            val path = "$cpuBaseSysfsPath/cpu$i/cpufreq"
+            val exists = readShellCommand("if [ -d $path ]; then echo 1; else echo 0; fi").trim() == "1"
+            if (exists) clusters.add("cpu$i")
+        }
+        return clusters
     }
 
 
@@ -495,10 +568,29 @@ class TuningRepository @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     fun setThermalModeIndex(modeIndex: Int): Flow<Boolean> = flow {
+        // Force SELinux to permissive before operation
+        val originalSelinuxMode = getSelinuxModeInternal()
+        val needsSelinuxChange = originalSelinuxMode.equals("Enforcing", ignoreCase = true)
+        var selinuxPermissiveOk = true
+        if (needsSelinuxChange) {
+            selinuxPermissiveOk = setSelinuxModeInternal(false)
+        }
+        // Force chmod before and after
         val preChmodOk = runTuningCommand("chmod 0666 $thermalSysfsNode")
-        val writeOk = runTuningCommand("echo $modeIndex > $thermalSysfsNode")
+        // Try to write multiple times (up to 3 attempts)
+        var writeOk = false
+        repeat(3) { attempt ->
+            writeOk = runTuningCommand("echo $modeIndex > $thermalSysfsNode")
+            if (writeOk) return@repeat
+            Thread.sleep(100)
+        }
         val postChmodOk = runTuningCommand("chmod 0666 $thermalSysfsNode")
-        emit(preChmodOk && writeOk && postChmodOk)
+        // Restore SELinux enforcing if needed
+        var selinuxRestoreOk = true
+        if (needsSelinuxChange) {
+            selinuxRestoreOk = setSelinuxModeInternal(true)
+        }
+        emit(selinuxPermissiveOk && preChmodOk && writeOk && postChmodOk && selinuxRestoreOk)
     }.flowOn(Dispatchers.IO)
 
     /* ----------------------------------------------------------
@@ -1164,6 +1256,82 @@ class TuningRepository @Inject constructor(
 
         emit(statusMap.toMap())
     }.flowOn(Dispatchers.IO)
+
+    /* ==========================================================
+   9.  FORCE-CPU-FREQ  (public API)
+   ========================================================== */
+    private val watchdogJobs = mutableMapOf<Int, Job>()
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /**
+     * Paksa core tertentu lock ke freq (kHz) sampai unlockCoreFreq() dipanggil.
+     * Thermal bypass otomatis dijalankan.
+     */
+    fun setCoreFreqForced(core: Int, kHz: Int, lock: Boolean = true): Boolean {
+        val minPath = "$cpuBaseSysfsPath/cpu$core/cpufreq/scaling_min_freq"
+        val maxPath = "$cpuBaseSysfsPath/cpu$core/cpufreq/scaling_max_freq"
+        val setPath = "$cpuBaseSysfsPath/cpu$core/cpufreq/scaling_setspeed"
+        val availPath = "$cpuBaseSysfsPath/cpu$core/cpufreq/scaling_available_frequencies"
+
+        /* 1. pilih target freq (sudah ada) */
+        val list = readShellCommand("cat $availPath")
+            .split(Regex("\\s+"))
+            .mapNotNull { it.toIntOrNull() }
+            .sorted()
+        val target = list.minByOrNull { kotlin.math.abs(it - kHz) } ?: return false
+
+        /* 2. thermal bypass + stop services */
+        disableThermalVeto()
+        runTuningCommand("stop thermal-engine")
+        runTuningCommand("stop thermald")
+        runTuningCommand("stop vendor.thermal-engine")
+
+        /* 3. override clk driver (bila ada) */
+        runTuningCommand("echo 0 > /sys/module/clk_xxx/parameters/thermal_cap")     // ganti xxx
+        runTuningCommand("echo 0 > /sys/kernel/msm_thermal/enabled")
+        runTuningCommand("echo 0 > /sys/module/msm_thermal/parameters/enabled")
+
+        /* 4. kosongkan trip-point untuk zona cpu7 (contoh) */
+        val zoneCpu7 = "/sys/class/thermal/thermal_zone7"  // <-- sesuaikan zona cpu7
+        runTuningCommand("echo -1 > $zoneCpu7/trip_point_0_temp")
+        runTuningCommand("echo -1 > $zoneCpu7/trip_point_1_temp")
+        runTuningCommand("echo disabled > $zoneCpu7/policy") // matikan step-wise
+
+        /* 5. lanjutkan chmod & lock freq seperti biasa */
+        runTuningCommand("chmod 666 $minPath $maxPath")
+        if (File(setPath).exists()) runTuningCommand("chmod 666 $setPath")
+
+        val ok = runTuningCommand("echo $target > $minPath") &&
+                runTuningCommand("echo $target > $maxPath") &&
+                (File(setPath).exists().not() || runTuningCommand("echo $target > $setPath"))
+
+        runTuningCommand("echo 1 > $cpuBaseSysfsPath/cpu$core/online")
+
+        if (lock && ok) startWatchdog(core, target)
+        else if (!lock) unlockCoreFreq(core)
+
+        Log.i(TAG, "Core$core dipaksa ke ${target}kHz (lock=$lock)")
+        return ok
+    }
+
+    fun unlockCoreFreq(core: Int) {
+        watchdogJobs[core]?.cancel()
+        watchdogJobs.remove(core)
+        Log.d(TAG, "Watchdog dihentikan untuk core$core")
+    }
+
+    private fun startWatchdog(core: Int, kHz: Int) {
+        unlockCoreFreq(core) // reset jika sudah berjalan
+        watchdogJobs[core] = scope.launch {
+            while (isActive) {
+                delay(200)
+                runTuningCommand("echo $kHz > $cpuBaseSysfsPath/cpu$core/cpufreq/scaling_min_freq")
+                runTuningCommand("echo $kHz > $cpuBaseSysfsPath/cpu$core/cpufreq/scaling_max_freq")
+                val setPath = "$cpuBaseSysfsPath/cpu$core/cpufreq/scaling_setspeed"
+                if (File(setPath).exists()) runTuningCommand("echo $kHz > $setPath")
+            }
+        }
+    }
     /* ----------------------------------------------------------
        Fallback Shell using Runtime.exec
        ---------------------------------------------------------- */
