@@ -24,7 +24,9 @@ class ThemeRepository @Inject constructor(
     }
 
     val themeType: Flow<ThemeType> = context.dataStore.data.map { preferences ->
-        val themeName = preferences[PreferencesKeys.THEME_TYPE] ?: ThemeType.GLASSMORPHISM.name
+        val themeName = preferences[PreferencesKeys.THEME_TYPE] ?: run {
+            if (android.os.Build.VERSION.SDK_INT >= 31) ThemeType.MATERIAL3.name else ThemeType.GLASSMORPHISM.name
+        }
         ThemeType.valueOf(themeName)
     }
 
