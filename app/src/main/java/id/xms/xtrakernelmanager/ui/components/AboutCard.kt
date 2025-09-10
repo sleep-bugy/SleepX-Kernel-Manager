@@ -50,7 +50,7 @@ fun AboutCard(
 
     SuperGlassCard(
         modifier = modifier,
-        glassIntensity = GlassIntensity.Medium
+        glassIntensity = GlassIntensity.Light
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
