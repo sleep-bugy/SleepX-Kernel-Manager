@@ -91,7 +91,7 @@ fun CpuCard(
     // Enhanced Glass Card dengan intensitas yang lebih ringan agar konten terlihat
     SuperGlassCard(
         modifier = modifier,
-        glassIntensity = GlassIntensity.Light, // Ubah dari Heavy ke Light
+        glassIntensity = GlassIntensity.Light,
         onClick = null
     ) {
         Column(
@@ -184,12 +184,12 @@ private fun CpuHeaderSection(
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFF6750A4).copy(alpha = pulseAlpha * 0.6f),
+                                Color(0xFF14AC1D).copy(alpha = pulseAlpha * 0.6f),
                                 Color.Transparent
                             ),
-                            radius = size.minDimension * 0.8f
+                            radius = size.minDimension * 0.6f
                         ),
-                        radius = size.minDimension * 0.5f
+                        radius = size.minDimension * 0.3f
                     )
                 }
                 .background(
