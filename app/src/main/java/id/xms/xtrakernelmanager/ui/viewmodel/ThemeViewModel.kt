@@ -18,7 +18,7 @@ class ThemeViewModel @Inject constructor(
     val currentTheme: StateFlow<ThemeType> = themeRepository.themeType.stateIn(
         scope = viewModelScope,
         started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000),
-        initialValue = ThemeType.GLASSMORPHISM
+        initialValue = if (android.os.Build.VERSION.SDK_INT >= 31) ThemeType.MATERIAL3 else ThemeType.GLASSMORPHISM
     )
 
     fun setTheme(themeType: ThemeType) {
