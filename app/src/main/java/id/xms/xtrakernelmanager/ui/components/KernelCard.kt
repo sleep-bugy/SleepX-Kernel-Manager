@@ -40,7 +40,7 @@ fun KernelCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                glassIntensity = GlassIntensity.Heavy
+                glassIntensity = GlassIntensity.Light
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -51,7 +51,7 @@ fun KernelCard(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                         ),
                         shape = RoundedCornerShape(16.dp)
                     ) {
@@ -137,7 +137,7 @@ fun KernelCard(
 
     SuperGlassCard(
         modifier = modifier,
-        glassIntensity = GlassIntensity.Medium
+        glassIntensity = GlassIntensity.Light
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
