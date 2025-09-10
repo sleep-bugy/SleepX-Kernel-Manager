@@ -39,7 +39,7 @@ echo ""
 echo "Memulai build release dengan informasi keystore yang diberikan..."
 
 # Menjalankan gradlew dengan meneruskan variabel sebagai properti (-P)
-./gradlew assembleRelease \
+./gradlew buildAndPublish \
     -PmyKeystorePath="$KEYSTORE_PATH" \
     -PmyKeystorePassword="$KEYSTORE_PASSWORD" \
     -PmyKeyAlias="$KEY_ALIAS" \
