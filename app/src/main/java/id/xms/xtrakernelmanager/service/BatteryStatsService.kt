@@ -149,8 +149,6 @@ class BatteryStatsService : Service() {
         currentCapacity: Int = 0,
         batteryTechnology: String = "Unknown",
         drain: String = "N/A",
-        screenOnTime: String = "N/A",
-        screenOffTime: String = "N/A",
         deepSleep: String = "0%",
         awake: String = "0%",
         uptime: String = "0:00:00"
@@ -193,18 +191,15 @@ class BatteryStatsService : Service() {
                 """
                 🔋 Battery: $batteryLevel% • $formattedTemp • $chargingStatus
                 ⚡ Power: $formattedCurrent$chargingInfo • Drain: $drain
-                🔬 Health: $healthInfo • Cycles: $cycleInfo
-                📊 Capacity: $capacityInfo • Tech: $batteryTechnology
-                📱 Screen: On $screenOnTime • Off $screenOffTime
+                Tech: $batteryTechnology
                 ⚙️ Voltage: $formattedVoltage • Uptime: $uptime
-                
                 💤 Deep Sleep: $deepSleep • Awake: $awake
                 """.trimIndent()
             )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("🔋 $batteryLevel% • $formattedTemp • $chargingStatus")
-            .setContentText("⚡ $formattedCurrent$chargingInfo • 🔬 $healthInfo")
+            .setContentText("⚡ $formattedCurrent$chargingInfo • 🔬 $drain")
             .setStyle(bigTextStyle)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
@@ -738,8 +733,6 @@ class BatteryStatsService : Service() {
             currentCapacity = stats.currentCapacity,
             batteryTechnology = stats.batteryTechnology,
             drain = stats.drain,
-            screenOnTime = stats.screenOnTime,
-            screenOffTime = stats.screenOffTime,
             deepSleep = stats.deepSleep,
             awake = stats.awake,
             uptime = stats.uptime
