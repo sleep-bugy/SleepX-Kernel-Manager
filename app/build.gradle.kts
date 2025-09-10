@@ -43,7 +43,8 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"),
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
@@ -268,19 +269,19 @@ abstract class SendTelegramMessageTask : DefaultTask() {
             35 -> "15 [VanillaIceCream]" // Android 15
             36 -> "16 [Baklava]" // Android 16
             else -> "Unknown"
-            }
+        }
         val minSdkCodename = when (minSdkVersion) {
             // Assuming minSdkVersion is an Int or can be converted to one for this when
             29 -> "10 [QuinceTart]" // Android 10
-                30 -> "11 [RedVelvet]" // Android 11
-                31 -> "12 [Snowcone]" // Android 12
-                32 -> "12L [Snowcone V2]" // Android 12L
-                33 -> "13 [Tiramisu]" // Android 13
-                34 -> "14 [UpsideDownCake]" // Android 14
-                35 -> "15 [VanillaIceCream]" // Android 15
-                36 -> "16 [Baklava]" // Android 16
-                else -> "Unknown"
-            }
+            30 -> "11 [RedVelvet]" // Android 11
+            31 -> "12 [Snowcone]" // Android 12
+            32 -> "12L [Snowcone V2]" // Android 12L
+            33 -> "13 [Tiramisu]" // Android 13
+            34 -> "14 [UpsideDownCake]" // Android 14
+            35 -> "15 [VanillaIceCream]" // Android 15
+            36 -> "16 [Baklava]" // Android 16
+            else -> "Unknown"
+        }
 
         val (totalRamGb, freeRamGb, usedRamGb) = try {
             val process = ProcessBuilder("cat", "/proc/meminfo")
@@ -462,13 +463,13 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
 
         // Hilangkan // jika sudah ingin release
         // val caption = "📦 New Release build: ${appName.get()} v${appVersionName.get()}\n" +
-                //"Build time: ${Date()}\n" +
-                // "File: ${currentApkFile.name} (${"%.2f".format(fileSizeMb)} MB)"
+        //"Build time: ${Date()}\n" +
+        // "File: ${currentApkFile.name} (${"%.2f".format(fileSizeMb)} MB)"
 
         // Tambahkan // jika sudah tidak ingin menggunakan test release
         val caption = "📦 New Test Release build: ${appName.get()} v${appVersionName.get()}\n" +
-            "Build time: ${Date()}\n" +
-             "File: ${currentApkFile.name} (${"%.2f".format(fileSizeMb)} MB)"
+                "Build time: ${Date()}\n" +
+                "File: ${currentApkFile.name} (${"%.2f".format(fileSizeMb)} MB)"
 
         val url = "https://botapi.arasea.dpdns.org/bot${telegramBotToken.get()}/sendDocument"
         val requestConfig = RequestConfig.custom()
@@ -506,60 +507,82 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
 
 
 // Task to rename/copy app-release.apk to XKM-versionName.apk after assembleRelease
+// 1. Task untuk me-rename/menyalin app-release.apk
 val renameReleaseApk by tasks.registering(Copy::class) {
     group = "custom"
-    description = "Renames/copies app-release.apk to XKM-versionName.apk after build."
-    val versionName = android.defaultConfig.versionName ?: "N/A"
-    val srcFile = file("release/app-release.apk")
-    val destFile = file("release/XKM-$versionName.apk")
-    from(srcFile)
-    into("release")
-    rename { "XKM-$versionName.apk" }
-    dependsOn("assembleRelease")
-    doFirst {
-        if (!srcFile.exists()) {
-            throw GradleException("Source APK not found: ${srcFile.absolutePath}")
-        }
+    description = "Renames/copies app-release.apk to a custom name."
+
+    val versionName = android.defaultConfig.versionName ?: "unknown-version"
+
+    // Sumber file APK dari direktori build
+    from(layout.buildDirectory.dir("outputs/apk/release")) {
+        include("app-release.apk")
     }
+
+    // Direktori tujuan (misalnya 'dist' di root proyek)
+    into(layout.projectDirectory.dir("dist"))
+
+    // Mengganti nama file
+    rename { "XKM-$versionName.apk" }
 }
 
-// Update the upload task to use the renamed APK
-// Rename the task for clarity
-
-tasks.register("uploadReleaseApkToTelegram", UploadApkToTelegramTask::class) {
+// 2. Task untuk mengunggah APK yang sudah diganti namanya
+val uploadReleaseApkToTelegram by tasks.registering(UploadApkToTelegramTask::class) {
     group = "custom"
     description = "Uploads the renamed release APK to Telegram."
-    dependsOn(renameReleaseApk)
-    val versionName = project.android.defaultConfig.versionName ?: "N/A"
-    apkFile.set(project.layout.projectDirectory.file("release/XKM-$versionName.apk"))
+
+    // --- INI BAGIAN UTAMA YANG DIPERBAIKI ---
+    // Daripada mencoba menghubungkan output task secara dinamis,
+    // kita secara eksplisit menunjuk ke LOKASI FILE yang kita tahu akan dibuat.
+    val versionName = android.defaultConfig.versionName ?: "unknown-version"
+    val outputApkPath = layout.projectDirectory.file("dist/XKM-$versionName.apk")
+
+    // .set() sekarang menerima referensi file yang valid dan "lazy".
+    apkFile.set(outputApkPath)
+    // -----------------------------------------
+
+    // Konfigurasi lainnya tetap sama
     telegramBotToken.convention(project.findProperty("telegramBotToken")?.toString() ?: "")
     telegramChatId.convention(project.findProperty("telegramChatId")?.toString() ?: "")
-    appVersionName.convention(project.provider { project.android.defaultConfig.versionName ?: "N/A" })
+    appVersionName.convention(project.provider { android.defaultConfig.versionName ?: "N/A" })
     appName.convention(project.name)
+
+    // SANGAT PENTING: Pastikan task ini baru berjalan SETELAH rename selesai.
+    mustRunAfter(renameReleaseApk)
 }
 
-// --- Hook tasks into the build lifecycle ---
+// 3. Task untuk mengirim notifikasi status build
+val notifyBuildStatusToTelegram by tasks.registering(SendTelegramMessageTask::class) {
+    group = "custom"
+    description = "Sends the final build status to Telegram."
 
-// Configure the sendTelegramMessage task
-project.afterEvaluate {
-    tasks.named("sendTelegramMessage", SendTelegramMessageTask::class) {
-        appVersionName.set(project.provider { android.defaultConfig.versionName ?: "N/A" })
-        appPackageName.set(project.provider { android.defaultConfig.applicationId ?: "N/A" })
-        appProjectName.set(project.provider {
-            android.namespace?.substringAfterLast('.') ?: project.name
-        })
-    }
+    // Konfigurasi properti
+    appVersionName.convention(project.provider { android.defaultConfig.versionName ?: "N/A" })
+    appPackageName.convention(project.provider { android.defaultConfig.applicationId ?: "N/A" })
+    appProjectName.convention(project.provider { android.namespace?.substringAfterLast('.') ?: project.name })
+
+    // Task ini akan dijalankan sebagai bagian dari alur kerja utama
+    // Dan akan dijalankan terakhir
 }
 
-// Hook the tasks in the correct order: assembleRelease -> rename -> upload -> sendTelegramMessage
-project.afterEvaluate {
-    tasks.named("assembleRelease") {
-        finalizedBy(renameReleaseApk)
-    }
-    tasks.named(renameReleaseApk.name) {
-        finalizedBy("uploadReleaseApkToTelegram")
-    }
-    tasks.named("uploadReleaseApkToTelegram") {
-        finalizedBy("sendTelegramMessage")
-    }
+// 4. Task Utama untuk menggabungkan semua langkah menjadi satu pipeline
+tasks.register("buildAndPublish") {
+    group = "custom"
+    description = "Builds, renames, uploads the APK, and sends a notification."
+
+    // Menetapkan urutan eksekusi yang BENAR.
+    // Jika salah satu gagal, yang berikutnya tidak akan berjalan.
+    dependsOn(tasks.named("assembleRelease"))
+
+    // Rantai tugas dengan `mustRunAfter` untuk memastikan urutan yang ketat
+    renameReleaseApk.get().mustRunAfter(tasks.named("assembleRelease"))
+    uploadReleaseApkToTelegram.get().mustRunAfter(renameReleaseApk)
+    notifyBuildStatusToTelegram.get().mustRunAfter(uploadReleaseApkToTelegram)
+
+    // Menjadikan semua task ini sebagai dependensi dari buildAndPublish
+    finalizedBy(
+        renameReleaseApk,
+        uploadReleaseApkToTelegram,
+        notifyBuildStatusToTelegram
+    )
 }
