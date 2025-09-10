@@ -88,6 +88,13 @@ fun SettingsScreen(
 
     // Theme Selection Dialog
     if (showThemeDialog) {
+        val filteredThemes = remember {
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                ThemeType.entries.filter { it != ThemeType.GLASSMORPHISM }
+            } else {
+                ThemeType.entries
+            }
+        }
         AlertDialog(
             onDismissRequest = { showThemeDialog = false },
             title = { Text("Select Theme") },
@@ -98,7 +105,7 @@ fun SettingsScreen(
             },
             text = {
                 Column {
-                    ThemeType.entries.forEach { theme ->
+                    filteredThemes.forEach { theme ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -156,4 +163,3 @@ fun SettingsScreen(
         )
     }
 }
-
