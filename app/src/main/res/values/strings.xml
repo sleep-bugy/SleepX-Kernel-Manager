@@ -10,7 +10,7 @@
 2. Pavellc : Ui Supports
 3. Ziyu : Tuning Supports</string>
     <string name="kernel">Kernel</string>
-    <string name="version">Version: %1$s</string>
+    <string name="version">Version Kernel</string>
     <string name="kernel_type">Kernel Type: %1$s</string>
     <string name="kernel_information">Kernel Information</string>
     <string name="kernel_version">Kernel Version: %1$s</string>
