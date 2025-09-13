@@ -38,6 +38,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
 import id.xms.xtrakernelmanager.ui.icons.OpenGLESIcon
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.debounce
 
 // Import SuperGlassCard dan GlassIntensity
 // (Pastikan import sesuai dengan lokasi file ExpressiveBackground.kt)
@@ -64,6 +66,31 @@ fun GpuControlCard(
     val vulkanVersion by tuningViewModel.vulkanApiVersion.collectAsState()
     val currentRenderer by tuningViewModel.currentGpuRenderer.collectAsState()
     val availableRenderers = tuningViewModel.availableGpuRenderers
+    // GPU power level states
+    val gpuPowerLevelRange by tuningViewModel.gpuPowerLevelRange.collectAsState()
+    val currentGpuPowerLevel by tuningViewModel.currentGpuPowerLevel.collectAsState()
+    val numLevels by tuningViewModel.gpuNumPowerLevels.collectAsState()
+    val currentLevel by tuningViewModel.currentGpuPowerLevel.collectAsState()
+    var localSliderValue by remember(currentGpuPowerLevel) {
+        mutableStateOf(currentGpuPowerLevel)
+    }
+    val sliderWriteFlow = remember { MutableSharedFlow<Float>(replay = 0) }
+    LaunchedEffect(sliderWriteFlow) {
+        sliderWriteFlow
+            .debounce(300)
+            .collect { value ->
+                tuningViewModel.setGpuPowerLevel(value)
+            }
+    }
+
+    val (safeMin, safeMax) = gpuPowerLevelRange
+    val isRangeValid = safeMin < safeMax && safeMax > 0
+    val uiMax = if (isRangeValid) (safeMax * 1.5f).coerceAtLeast(10f) else 10f
+    LaunchedEffect(currentGpuPowerLevel) {
+        if (localSliderValue != currentGpuPowerLevel) {
+            localSliderValue = currentGpuPowerLevel
+        }
+    }
 
     // Calculate frequency ranges for sliders
     val minFreqRange = availableGpuFrequencies.minOrNull()?.toFloat() ?: 0f
@@ -399,7 +426,12 @@ fun GpuControlCard(
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 )
                                 Text(
-                                    text = currentRenderer.takeIf { it != "Loading..." && it.isNotBlank() } ?: "Default",
+                                    text = when {
+                                        currentRenderer.isBlank() || currentRenderer == "Loading..." -> "Loading..."
+                                        currentRenderer.contains("N/A", ignoreCase = true) -> "N/A"
+                                        currentRenderer.contains("Default", ignoreCase = true) -> "Default"
+                                        else -> currentRenderer
+                                    },
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.primary,
@@ -415,6 +447,227 @@ fun GpuControlCard(
                             )
                         }
                     }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // GPU Power Level Control
+                if (numLevels > 0) {
+                    GPUControlSection(
+                        title = "GPU Power Level",
+                        description = "Select one of the ${numLevels} available power levels",
+                        icon = Icons.Default.Tune
+                    ) {
+
+                        // Tentukan batas antara penggunaan Button dan Slider
+                        val buttonThreshold = 6
+
+                        if (numLevels <= buttonThreshold) {
+                            // --- JIKA LEVEL SEDIKIT, GUNAKAN SEGMENTED BUTTONS ---
+                            val options = (0 until numLevels).map { it.toString() }
+                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                options.forEachIndexed { index, label ->
+                                    SegmentedButton(
+                                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                                        onClick = {
+                                            tuningViewModel.setGpuPowerLevel(label.toFloat())
+                                        },
+                                        selected = currentLevel.toInt().toString() == label
+                                    ) {
+                                        Text(label)
+                                    }
+                                }
+                            }
+
+                        } else {
+                            // --- JIKA LEVEL BANYAK, GUNAKAN SLIDER ---
+                            val maxLevel = (numLevels - 1).toFloat()
+                            Column {
+                                Text(
+                                    text = "Level: ${currentLevel.toInt()} (Range: 0 - ${maxLevel.toInt()})",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Slider(
+                                    value = currentLevel,
+                                    onValueChange = { newValue ->
+                                        // Emit to debounced writer
+                                        coroutineScope.launch {
+                                            sliderWriteFlow.emit(newValue)
+                                        }
+                                    },
+                                    valueRange = 0f..maxLevel,
+                                    steps = (maxLevel - 1).toInt().coerceAtLeast(0),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Governor Selection Dialog
+                if (showGovernorDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showGovernorDialog = false },
+                        title = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text("Select GPU Governor")
+                            }
+                        },
+                        text = {
+                            if (availableGovernors.isEmpty()) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Loading governors...")
+                                }
+                            } else {
+                                LazyColumn {
+                                    items(availableGovernors) { governor ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .selectable(
+                                                    selected = governor == gpuGovernor,
+                                                    onClick = {
+                                                        coroutineScope.launch {
+                                                            tuningViewModel.setGpuGovernor(governor)
+                                                        }
+                                                        showGovernorDialog = false
+                                                    }
+                                                )
+                                                .padding(vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            RadioButton(
+                                                selected = governor == gpuGovernor,
+                                                onClick = {
+                                                    coroutineScope.launch {
+                                                        tuningViewModel.setGpuGovernor(governor)
+                                                    }
+                                                    showGovernorDialog = false
+                                                }
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = governor,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showGovernorDialog = false }) {
+                                Text("Close")
+                            }
+                        }
+                    )
+                }
+
+                // Renderer Selection Dialog
+                if (showRendererDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showRendererDialog = false },
+                        title = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text("Select GPU Renderer")
+                            }
+                        },
+                        text = {
+                            LazyColumn {
+                                items(availableRenderers) { renderer ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .selectable(
+                                                selected = renderer == currentRenderer,
+                                                onClick = {
+                                                    coroutineScope.launch {
+                                                        tuningViewModel.userSelectedGpuRenderer(renderer)
+                                                    }
+                                                    showRendererDialog = false
+                                                }
+                                            )
+                                            .padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = renderer == currentRenderer,
+                                            onClick = {
+                                                coroutineScope.launch {
+                                                    tuningViewModel.userSelectedGpuRenderer(renderer)
+                                                }
+                                                showRendererDialog = false
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                text = renderer,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            when (renderer) {
+                                                "OpenGL" -> Text(
+                                                    text = "Traditional rendering",
+                                                    fontSize = 10.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                )
+                                                "Vulkan" -> Text(
+                                                    text = "Modern low-overhead API",
+                                                    fontSize = 10.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                )
+                                                "ANGLE" -> Text(
+                                                    text = "OpenGL ES on Direct3D",
+                                                    fontSize = 10.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                )
+                                                "Default" -> Text(
+                                                    text = "System default",
+                                                    fontSize = 10.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showRendererDialog = false }) {
+                                Text("Close")
+                            }
+                        }
+                    )
                 }
             }
         }
