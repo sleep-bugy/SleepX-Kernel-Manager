@@ -142,13 +142,10 @@ class BatteryStatsService : Service() {
         batteryTemp: Float = 0f,
         chargingType: String = "",
         chargingStatus: String = "Unknown",
-        batteryHealth: String = "Unknown",
-        healthPercentage: Int = 0,
-        cycleCount: Int = 0,
-        batteryCapacity: Int = 0,
-        currentCapacity: Int = 0,
         batteryTechnology: String = "Unknown",
         drain: String = "N/A",
+        screenOnTime: String = "00:00:00",
+        screenOffTime: String = "00:00:00",
         deepSleep: String = "0%",
         awake: String = "0%",
         uptime: String = "0:00:00"
@@ -166,34 +163,17 @@ class BatteryStatsService : Service() {
         val formattedTemp = if (batteryTemp > 0) "%.1f°C".format(batteryTemp) else "N/A"
         val chargingInfo = if (chargingType.isNotEmpty() && chargingType != "Unknown") " ($chargingType)" else ""
 
-        // Format capacity information
-        val capacityInfo = if (batteryCapacity > 0) {
-            if (currentCapacity > 0) {
-                "$currentCapacity/$batteryCapacity mAh"
-            } else {
-                "$batteryCapacity mAh"
-            }
-        } else "N/A"
-
-        // Format health information
-        val healthInfo = if (healthPercentage > 0) {
-            "$batteryHealth ($healthPercentage%)"
-        } else {
-            batteryHealth
-        }
-
-        // Format cycle information
-        val cycleInfo = if (cycleCount > 0) "$cycleCount cycles" else "N/A"
 
         val bigTextStyle = NotificationCompat.BigTextStyle()
             .setBigContentTitle("Battery & System Statistics")
             .bigText(
                 """
-                🔋 Battery: $batteryLevel% • $formattedTemp • $chargingStatus
-                ⚡ Power: $formattedCurrent$chargingInfo • Drain: $drain
-                Tech: $batteryTechnology
-                ⚙️ Voltage: $formattedVoltage • Uptime: $uptime
-                💤 Deep Sleep: $deepSleep • Awake: $awake
+                Battery : $batteryLevel% • $formattedTemp • $chargingStatus
+                Power : $formattedCurrent$chargingInfo • Active Drain: $drain
+                Screen On: $screenOnTime • Screen Off: $screenOffTime
+                Tech : $batteryTechnology
+                Voltage : $formattedVoltage • Uptime: $uptime
+                Deep Sleep : $deepSleep • Awake: $awake
                 """.trimIndent()
             )
 
@@ -726,13 +706,10 @@ class BatteryStatsService : Service() {
             batteryTemp = stats.batteryTemp,
             chargingType = stats.chargingType,
             chargingStatus = stats.chargingStatus,
-            batteryHealth = stats.batteryHealth,
-            healthPercentage = stats.healthPercentage,
-            cycleCount = stats.cycleCount,
-            batteryCapacity = stats.batteryCapacity,
-            currentCapacity = stats.currentCapacity,
             batteryTechnology = stats.batteryTechnology,
             drain = stats.drain,
+            screenOnTime = stats.screenOnTime,
+            screenOffTime = stats.screenOffTime,
             deepSleep = stats.deepSleep,
             awake = stats.awake,
             uptime = stats.uptime
