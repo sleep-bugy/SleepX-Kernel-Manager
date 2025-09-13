@@ -63,6 +63,12 @@ class TuningViewModel @Inject constructor(
     private val _currentGpuPowerLevel = MutableStateFlow(0f)
     val currentGpuPowerLevel: StateFlow<Float> = _currentGpuPowerLevel.asStateFlow()
 
+    // Di dalam class TuningViewModel, di bawah _currentGpuPowerLevel
+
+    private val _gpuNumPowerLevels = MutableStateFlow(0)
+    val gpuNumPowerLevels: StateFlow<Int> = _gpuNumPowerLevels.asStateFlow()
+
+
     /* ---------------- OpenGL / Vulkan / Renderer ---------------- */
     private val _currentOpenGlesDriver = MutableStateFlow("Loading...")
     val currentOpenGlesDriver: StateFlow<String> = _currentOpenGlesDriver.asStateFlow()
@@ -132,6 +138,13 @@ class TuningViewModel @Inject constructor(
     /* Max ZRAM otomatis 6 GB untuk 8 GB RAM */
     private val _maxZramSize = MutableStateFlow(repo.calculateMaxZramSize())
     val maxZramSize: StateFlow<Long> = _maxZramSize.asStateFlow()
+
+    /* ---------------- I/O Scheduler ---------------- */
+    private val _availableIoSchedulers = MutableStateFlow<List<String>>(emptyList())
+    val availableIoSchedulers: StateFlow<List<String>> = _availableIoSchedulers.asStateFlow()
+
+    private val _currentIoScheduler = MutableStateFlow("Loading...")
+    val currentIoScheduler: StateFlow<String> = _currentIoScheduler.asStateFlow()
 
     /* ---------------- Thermal ---------------- */
     private val _isThermalLoading = MutableStateFlow(true)
@@ -233,6 +246,7 @@ class TuningViewModel @Inject constructor(
         Log.d("ViewModelGPU", "StateFlows updated: _currentGpuMinFreq=${_currentGpuMinFreq.value}, _currentGpuMaxFreq=${_currentGpuMaxFreq.value}")
         _gpuPowerLevelRange.value = repo.getGpuPowerLevelRange().first()
         _currentGpuPowerLevel.value = repo.getCurrentGpuPowerLevel().first()
+        _gpuNumPowerLevels.value = repo.getGpuNumPowerLevels()
     }
 
     fun setGpuGovernor(gov: String) = viewModelScope.launch(Dispatchers.IO) {
@@ -244,7 +258,7 @@ class TuningViewModel @Inject constructor(
     fun setGpuMinFrequency(freqKHz: Int) = viewModelScope.launch(Dispatchers.IO) {
         repo.setGpuMinFreq(freqKHz)
         if (repo.setGpuMinFreq(freqKHz)) {
-            val (min, max) = repo.getGpuFreq().first()
+            val (min, _) = repo.getGpuFreq().first()
             _currentGpuMinFreq.value = min
             fetchGpuData()
         }
@@ -253,7 +267,7 @@ class TuningViewModel @Inject constructor(
     fun setGpuMaxFrequency(freqKHz: Int) = viewModelScope.launch(Dispatchers.IO) {
         repo.setGpuMaxFreq(freqKHz)
         if (repo.setGpuMaxFreq(freqKHz)) {
-            val (min, max) = repo.getGpuFreq().first()
+            val (_, max) = repo.getGpuFreq().first()
             _currentGpuMaxFreq.value = max
             fetchGpuData()
         }
@@ -506,6 +520,24 @@ class TuningViewModel @Inject constructor(
     fun setThermalProfile(profile: ThermalRepository.ThermalProfile) =
         viewModelScope.launch { setThermalProfileInternal(profile, isRestoring = false) }
 
+
+
+    // Di dalam class TuningViewModel
+
+    private fun fetchIoSchedulerData() = viewModelScope.launch(Dispatchers.IO) {
+        _availableIoSchedulers.value = repo.getAvailableIoSchedulers()
+        _currentIoScheduler.value = repo.getCurrentIoScheduler()
+    }
+
+    fun setIoScheduler(scheduler: String) = viewModelScope.launch(Dispatchers.IO) {
+        if (repo.setIoScheduler(scheduler)) {
+            // Setelah diubah, baca kembali nilainya untuk update UI
+            _currentIoScheduler.value = repo.getCurrentIoScheduler()
+        }
+    }
+
+
+
     /* ---------------- Init ---------------- */
     private fun fetchAllInitialData() {
         viewModelScope.launch {
@@ -516,6 +548,7 @@ class TuningViewModel @Inject constructor(
             launch(Dispatchers.IO) { fetchCurrentGpuRenderer() }
             launch(Dispatchers.IO) { fetchVulkanApiVersion() }
             fetchRamControlData()
+            launch(Dispatchers.IO) { fetchIoSchedulerData() }
         }
     }
 }

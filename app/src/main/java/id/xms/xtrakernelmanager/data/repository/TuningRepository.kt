@@ -48,6 +48,7 @@ class TuningRepository @Inject constructor(
     private val gpuCurrentPowerLevelPath = "$gpuBaseSysfsPath/default_pwrlevel"
     private val gpuMinPowerLevelPath = "$gpuBaseSysfsPath/min_pwrlevel"
     private val gpuMaxPowerLevelPath = "$gpuBaseSysfsPath/max_pwrlevel"
+    private val gpuNumPowerLevelPath = "$gpuBaseSysfsPath/num_pwrlevels"
 
     // Thermal nodes to check for existence
     private val thermalNodes = listOf(
@@ -544,20 +545,35 @@ class TuningRepository @Inject constructor(
             .sorted())
     }.flowOn(Dispatchers.IO)
 
-    fun getGpuPowerLevelRange(): Flow<Pair<Float, Float>> = flow {
-        // Asumsi nilai power level adalah integer
-        val min = readShellCommand("cat $gpuMinPowerLevelPath").toFloatOrNull() ?: 0f
-        val max = readShellCommand("cat $gpuMaxPowerLevelPath").toFloatOrNull() ?: 0f
-        emit(min to max)
-    }.flowOn(Dispatchers.IO)
+    // Di dalam class TuningRepository
+
+    // Di dalam class TuningRepository
+
+    // ... (di dekat fungsi GPU lainnya seperti setGpuMaxFreq)
 
     fun getCurrentGpuPowerLevel(): Flow<Float> = flow {
         emit(readShellCommand("cat $gpuCurrentPowerLevelPath").toFloatOrNull() ?: 0f)
     }.flowOn(Dispatchers.IO)
 
-    fun setGpuPowerLevel(level: Float): Boolean =
-        runTuningCommand("echo ${level.toInt()} > $gpuCurrentPowerLevelPath")
+    fun setGpuPowerLevel(level: Float): Boolean {
+        // Power level biasanya integer, jadi kita konversi dulu
+        return runTuningCommand("echo ${level.toInt()} > $gpuCurrentPowerLevelPath")
+    }
 
+    fun getGpuPowerLevelRange(): Flow<Pair<Float, Float>> = flow {
+        val numLevels = readShellCommand("cat $gpuNumPowerLevelPath").toIntOrNull() ?: 0
+
+        if (numLevels > 0) {
+            val maxLevel = (numLevels - 1).toFloat()
+            emit(0f to maxLevel)
+            Log.d(TAG, "GPU Power Level range from num_pwrlevel: 0 to $maxLevel")
+        } else {
+            val min = readShellCommand("cat $gpuMinPowerLevelPath").toFloatOrNull() ?: 0f
+            val max = readShellCommand("cat $gpuMaxPowerLevelPath").toFloatOrNull() ?: 0f
+            emit(min to max)
+            Log.d(TAG, "GPU Power Level range from min/max_pwrlevel: $min to $max")
+        }
+    }.flowOn(Dispatchers.IO)
 
     /* ----------------------------------------------------------
        Thermal
@@ -1193,6 +1209,10 @@ class TuningRepository @Inject constructor(
         }
     }
 
+    fun getGpuNumPowerLevels(): Int {
+        return readShellCommand("cat $gpuNumPowerLevelPath").toIntOrNull() ?: 0
+    }
+
     /**
      * Get detailed SurfaceFlinger and Vulkan status for debugging
      * This helps diagnose Android 16 custom ROM compatibility issues
@@ -1407,6 +1427,38 @@ class TuningRepository @Inject constructor(
             false
         }
     }
+    /* ---------------------------------------------------------
+       I/O Scheduler
+       ---------------------------------------------------------- */
+    private val ioSchedulerPath = "/sys/block/sda/queue/scheduler"
+
+    fun getAvailableIoSchedulers(): List<String> {
+        val result = readShellCommand("cat $ioSchedulerPath")
+        return if (result.isNotBlank()) {
+            // Outputnya seperti: [mq-deadline] kyber bfq none
+            // Kita bersihkan kurung siku dan split berdasarkan spasi
+            result.replace("[", "").replace("]", "")
+                .split(" ").filter { it.isNotBlank() }
+        } else {
+            emptyList()
+        }
+    }
+
+    fun getCurrentIoScheduler(): String {
+        val result = readShellCommand("cat $ioSchedulerPath")
+        return if (result.isNotBlank()) {
+            // Cari bagian yang ada di dalam kurung siku
+            result.substringAfter("[").substringBefore("]").trim()
+        } else {
+            "N/A"
+        }
+    }
+
+    fun setIoScheduler(scheduler: String): Boolean {
+        return runTuningCommand("echo '$scheduler' > $ioSchedulerPath")
+    }
+
+
 
     fun getSwapSize(): Flow<Long> = flow {
         val swapInfo = readShellCommand("cat /proc/swaps")
@@ -1426,3 +1478,4 @@ class TuningRepository @Inject constructor(
         emit(0L) // No swap file found
     }.flowOn(Dispatchers.IO)
 }
+
