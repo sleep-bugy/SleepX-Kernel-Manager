@@ -35,15 +35,20 @@ read -s -p "Masukkan password untuk alias '$KEY_ALIAS': " KEY_PASSWORD
 echo "" # Pindah ke baris baru setelah input password
 echo ""
 
+echo "Masukkan changelog untuk rilis ini (tekan Ctrl+D setelah selesai):"
+CHANGELOG=$(cat)
+echo ""
+
 # --- Menjalankan Build Gradle dengan Properti ---
-echo "Memulai build release dengan informasi keystore yang diberikan..."
+echo "Memulai build release dengan informasi keystore dan Changelog yang diberikan..."
 
 # Menjalankan gradlew dengan meneruskan variabel sebagai properti (-P)
 ./gradlew buildAndPublish \
     -PmyKeystorePath="$KEYSTORE_PATH" \
     -PmyKeystorePassword="$KEYSTORE_PASSWORD" \
     -PmyKeyAlias="$KEY_ALIAS" \
-    -PmyKeyPassword="$KEY_PASSWORD"
+    -PmyKeyPassword="$KEY_PASSWORD" \
+    -PmyChangelog="$CHANGELOG"
 
 # Cek status build
 if [ $? -eq 0 ]; then

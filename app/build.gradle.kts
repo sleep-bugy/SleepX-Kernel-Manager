@@ -28,7 +28,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 1
-        versionName = "1.5.-Release"
+        versionName = "1.5-TestRelease"
     }
 
     signingConfigs {
@@ -154,6 +154,11 @@ abstract class SendTelegramMessageTask : DefaultTask() {
     @get:Input
     abstract val appProjectName: Property<String>
 
+    @get:Input
+    @get:Optional
+    abstract val changelog: Property<String>
+
+
 
     init {
         // Initialize from project properties
@@ -163,6 +168,8 @@ abstract class SendTelegramMessageTask : DefaultTask() {
         appVersionName.convention("")
         appPackageName.convention("")
         appProjectName.convention(project.name) // Default to current project name
+        changelog.convention(project.findProperty("myChangelog")?.toString() ?: "")
+
     }
 
     @TaskAction
@@ -336,15 +343,19 @@ abstract class SendTelegramMessageTask : DefaultTask() {
             "N/A" // Fallback
         }
 
-        // Function to escape MarkdownV2 characters
         fun escapeMarkdownV2(text: String): String {
-            val escapeChars = charArrayOf('_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!')
-            var result = text
-            for (ch in escapeChars) {
-                result = result.replace(ch.toString(), "\\" + ch)
-            }
-            return result
+            val escapeChars = "_*[]()~`>#+-=|{}.!"
+            return text.map { char ->
+                if (escapeChars.contains(char)) {
+                    "\\$char"
+                } else {
+                    char.toString()
+                }
+            }.joinToString("")
         }
+
+
+        val buildChangelog = changelog.getOrElse("")
 
         var message = "[Build Status] ${escapeMarkdownV2(project.name)} \\- $buildStatus* 🚀\n\n" +
                 "📦 App: ${escapeMarkdownV2(currentProjectName)}\n" +
@@ -352,18 +363,23 @@ abstract class SendTelegramMessageTask : DefaultTask() {
                 "🆔 Package: ${escapeMarkdownV2(currentAppPackage)}\n" +
                 "📅 Time: ${escapeMarkdownV2(Date().toString())}\n\n" +
                 "[Build Environment]\n" +
-                "  \\- OS: ${escapeMarkdownV2("$osName ($osArch)")}\n" +
-                "  \\- Kernel: ${escapeMarkdownV2(kernelInfo)}\n" +
-                "  \\- Processor:\n ${escapeMarkdownV2(processor)}\n" +
-                "  \\- RAM:\n Total: ${escapeMarkdownV2(totalRamGb)}\n Free: ${escapeMarkdownV2(freeRamGb)}\n Used: ${escapeMarkdownV2(usedRamGb)}\n" +
-                "  \\- Storage:\n Total: ${escapeMarkdownV2(totalStorageGb)}\n Free: ${escapeMarkdownV2(freeStorageGb)}\n" +
-                "  \\- Android Studio: ${escapeMarkdownV2("Narwhal Feature Drop")}\n" +
-                "  \\- Kotlin: ${escapeMarkdownV2(kotlinVersion)}\n" +
-                "  \\- Java: ${escapeMarkdownV2(javaVersion)}\n" +
-                "  \\- Gradle (Kotlin DSL): ${escapeMarkdownV2(gradleVersion)}\n\n" +
+                "  \\OS: ${escapeMarkdownV2("$osName ($osArch)")}\n" +
+                "  \\Kernel: ${escapeMarkdownV2(kernelInfo)}\n" +
+                "  \\Processor:\n ${escapeMarkdownV2(processor)}\n" +
+                "  \\RAM:\n Total: ${escapeMarkdownV2(totalRamGb)}\n Free: ${escapeMarkdownV2(freeRamGb)}\n Used: ${escapeMarkdownV2(usedRamGb)}\n" +
+                "  \\Storage:\n Total: ${escapeMarkdownV2(totalStorageGb)}\n Free: ${escapeMarkdownV2(freeStorageGb)}\n" +
+                "  \\Android Studio: ${escapeMarkdownV2("Narwhal Feature Drop")}\n" +
+                "  \\Kotlin: ${escapeMarkdownV2(kotlinVersion)}\n" +
+                "  \\Java: ${escapeMarkdownV2(javaVersion)}\n" +
+                "  \\Gradle (Kotlin DSL): ${escapeMarkdownV2(gradleVersion)}\n\n" +
                 "[App SDK Information]\n" +
-                "  \\- Min SDK: ${escapeMarkdownV2("$minSdkVersion (Android $minSdkCodename)")}\n" +
-                "  \\- Target SDK: ${escapeMarkdownV2("$targetSdkVersionInt (Android $targetSdkVersionName)")}\n"
+                "  \\Min SDK: ${escapeMarkdownV2("$minSdkVersion (Android $minSdkCodename)")}\n" +
+                "  \\Target SDK: ${escapeMarkdownV2("$targetSdkVersionInt (Android $targetSdkVersionName)")}\n"
+
+
+        if (buildChangelog.isNotBlank()) {
+            message += "\n*Changelog*:\n${escapeMarkdownV2(buildChangelog)}\n"
+        }
 
         if (buildStatus == "FAILED") {
             val failedTasks = project.gradle.taskGraph.allTasks.filter { it.state.failure != null }
@@ -388,16 +404,18 @@ abstract class SendTelegramMessageTask : DefaultTask() {
             .setSocketTimeout(30 * 1000)
             .build()
 
+
+
+        if (buildMsgId != null) {
+            editTelegramMessage(buildMsgId, if (buildStatus == "SUCCESS") "✅ Build finished successfully!" else "❌ Build failed!", parseMode = "MarkdownV2")
+        }
+
         HttpClients.custom().setDefaultRequestConfig(requestConfig).build().use { httpClient ->
             val post = HttpPost(url)
             val jsonPayload = """
             {
-        // Update the progress message to final build status
-        if (buildMsgId != null) {
-            editTelegramMessage(buildMsgId, if (buildStatus == "SUCCESS") "✅ Build finished successfully!" else "❌ Build failed!", parseMode = "MarkdownV2")
-        }
                 "chat_id": "${telegramChatId.get().replace("\"", "\\\"")}",
-                "text": "${message.replace("\"", "\\\"")}", // Gunakan message langsung
+                "text": "${message.replace("\"", "\\\"")}",
                 "parse_mode": "MarkdownV2"
             }
             """.trimIndent()
@@ -470,6 +488,7 @@ abstract class UploadApkToTelegramTask : DefaultTask() {
         val caption = "📦 New Test Release build: ${appName.get()} v${appVersionName.get()}\n" +
                 "Build time: ${Date()}\n" +
                 "File: ${currentApkFile.name} (${"%.2f".format(fileSizeMb)} MB)"
+                "Changelog: Enhance UI RAM info, fix minor bugs, update dependencies."
 
         val url = "https://botapi.arasea.dpdns.org/bot${telegramBotToken.get()}/sendDocument"
         val requestConfig = RequestConfig.custom()
@@ -560,9 +579,6 @@ val notifyBuildStatusToTelegram by tasks.registering(SendTelegramMessageTask::cl
     appVersionName.convention(project.provider { android.defaultConfig.versionName ?: "N/A" })
     appPackageName.convention(project.provider { android.defaultConfig.applicationId ?: "N/A" })
     appProjectName.convention(project.provider { android.namespace?.substringAfterLast('.') ?: project.name })
-
-    // Task ini akan dijalankan sebagai bagian dari alur kerja utama
-    // Dan akan dijalankan terakhir
 }
 
 // 4. Task Utama untuk menggabungkan semua langkah menjadi satu pipeline
