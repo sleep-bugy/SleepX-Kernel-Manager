@@ -866,7 +866,7 @@ fun CpuClusterCard(
 
 
 @Composable
-private fun CompactControlItem(
+fun CompactControlItem(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     value: String,
