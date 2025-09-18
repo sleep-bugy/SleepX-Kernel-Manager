@@ -27,7 +27,7 @@ fun UpdateDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     if (!force) {
-                        TextButton(onClick = onDismiss) { Text("Nanti saja") }
+                        TextButton(onClick = onDismiss) { Text("Later") }
                     }
                     Button(onClick = onUpdateClick) { Text("Update") }
                 }
