@@ -25,10 +25,14 @@ class MiscViewModel @Inject constructor(
     private val _batteryNotificationEnabled = MutableStateFlow(false)
     val batteryNotificationEnabled: StateFlow<Boolean> = _batteryNotificationEnabled.asStateFlow()
 
+    private val _showBatteryTempInStatusBar = MutableStateFlow(false)
+    val showBatteryTempInStatusBar: StateFlow<Boolean> = _showBatteryTempInStatusBar.asStateFlow()
+
     init {
         // Load saved preferences on init
         _batteryStatsEnabled.value = preferenceManager.getBatteryStatsEnabled()
         _batteryNotificationEnabled.value = preferenceManager.getBatteryStatsEnabled()
+        _showBatteryTempInStatusBar.value = preferenceManager.getShowBatteryTempInStatusBar()
     }
 
     fun toggleBatteryStats(enabled: Boolean) {
@@ -56,6 +60,13 @@ class MiscViewModel @Inject constructor(
                 application.stopService(serviceIntent)
                 preferenceManager.setBatteryStatsEnabled(false)
             }
+        }
+    }
+
+    fun toggleShowBatteryTempInStatusBar(enabled: Boolean) {
+        viewModelScope.launch {
+            _showBatteryTempInStatusBar.value = enabled
+            preferenceManager.setShowBatteryTempInStatusBar(enabled)
         }
     }
 }

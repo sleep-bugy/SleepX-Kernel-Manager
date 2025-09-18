@@ -18,6 +18,7 @@ class PreferenceManager @Inject constructor(
         private const val KEY_BATTERY_NOTIFICATION_AUTO_START = "battery_notification_auto_start"
         private const val KEY_SERVICE_AUTO_START = "service_auto_start"
         private const val KEY_TARGET_GAME_PACKAGES = "target_game_packages"
+        private const val KEY_SHOW_BATTERY_TEMP_STATUSBAR = "show_battery_temp_statusbar"
     }
 
     fun setBatteryStatsEnabled(enabled: Boolean) {
@@ -59,5 +60,15 @@ class PreferenceManager @Inject constructor(
 
     fun getTargetGamePackages(): Set<String> {
         return sharedPreferences.getStringSet(KEY_TARGET_GAME_PACKAGES, emptySet()) ?: emptySet()
+    }
+
+    fun setShowBatteryTempInStatusBar(enabled: Boolean) {
+        sharedPreferences.edit()
+            .putBoolean(KEY_SHOW_BATTERY_TEMP_STATUSBAR, enabled)
+            .apply()
+    }
+
+    fun getShowBatteryTempInStatusBar(): Boolean {
+        return sharedPreferences.getBoolean(KEY_SHOW_BATTERY_TEMP_STATUSBAR, false)
     }
 }

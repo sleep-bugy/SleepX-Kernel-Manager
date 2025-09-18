@@ -29,6 +29,7 @@ fun MiscScreen(
 
     val batteryStatsEnabled by viewModel.batteryStatsEnabled.collectAsState()
     val batteryNotificationEnabled by viewModel.batteryNotificationEnabled.collectAsState()
+    val showBatteryTempInStatusBar by viewModel.showBatteryTempInStatusBar.collectAsState()
 
     Column(
         modifier = Modifier
@@ -48,8 +49,12 @@ fun MiscScreen(
         BatteryStatsCard(
             batteryStatsEnabled = batteryStatsEnabled,
             batteryNotificationEnabled = batteryNotificationEnabled,
+            showBatteryTempInStatusBar = showBatteryTempInStatusBar,
             onToggleBatteryStats = { enabled ->
                 viewModel.toggleBatteryStats(enabled)
+            },
+            onToggleShowBatteryTempInStatusBar = { enabled ->
+                viewModel.toggleShowBatteryTempInStatusBar(enabled)
             }
         )
 
@@ -62,7 +67,9 @@ fun MiscScreen(
 fun BatteryStatsCard(
     batteryStatsEnabled: Boolean,
     batteryNotificationEnabled: Boolean,
-    onToggleBatteryStats: (Boolean) -> Unit
+    showBatteryTempInStatusBar: Boolean,
+    onToggleBatteryStats: (Boolean) -> Unit,
+    onToggleShowBatteryTempInStatusBar: (Boolean) -> Unit
 ) {
     SuperGlassCard(
         modifier = Modifier.fillMaxWidth(),
@@ -125,6 +132,31 @@ fun BatteryStatsCard(
                     checked = batteryNotificationEnabled,
                     onCheckedChange = onToggleBatteryStats,
                     enabled = false // This is controlled by the main battery stats toggle
+                )
+            }
+
+            // Show Battery Temp in Status Bar Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Show Battery Temperature in Status Bar",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Display battery temperature next to percentage in the status bar",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = showBatteryTempInStatusBar,
+                    onCheckedChange = onToggleShowBatteryTempInStatusBar,
+                    enabled = batteryStatsEnabled
                 )
             }
 
