@@ -100,6 +100,14 @@
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
 
+        <!-- OTA Update Listener Service -->
+        <service
+            android:name=".service.OtaUpdateListenerService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+
         <!-- Battery Notification Widget -->
         <receiver
             android:name=".widget.BatteryNotificationWidget"
