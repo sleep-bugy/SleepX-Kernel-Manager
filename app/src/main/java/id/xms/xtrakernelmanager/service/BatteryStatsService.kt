@@ -54,8 +54,9 @@ class BatteryStatsService : Service() {
         const val TEMP_CHANNEL_ID = "temperature_stats_channel"
 
         private const val UPDATE_INTERVAL_MS = 2000L
-        private const val MIN_DRAIN_TIME_MS = 5 * 60 * 1000L
+        private const val MIN_DRAIN_TIME_MS = 1 * 60 * 1000L
     }
+
 
     private val systemStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -86,14 +87,23 @@ class BatteryStatsService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // Start foreground immediately with a minimal notification
+        createMainNotificationChannel()
+        val minimalNotification = NotificationCompat.Builder(this, MAIN_CHANNEL_ID)
+            .setContentTitle("Battery Stats Running")
+            .setContentText("Collecting battery statistics...")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+        startForeground(MAIN_NOTIFICATION_ID, minimalNotification)
+
         designCapacityUah = getDesignCapacityUah()
         preferenceManager.setBatteryStatsEnabled(true)
-
-        createMainNotificationChannel()
         createTempNotificationChannel()
 
-        startForeground(MAIN_NOTIFICATION_ID, createMainNotification())
-
+        // Replace notification with the real one after setup
+        updateNotifications(getSystemStats())
         val intentFilter = IntentFilter().apply {
             addAction(Intent.ACTION_BATTERY_CHANGED)
             addAction(Intent.ACTION_SCREEN_ON)
@@ -276,7 +286,7 @@ class BatteryStatsService : Service() {
             wattage = voltage * (smoothedCurrent / 1_000_000f),
             batteryTemp = (intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0) / 10f,
             chargingStatus = getChargingStatusString(status, plugged),
-            activeDrain = calculateActiveDrain(currentChargeCounter, isCharging),
+            activeDrain = calculateActiveDrain(smoothedCurrent, isCharging),
             idleDrain = calculateIdleDrain(currentChargeCounter, isCharging),
             screenOnTime = getFormattedScreenOnTime(),
             uptime = formatMillisToTime(uptimeMillis),
@@ -287,41 +297,49 @@ class BatteryStatsService : Service() {
         )
     }
 
-    private fun calculateActiveDrain(currentCharge: Long, isCharging: Boolean): String {
+    // GANTI FUNGSI LAMA DENGAN INI
+    private fun calculateActiveDrain(
+        smoothedCurrentUa: Float,
+        isCharging: Boolean
+    ): String {
         if (isCharging) {
-            lastActiveChargeCounter = 0
             return "Charging"
         }
-        if (lastActiveChargeCounter == 0L) {
-            lastActiveChargeCounter = currentCharge
-            lastActiveDrainTime = System.currentTimeMillis()
-            return "Calculating..."
+
+        // Arus (mA) harus negatif (menandakan pemakaian), ambil nilai absolutnya.
+        val currentDrainMa = abs(smoothedCurrentUa) / 1000f
+
+        // Konversi kapasitas desain ke mAh
+        val designCapacityMah = designCapacityUah / 1000f
+
+        // Pengaman jika kapasitas tidak terdeteksi atau arus nol
+        if (designCapacityMah <= 0 || currentDrainMa == 0f) {
+            return "0.0%/h"
         }
 
-        val timeDiff = System.currentTimeMillis() - lastActiveDrainTime
-        if (timeDiff < MIN_DRAIN_TIME_MS) return "Calculating..."
+        // Rumus: (pemakaian saat ini / kapasitas total) * 100
+        val drainRatePerHour = (currentDrainMa / designCapacityMah) * 100
 
-        val chargeDropUah = lastActiveChargeCounter - currentCharge
-        if (chargeDropUah <= 0) return "0.0%/h"
-
-        val chargeDropPct = (chargeDropUah.toDouble() / designCapacityUah) * 100
-        val drainRatePctPerHour = (chargeDropPct / timeDiff) * (1000 * 60 * 60)
-
-        lastActiveChargeCounter = currentCharge
-        lastActiveDrainTime = System.currentTimeMillis()
-
-        return "%.1f%%/h".format(drainRatePctPerHour)
+        return "%.1f%%/h".format(drainRatePerHour)
     }
 
     private fun calculateIdleDrain(currentCharge: Long, isCharging: Boolean): String {
-        if (isCharging) return "Charging"
-        if (lastIdleChargeCounter == 0L) return lastIdleDrainValue
+        if (isCharging) {
+            lastIdleChargeCounter = 0
+            return "Charging"
+        }
+        if (lastIdleChargeCounter == 0L) {
+            return lastIdleDrainValue
+        }
 
         val timeDiff = System.currentTimeMillis() - lastIdleDrainTime
         if (timeDiff < MIN_DRAIN_TIME_MS) return "Calculating..."
 
         val chargeDropUah = lastIdleChargeCounter - currentCharge
-        if (chargeDropUah <= 0) return "0.0%/h"
+
+        if (chargeDropUah <= 0) {
+            return "0.0%/h"
+        }
 
         val chargeDropPct = (chargeDropUah.toDouble() / designCapacityUah) * 100
         val drainRatePctPerHour = (chargeDropPct / timeDiff) * (1000 * 60 * 60)
