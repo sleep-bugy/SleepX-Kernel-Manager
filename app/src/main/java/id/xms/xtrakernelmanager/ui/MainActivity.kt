@@ -129,12 +129,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun startOtaUpdateListenerService() {
+        val intent = Intent(this, id.xms.xtrakernelmanager.service.OtaUpdateListenerService::class.java)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
     private fun checkAndHandlePermissions() {
         if (!batteryOptChecker.hasRequiredPermissions()) {
             showBatteryOptDialog = true
         } else {
             // Only start service if we have permissions
             startForegroundService(Intent(this, ThermalService::class.java))
+            startOtaUpdateListenerService()
         }
     }
 
