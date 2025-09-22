@@ -30,6 +30,7 @@ fun MiscScreen(
     val batteryStatsEnabled by viewModel.batteryStatsEnabled.collectAsState()
     val batteryNotificationEnabled by viewModel.batteryNotificationEnabled.collectAsState()
     val showBatteryTempInStatusBar by viewModel.showBatteryTempInStatusBar.collectAsState()
+    val fpsMonitorEnabled by viewModel.fpsMonitorEnabled.collectAsState()
 
     Column(
         modifier = Modifier
@@ -57,6 +58,17 @@ fun MiscScreen(
                 viewModel.toggleShowBatteryTempInStatusBar(enabled)
             }
         )
+
+        // FPS Monitor Toggle
+        FpsMonitorCard(fpsMonitorEnabled = fpsMonitorEnabled, onToggleFpsMonitor = { enabled ->
+            if (enabled && !Settings.canDrawOverlays(context)) {
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } else {
+                viewModel.toggleFpsMonitor(enabled)
+            }
+        })
 
         // Additional misc features
         SystemTweaksCard()
@@ -233,6 +245,88 @@ fun BatteryStatsCard(
                             Text("• System uptime tracking", style = MaterialTheme.typography.bodySmall)
                             Text("• Battery drain rate calculation", style = MaterialTheme.typography.bodySmall)
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FpsMonitorCard(
+    fpsMonitorEnabled: Boolean,
+    onToggleFpsMonitor: (Boolean) -> Unit
+) {
+    SuperGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        glassIntensity = GlassIntensity.Light
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "FPS Monitor",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            // FPS Monitor Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Enable FPS Monitor",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Show current FPS on the screen",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Switch(
+                    checked = fpsMonitorEnabled,
+                    onCheckedChange = onToggleFpsMonitor
+                )
+            }
+
+            if (fpsMonitorEnabled) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PieChart,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Overlay Permission Required",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Text(
+                            text = "The FPS monitor requires overlay permission to display the current FPS on the screen. Please grant the permission in the settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
                 }
             }

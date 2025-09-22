@@ -19,6 +19,7 @@ class PreferenceManager @Inject constructor(
         private const val KEY_SERVICE_AUTO_START = "service_auto_start"
         private const val KEY_TARGET_GAME_PACKAGES = "target_game_packages"
         private const val KEY_SHOW_BATTERY_TEMP_STATUSBAR = "show_battery_temp_statusbar"
+        private const val KEY_FPS_MONITOR_ENABLED = "fps_monitor_enabled" // Added for FPS monitor
     }
 
     fun setBatteryStatsEnabled(enabled: Boolean) {
@@ -70,5 +71,15 @@ class PreferenceManager @Inject constructor(
 
     fun getShowBatteryTempInStatusBar(): Boolean {
         return sharedPreferences.getBoolean(KEY_SHOW_BATTERY_TEMP_STATUSBAR, false)
+    }
+
+    fun setFpsMonitorEnabled(enabled: Boolean) {
+        sharedPreferences.edit()
+            .putBoolean(KEY_FPS_MONITOR_ENABLED, enabled)
+            .apply()
+    }
+
+    fun getFpsMonitorEnabled(): Boolean {
+        return sharedPreferences.getBoolean(KEY_FPS_MONITOR_ENABLED, false)
     }
 }

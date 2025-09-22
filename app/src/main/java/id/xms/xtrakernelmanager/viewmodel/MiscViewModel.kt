@@ -28,11 +28,15 @@ class MiscViewModel @Inject constructor(
     private val _showBatteryTempInStatusBar = MutableStateFlow(false)
     val showBatteryTempInStatusBar: StateFlow<Boolean> = _showBatteryTempInStatusBar.asStateFlow()
 
+    private val _fpsMonitorEnabled = MutableStateFlow(false)
+    val fpsMonitorEnabled: StateFlow<Boolean> = _fpsMonitorEnabled.asStateFlow()
+
     init {
         // Load saved preferences on init
         _batteryStatsEnabled.value = preferenceManager.getBatteryStatsEnabled()
         _batteryNotificationEnabled.value = preferenceManager.getBatteryStatsEnabled()
         _showBatteryTempInStatusBar.value = preferenceManager.getShowBatteryTempInStatusBar()
+        _fpsMonitorEnabled.value = preferenceManager.getFpsMonitorEnabled()
     }
 
     fun toggleBatteryStats(enabled: Boolean) {
@@ -67,6 +71,27 @@ class MiscViewModel @Inject constructor(
         viewModelScope.launch {
             _showBatteryTempInStatusBar.value = enabled
             preferenceManager.setShowBatteryTempInStatusBar(enabled)
+        }
+    }
+
+    fun toggleFpsMonitor(enabled: Boolean) {
+        viewModelScope.launch {
+            _fpsMonitorEnabled.value = enabled
+            preferenceManager.setFpsMonitorEnabled(enabled)
+            val serviceIntent = Intent(application, Class.forName("id.xms.xtrakernelmanager.service.FPSOverlayService"))
+            if (enabled) {
+                try {
+                    application.startForegroundService(serviceIntent)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            } else {
+                try {
+                    application.stopService(serviceIntent)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 }
