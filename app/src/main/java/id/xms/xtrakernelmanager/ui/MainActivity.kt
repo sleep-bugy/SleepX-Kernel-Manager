@@ -39,8 +39,6 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "se
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject
-    lateinit var rootUtils: RootUtils
 
     @Inject
     lateinit var dataStore: DataStore<Preferences>
@@ -63,7 +61,6 @@ class MainActivity : ComponentActivity() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
 
         enableEdgeToEdge() // Enable edge-to-edge display for Android 16-like experience
-        rootUtils.init(this)
         batteryOptChecker = BatteryOptimizationChecker(this)
 
         // Check permissions first before starting any services
