@@ -14,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.preferencesDataStore
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.*
@@ -33,8 +32,6 @@ import id.xms.xtrakernelmanager.util.RootUtils
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -115,9 +112,10 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 composable("home") { HomeScreen(navController = navController) }
                                 composable("tuning") { TuningScreen() }
-                                composable("misc") { MiscScreen() }
+                                composable("misc") { MiscScreen(navController = navController) }
                                 composable("info") { InfoScreen() }
                                 composable("settings") { SettingsScreen(navController = navController) }
+                                composable("app_selection") { AppSelectionScreen() }
                             }
                         }
                     }

@@ -15,22 +15,27 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import id.xms.xtrakernelmanager.ui.components.SuperGlassCard
+import androidx.navigation.NavController
 import id.xms.xtrakernelmanager.ui.components.GlassIntensity
+import id.xms.xtrakernelmanager.ui.components.SuperGlassCard
+import id.xms.xtrakernelmanager.ui.viewmodel.DeveloperOptionsViewModel
 import id.xms.xtrakernelmanager.viewmodel.MiscViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MiscScreen(
-    viewModel: MiscViewModel = hiltViewModel()
+    navController: NavController,
+    miscViewModel: MiscViewModel = hiltViewModel(),
+    devOptionsViewModel: DeveloperOptionsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    val batteryStatsEnabled by viewModel.batteryStatsEnabled.collectAsState()
-    val batteryNotificationEnabled by viewModel.batteryNotificationEnabled.collectAsState()
-    val showBatteryTempInStatusBar by viewModel.showBatteryTempInStatusBar.collectAsState()
-    val fpsMonitorEnabled by viewModel.fpsMonitorEnabled.collectAsState()
+    val batteryStatsEnabled by miscViewModel.batteryStatsEnabled.collectAsState()
+    val batteryNotificationEnabled by miscViewModel.batteryNotificationEnabled.collectAsState()
+    val showBatteryTempInStatusBar by miscViewModel.showBatteryTempInStatusBar.collectAsState()
+    val fpsMonitorEnabled by miscViewModel.fpsMonitorEnabled.collectAsState()
+    val hideDeveloperOptionsEnabled by devOptionsViewModel.hideDeveloperOptionsEnabled
 
     Column(
         modifier = Modifier
@@ -52,10 +57,10 @@ fun MiscScreen(
             batteryNotificationEnabled = batteryNotificationEnabled,
             showBatteryTempInStatusBar = showBatteryTempInStatusBar,
             onToggleBatteryStats = { enabled ->
-                viewModel.toggleBatteryStats(enabled)
+                miscViewModel.toggleBatteryStats(enabled)
             },
             onToggleShowBatteryTempInStatusBar = { enabled ->
-                viewModel.toggleShowBatteryTempInStatusBar(enabled)
+                miscViewModel.toggleShowBatteryTempInStatusBar(enabled)
             }
         )
 
@@ -66,12 +71,19 @@ fun MiscScreen(
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(intent)
             } else {
-                viewModel.toggleFpsMonitor(enabled)
+                miscViewModel.toggleFpsMonitor(enabled)
             }
         })
 
         // Additional misc features
         SystemTweaksCard()
+
+        // Per-app hide developer options
+        DeveloperOptionsCard(
+            navController = navController,
+            hideDeveloperOptionsEnabled = hideDeveloperOptionsEnabled,
+            onToggleHideDeveloperOptions = { devOptionsViewModel.setHideDeveloperOptions(it) }
+        )
     }
 }
 
@@ -388,6 +400,56 @@ fun SystemTweaksCard() {
                     checked = debugMode,
                     onCheckedChange = { debugMode = it }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun DeveloperOptionsCard(
+    navController: NavController,
+    hideDeveloperOptionsEnabled: Boolean,
+    onToggleHideDeveloperOptions: (Boolean) -> Unit
+) {
+    SuperGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        glassIntensity = GlassIntensity.Light
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Developer Options",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Hide Developer Options")
+                    Text(
+                        text = "Hide developer options for specific apps",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = hideDeveloperOptionsEnabled,
+                    onCheckedChange = onToggleHideDeveloperOptions
+                )
+            }
+
+            if (hideDeveloperOptionsEnabled) {
+                Button(
+                    onClick = { navController.navigate("app_selection") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Select Apps")
+                }
             }
         }
     }
