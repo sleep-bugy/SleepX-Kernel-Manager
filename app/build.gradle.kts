@@ -105,6 +105,8 @@ dependencies {
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // Accompanist
+    implementation("com.google.accompanist:accompanist-drawablepainter:0.28.0")
 
     // Serialization yang cocok dengan Kotlin 1.9.24
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
