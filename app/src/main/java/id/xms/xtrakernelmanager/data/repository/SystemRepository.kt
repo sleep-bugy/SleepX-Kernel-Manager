@@ -5,19 +5,13 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.util.Log
-import androidx.compose.ui.geometry.isEmpty
-import androidx.compose.ui.graphics.vector.path
-// Hapus impor yang tidak terpakai jika ada, seperti:
-// import androidx.compose.ui.geometry.isEmpty
-// import androidx.compose.ui.graphics.vector.path
-// import kotlin.io.path.inputStream // Ini juga sepertinya tidak digunakan, File.inputStream() lebih umum
+
 
 import id.xms.xtrakernelmanager.data.model.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -26,12 +20,11 @@ import kotlinx.coroutines.channels.awaitClose // Diperlukan untuk callbackFlow
 import kotlinx.coroutines.channels.ChannelResult // Untuk memeriksa hasil trySend
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
-// import kotlinx.coroutines.flow.first // Tidak digunakan di kode yang Anda berikan
-// import kotlinx.coroutines.flow.mapLatest // Tidak digunakan di kode yang Anda berikan
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -39,8 +32,6 @@ import java.io.InputStreamReader
 import java.io.BufferedReader
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.io.path.inputStream
-
 
 @Suppress("UNREACHABLE_CODE")
 @Singleton
@@ -702,12 +693,12 @@ class SystemRepository @Inject constructor(
         val gkiType = when {
             // Check for specific GKI patterns first (more specific)
             version.contains("gki", ignoreCase = true) ||
-            version.contains("generic kernel image", ignoreCase = true) ||
-            android.os.Build.VERSION.RELEASE.contains("gki", ignoreCase = true) -> "Generic Kernel Image (GKI)"
+                    version.contains("generic kernel image", ignoreCase = true) ||
+                    android.os.Build.VERSION.RELEASE.contains("gki", ignoreCase = true) -> "Generic Kernel Image (GKI)"
 
             // Check for Android Common Kernel patterns
             version.contains("android-mainline", ignoreCase = true) ||
-            version.contains("android-common", ignoreCase = true) -> "Android Common Kernel (ACK)"
+                    version.contains("android-common", ignoreCase = true) -> "Android Common Kernel (ACK)"
 
             // GKI version detection based on Linux kernel version
             version.contains("Linux version", ignoreCase = true) -> {
@@ -722,8 +713,8 @@ class SystemRepository @Inject constructor(
                     kernelVersion != null && kernelVersion >= 5.10f -> "Generic Kernel Image (GKI 2.0)"
                     kernelVersion != null && kernelVersion >= 5.4f -> "Generic Kernel Image (GKI 1.0)"
                     kernelVersion != null && kernelVersion >= 4.19f &&
-                    (version.contains("android", ignoreCase = true) ||
-                     android.os.Build.VERSION.SDK_INT >= 29) -> "Generic Kernel Image (GKI)"
+                            (version.contains("android", ignoreCase = true) ||
+                                    android.os.Build.VERSION.SDK_INT >= 29) -> "Generic Kernel Image (GKI)"
                     version.contains("android", ignoreCase = true) -> "Android Kernel"
                     else -> "Linux Kernel $kernelVersion"
                 }
@@ -745,18 +736,18 @@ class SystemRepository @Inject constructor(
                 val activeSchedulerRegex = """\[([^\]]+)\]""".toRegex()
                 activeSchedulerRegex.find(schedulerLine)?.groupValues?.get(1) ?: schedulerLine.trim()
             } ?: run {
-                // Try alternative block devices
-                val alternativeDevices = listOf("mmcblk0", "nvme0n1", "sdb", "sdc")
-                for (device in alternativeDevices) {
-                    val altScheduler = readFileToString("/sys/block/$device/queue/scheduler", "I/O Scheduler ($device)")
-                    if (altScheduler != null) {
-                        val activeSchedulerRegex = """\[([^\]]+)\]""".toRegex()
-                        val result = activeSchedulerRegex.find(altScheduler)?.groupValues?.get(1) ?: altScheduler.trim()
-                        if (result.isNotBlank()) return@run result
-                    }
+            // Try alternative block devices
+            val alternativeDevices = listOf("mmcblk0", "nvme0n1", "sdb", "sdc")
+            for (device in alternativeDevices) {
+                val altScheduler = readFileToString("/sys/block/$device/queue/scheduler", "I/O Scheduler ($device)")
+                if (altScheduler != null) {
+                    val activeSchedulerRegex = """\[([^\]]+)\]""".toRegex()
+                    val result = activeSchedulerRegex.find(altScheduler)?.groupValues?.get(1) ?: altScheduler.trim()
+                    if (result.isNotBlank()) return@run result
                 }
-                "Unknown"
             }
+            "Unknown"
+        }
 
         // Get SELinux status
         val selinuxStatus = readFileToString("/sys/fs/selinux/enforce", "SELinux Status")
@@ -967,6 +958,35 @@ class SystemRepository @Inject constructor(
             architecture = architecture,
             kernelSuStatus = kernelSuStatus
         )
+    }
+
+
+
+    suspend fun getScreenOnTimeSeconds(): Long {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", "dumpsys batterystats --charged"))
+                val reader = proc.inputStream.bufferedReader()
+                var totalSec = 0L
+
+                /* pola: Screen on: 6h 12m 34s  (semua opsional) */
+                /* ignore case + spasi fleksibel + ambil angka saja */
+                val pat = Regex("""screen\s+on.*?(\d+)h.*?(?:(\d+)m).*?(?:(\d+)s)""", RegexOption.IGNORE_CASE)
+
+                reader.useLines { lines ->
+                    val match = lines.mapNotNull { pat.find(it) }.firstOrNull { it.groupValues.size >= 4 }
+                    match?.let {
+                        val h = it.groupValues[1].toLongOrNull() ?: 0L
+                        val m = it.groupValues[2].toLongOrNull() ?: 0L
+                        val s = it.groupValues[3].toLongOrNull() ?: 0L
+                        totalSec = h * 3600 + m * 60 + s
+                        Log.d("SoT", "Parsed = ${it.value} → $totalSec detik")
+                    }
+                }
+                proc.waitFor()
+                totalSec
+            }.getOrElse { 0L }
+        }
     }
 
     fun getCpuClusters(): List<CpuCluster> {

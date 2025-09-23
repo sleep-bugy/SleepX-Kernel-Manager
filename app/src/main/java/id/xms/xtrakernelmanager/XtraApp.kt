@@ -4,14 +4,23 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.HiltAndroidApp
-import android.util.Log
+import id.xms.xtrakernelmanager.worker.BatteryWorker
+import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 
 @HiltAndroidApp
 class XtraApp : Application(), Configuration.Provider {
+
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
 
     override fun onCreate() {
         super.onCreate()
@@ -22,20 +31,29 @@ class XtraApp : Application(), Configuration.Provider {
         /* 2. Inject 430 dpi ke SELURUH activity / dialog */
         registerActivityLifecycleCallbacks(DensityInjector(430))
 
-        /* 3. WorkManager */
-        WorkManager.initialize(
-            this,
-            Configuration.Builder()
-                .setMinimumLoggingLevel(Log.DEBUG)
-                .build()
-        )
-        Log.d("XtraApp", "WorkManager & 430-dpi injector ready")
+        /* 3. Schedule Battery Worker */
+        setupRecurringWork()
+        Log.d("XtraApp", "Battery worker scheduled & 430-dpi injector ready")
     }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
             .setMinimumLoggingLevel(Log.DEBUG)
             .build()
+
+    private fun setupRecurringWork() {
+        val workManager = WorkManager.getInstance(this)
+        val batteryWorkRequest = PeriodicWorkRequestBuilder<BatteryWorker>(
+            30, TimeUnit.MINUTES
+        ).build()
+
+        workManager.enqueueUniquePeriodicWork(
+            "BatteryHistoryLogger",
+            ExistingPeriodicWorkPolicy.KEEP,
+            batteryWorkRequest
+        )
+    }
 
     /* ---------- Internal ---------- */
     private class DensityInjector(private val dpi: Int) : ActivityLifecycleCallbacks {
