@@ -11,9 +11,9 @@ import kotlin.text.substringAfterLast
 
 
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("kotlin-kapt")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.ksp)
     id("com.google.dagger.hilt.android")
     id("kotlinx-serialization")
     alias(libs.plugins.kotlin.compose)
@@ -82,7 +82,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
 
-    // Versi yang aman untuk Kotlin 1.9.24
     implementation("androidx.navigation:navigation-compose:2.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
@@ -91,15 +90,19 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.1.7")
 
+    // Room Database
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
+
     // Hilt
     implementation("com.google.dagger:hilt-android:2.57")
-    implementation(libs.androidx.material3.android)
-    implementation(libs.androidx.compilercommon)
-    kapt("com.google.dagger:hilt-compiler:2.57")
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    ksp("com.google.dagger:hilt-compiler:2.57")
     implementation("androidx.hilt:hilt-work:1.2.0")
+    ksp("androidx.hilt:hilt-compiler:1.2.0") // KSP processor for Hilt-WorkManager
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
     testImplementation("com.google.dagger:hilt-android-testing:2.57")
-    kaptTest("com.google.dagger:hilt-compiler:2.57")
+    kspTest("com.google.dagger:hilt-compiler:2.57")
 
     // LibSu & Coil
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
@@ -108,8 +111,8 @@ dependencies {
     // Accompanist
     implementation("com.google.accompanist:accompanist-drawablepainter:0.28.0")
 
-    // Serialization yang cocok dengan Kotlin 1.9.24
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    // Serialization for Kotlin 2.0.0
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // WorkManager
