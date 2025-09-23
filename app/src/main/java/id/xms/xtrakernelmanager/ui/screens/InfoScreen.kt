@@ -1,26 +1,28 @@
 package id.xms.xtrakernelmanager.ui.screens
 
-import androidx.compose.foundation.layout.*
+
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
-import id.xms.xtrakernelmanager.ui.components.InfoCard
-import id.xms.xtrakernelmanager.ui.components.SystemCard
+import id.xms.xtrakernelmanager.ui.components.BatteryUsageCard
 import id.xms.xtrakernelmanager.viewmodel.InfoViewModel
 
 @Composable
 fun InfoScreen(vm: InfoViewModel = hiltViewModel()) {
-    val kernel by vm.kernel.collectAsState()
-    val system by vm.system.collectAsState()
+    val batteryStats by vm.batteryStats.collectAsState()
+    val sotCached by vm.sotCached.collectAsState()
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        kernel?.let { item { InfoCard(it, blur = true ) } }
-        system?.let { item { SystemCard(it, blur = true ) } }
+    LazyColumn(/* ... */) {
+        batteryStats?.let { stats ->
+            item {
+                BatteryUsageCard(
+                    batteryStats = stats,
+                    sotCached = sotCached,
+                    onRefreshScreenOnTime = { vm.refreshScreenOnTime() }
+                )
+            }
+        }
     }
 }
