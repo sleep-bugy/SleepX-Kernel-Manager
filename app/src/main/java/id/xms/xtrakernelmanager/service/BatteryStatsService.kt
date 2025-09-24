@@ -29,10 +29,15 @@ class BatteryStatsService : Service() {
     private var lastCurrent = 0f
     private var designCapacityUah: Long = 0L
 
+
     // Idle baseline
     private var idleStartLevel = -1
     private var idleStartCharge = 0L
     private var idleStartTime = 0L
+    private var lastIdleDrainResult: String = "N/A"
+
+// Realtime usage
+// ...
 
     // Realtime usage
     private var realtimeUsedMah = 0.0
@@ -105,27 +110,33 @@ class BatteryStatsService : Service() {
     }
 
     // === Broadcast Receiver ===
+    // File: BatteryStatsService.kt
+
     private val systemReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
             when (intent?.action) {
-                Intent.ACTION_BATTERY_CHANGED -> {
-                    val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-                    val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
-                    val isCharging = (status == BatteryManager.BATTERY_STATUS_CHARGING || plugged > 0)
-                    if (isCharging) {
-                        resetIdleBaseline("charging")
-                    }
-                }
                 Intent.ACTION_SCREEN_ON -> {
                     screenOnSince = System.currentTimeMillis()
-                    resetIdleBaseline("screen on")
+
+                    // Lakukan kalkulasi final SEBELUM mereset baseline
+                    if (idleStartTime > 0L) {
+                        val currentCharge = bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
+                        val currentLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                        // Panggil calculateIdleDrain untuk mendapatkan hasil akhir sesi
+                        lastIdleDrainResult = calculateIdleDrain(currentCharge, currentLevel, isCharging = false)
+                        Log.d("BatteryDebug", "Idle session ended. Final result: $lastIdleDrainResult")
+                    }
+
+                    // Sekarang baru reset baseline
+                    resetIdleDrainBaseline("screen on")
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     val batteryStatusIntent = context?.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                     val status = batteryStatusIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
                     val plugged = batteryStatusIntent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
                     val isCharging = (status == BatteryManager.BATTERY_STATUS_CHARGING || plugged > 0)
+
                     if (!isCharging) {
                         idleStartCharge = bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
                         idleStartLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -137,11 +148,11 @@ class BatteryStatsService : Service() {
         }
     }
 
-    private fun resetIdleBaseline(reason: String) {
+    private fun resetIdleDrainBaseline(reason: String) {
         idleStartLevel = -1
         idleStartCharge = 0L
         idleStartTime = 0L
-        Log.d("BatteryDebug", "Idle baseline reset ($reason)")
+        Log.d("BatteryDebug", "Idle drain baseline reset ($reason)")
     }
 
     // === Monitoring Loop ===
@@ -206,34 +217,46 @@ class BatteryStatsService : Service() {
     }
 
     private fun calculateIdleDrain(currentCharge: Long, currentLevel: Int, isCharging: Boolean): String {
-        // Jangan hitung kalau belum ada baseline
-        if (idleStartTime == 0L) return "N/A"
-        if (isCharging) return "Charging"
+        // 1. If there's no active idle session, return the last saved result.
+        if (idleStartTime == 0L) return lastIdleDrainResult
 
+        // 2. If charging, the idle session is interrupted.
+        if (isCharging) {
+            // We consider the idle session over and reset the baseline.
+            resetIdleDrainBaseline("charging started")
+            return "Charging"
+        }
         val elapsedMs = System.currentTimeMillis() - idleStartTime
+        // Wait for a minimum duration before showing a result.
         if (elapsedMs < MIN_DRAIN_TIME_MS) return "Calculating..."
 
-        // 1️⃣ CHARGE_COUNTER
-        if (idleStartCharge > 0 && currentCharge > 0) {
+        // --- MODIFICATION START ---
+
+        // 3. Prioritize CHARGE_COUNTER calculation if the values are valid.
+        //    A valid charge counter will be a positive number.
+        val useChargeCounter = idleStartCharge > 0 && currentCharge > 0
+        if (useChargeCounter) {
             val dropUah = idleStartCharge - currentCharge
             if (dropUah > 0) {
                 val dropPct = (dropUah.toDouble() / designCapacityUah) * 100
-                val rate = dropPct / (elapsedMs / 3600000.0)
-                val rateMah = (dropPct / 100) * (designCapacityUah / 1000.0) / (elapsedMs / 3600000.0)
-                return "%.2f%%/h (≈%.0f mAh/h)".format(rate, rateMah)
+                val rate = dropPct / (elapsedMs / 3600000.0) // 3.6e6 ms in an hour
+                val rateMah = (dropUah / 1000.0) / (elapsedMs / 3600000.0)
+                return "%.2f%%/h (≈%.1f mAh/h)".format(rate, rateMah)
             }
         }
 
-        // 2️⃣ Persentase fallback
+        // 4. Fallback to percentage-based calculation if CHARGE_COUNTER is not supported
+        //    or if no drop was detected with it.
         if (idleStartLevel > 0 && currentLevel > 0) {
             val dropPct = (idleStartLevel - currentLevel).toDouble()
             if (dropPct > 0) {
                 val rate = dropPct / (elapsedMs / 3600000.0)
+                // Estimate mAh drain based on percentage drop and design capacity
                 val rateMah = (rate / 100) * (designCapacityUah / 1000.0)
-                return "%.2f%%/h (≈%.0f mAh/h)".format(rate, rateMah)
+                return "%.2f%%/h (≈%.1f mAh/h)".format(rate, rateMah)
             }
         }
-
+        // 5. If no drop is detected by any method, the drain is effectively zero.
         return "0.0%/h"
     }
 
@@ -283,6 +306,7 @@ class BatteryStatsService : Service() {
                 """
                 Power: $formattedCurrent / $formattedWattage
                 Active Drain: ${stats.activeDrain}
+                Idle Drain: ${stats.idleDrain}
                 Realtime Used: ${stats.realtimeUsed}
                 Screen On: ${stats.screenOnTime} • Screen Off: ${stats.screenOffTime}
                 Uptime: ${stats.uptime}
