@@ -36,4 +36,11 @@ object RootUtils {
         Log.e("RootUtils", "exception: $cmd", e)
         null
     }
+
+    /**
+     * Mengecek apakah perangkat memiliki akses root.
+     */
+    fun isDeviceRooted(): Boolean {
+        return runCommandAsRoot("id") != null
+    }
 }
