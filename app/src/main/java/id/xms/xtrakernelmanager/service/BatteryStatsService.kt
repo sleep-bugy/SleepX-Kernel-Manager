@@ -283,7 +283,6 @@ class BatteryStatsService : Service() {
                 """
                 Power: $formattedCurrent / $formattedWattage
                 Active Drain: ${stats.activeDrain}
-                Idle Drain: ${stats.idleDrain}
                 Realtime Used: ${stats.realtimeUsed}
                 Screen On: ${stats.screenOnTime} • Screen Off: ${stats.screenOffTime}
                 Uptime: ${stats.uptime}
