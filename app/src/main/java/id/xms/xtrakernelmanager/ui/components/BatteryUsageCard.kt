@@ -3,7 +3,6 @@ package id.xms.xtrakernelmanager.ui.components
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -40,13 +39,14 @@ fun BatteryUsageCard(
     LaunchedEffect(sotCached) { screenOnTimeSeconds = sotCached }
 
     SuperGlassCard(
-        modifier = modifier,
-        glassIntensity = GlassIntensity.Medium
+        modifier = modifier
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        glassIntensity = GlassIntensity.Light
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(0.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             HeaderRow(batteryStats)
