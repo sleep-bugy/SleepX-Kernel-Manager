@@ -11,6 +11,8 @@ object RootUtils {
     /**
      * @return
      */
+
+
     fun runCommandAsRoot(cmd: String, timeoutMs: Long = 3_000): String? = try {
         Log.d("RootUtils", "exec: $cmd")
         val proc = Runtime.getRuntime().exec("su")
@@ -42,5 +44,26 @@ object RootUtils {
      */
     fun isDeviceRooted(): Boolean {
         return runCommandAsRoot("id") != null
+    }
+
+    fun execute(command: String): String? {
+        var process: Process? = null
+        var reader: BufferedReader? = null
+        return try {
+            // Request superuser privileges to run the command
+            process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+            reader = BufferedReader(InputStreamReader(process.inputStream))
+            // Read the first line of the output
+            val output = reader.readLine()
+            process.waitFor()
+            output
+        } catch (e: Exception) {
+            // This can happen if 'su' binary is not found or other errors occur
+            null
+        } finally {
+            // Clean up resources
+            reader?.close()
+            process?.destroy()
+        }
     }
 }
