@@ -109,9 +109,6 @@ class BatteryStatsService : Service() {
         }
     }
 
-    // === Broadcast Receiver ===
-    // File: BatteryStatsService.kt
-
     private val systemReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager

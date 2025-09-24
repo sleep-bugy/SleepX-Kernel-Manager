@@ -160,7 +160,7 @@ private fun BatteryGraphToggleable(
     }
 }
 
-/* ------------------ LINE CHART (REFACTORED FOR LAYOUT) ------------------ */
+/* ------------------ LINE CHART ------------------ */
 @Composable
 private fun LineChart(history: List<Float>, modifier: Modifier = Modifier) {
     if (history.isEmpty()) return
@@ -178,7 +178,7 @@ private fun LineChart(history: List<Float>, modifier: Modifier = Modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f), // Take up all available vertical space
+                .weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Y-Axis Labels
@@ -200,9 +200,8 @@ private fun LineChart(history: List<Float>, modifier: Modifier = Modifier) {
             Canvas(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .weight(1f) // Fill remaining horizontal space
+                    .weight(1f)
             ) {
-                // Padding is now only needed inside the canvas, not for the whole component
                 val padTop = 18.dp.toPx()
                 val padBottom = 18.dp.toPx()
                 val chartHeight = size.height - padTop - padBottom
@@ -268,7 +267,7 @@ private fun LineChart(history: List<Float>, modifier: Modifier = Modifier) {
 }
 
 
-/* ------------------ BAR CHART (REFACTORED FOR LAYOUT) ------------------ */
+/* ------------------ BAR CHART  ------------------ */
 @Composable
 private fun BarChart(history: List<Float>, modifier: Modifier = Modifier) {
     if (history.isEmpty()) return
