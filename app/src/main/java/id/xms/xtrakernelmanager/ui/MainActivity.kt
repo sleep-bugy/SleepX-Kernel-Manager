@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
     private var showBatteryOptDialog by mutableStateOf(false)
     private var permissionDenialCount by mutableIntStateOf(0)
     private val MAX_PERMISSION_RETRIES = 2
+    private var showNonRootDialog by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +63,11 @@ class MainActivity : ComponentActivity() {
 
         // Check permissions first before starting any services
         checkAndHandlePermissions()
+
+        // Cek root dan tampilkan dialog jika non-root
+        if (!RootUtils.isDeviceRooted()) {
+            showNonRootDialog = true
+        }
 
         // Observe language changes
         lifecycleScope.launch {
@@ -95,6 +101,20 @@ class MainActivity : ComponentActivity() {
                             },
                             onExit = { finish() },
                             showExitButton = permissionDenialCount >= MAX_PERMISSION_RETRIES
+                        )
+                    }
+
+                    if (showNonRootDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showNonRootDialog = false },
+                            confirmButton = {
+                                Button(onClick = { showNonRootDialog = false }) {
+                                    Text("OK")
+                                }
+                            },
+                            title = { Text("Non-Root Device Detected") },
+                            text = { Text("You're using Xtra Kernel Manager without root access.\n" +
+                                    "If you're rooted, allow it first with Magisk/KernelSU. If you're not, you can use Battery Notification and Clear Cache in Misc Features.") }
                         )
                     }
 
