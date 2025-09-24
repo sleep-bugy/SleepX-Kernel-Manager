@@ -122,9 +122,10 @@ class BatteryStatsService : Service() {
                     resetIdleBaseline("screen on")
                 }
                 Intent.ACTION_SCREEN_OFF -> {
-                    val intentStatus = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-                    val intentPlugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
-                    val isCharging = (intentStatus == BatteryManager.BATTERY_STATUS_CHARGING || intentPlugged > 0)
+                    val batteryStatusIntent = context?.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                    val status = batteryStatusIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+                    val plugged = batteryStatusIntent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
+                    val isCharging = (status == BatteryManager.BATTERY_STATUS_CHARGING || plugged > 0)
                     if (!isCharging) {
                         idleStartCharge = bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
                         idleStartLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)

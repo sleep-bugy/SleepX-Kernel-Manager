@@ -20,6 +20,7 @@ import id.xms.xtrakernelmanager.ui.components.GlassIntensity
 import id.xms.xtrakernelmanager.ui.components.SuperGlassCard
 import id.xms.xtrakernelmanager.ui.viewmodel.DeveloperOptionsViewModel
 import id.xms.xtrakernelmanager.viewmodel.MiscViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -348,12 +349,31 @@ fun FpsMonitorCard(
 
 @Composable
 fun SystemTweaksCard() {
-    var animationsEnabled by remember { mutableStateOf(true) }
-    var debugMode by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var isClearing by remember { mutableStateOf(false) }
+    var showResultDialog by remember { mutableStateOf(false) }
+    var cacheClearedMB by remember { mutableStateOf(0L) }
+    var appsCleared by remember { mutableStateOf(0) }
+    var useRoot by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf("") }
+    var liveLog by remember { mutableStateOf(listOf<String>()) }
+    var progress by remember { mutableStateOf(0f) }
+    var isCanceled by remember { mutableStateOf(false) }
+    var minCacheOption by remember { mutableStateOf("10MB") }
+    val cacheOptions = listOf("1MB", "10MB", "50MB", "100MB", "500MB", "Unlimited")
+    val minCacheMB = when (minCacheOption) {
+        "1MB" -> 1
+        "10MB" -> 10
+        "50MB" -> 50
+        "100MB" -> 100
+        "500MB" -> 500
+        else -> 0 // Unlimited
+    }
+    val scope = rememberCoroutineScope()
 
     SuperGlassCard(
         modifier = Modifier.fillMaxWidth(),
-        glassIntensity = GlassIntensity.Light // No blur for better readability
+        glassIntensity = GlassIntensity.Light
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -363,46 +383,211 @@ fun SystemTweaksCard() {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-
+            // Toggle for root/non-root
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 8.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("System Animations")
-                    Text(
-                        text = "Enable/disable system animations",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = animationsEnabled,
-                    onCheckedChange = { animationsEnabled = it }
-                )
+                Text("Use Root Method", modifier = Modifier.weight(1f))
+                Switch(checked = useRoot, onCheckedChange = { useRoot = it })
             }
-
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                Text("Min cache to clear:", modifier = Modifier.weight(1f))
+                var expanded by remember { mutableStateOf(false) }
+                Box {
+                    Button(onClick = { expanded = true }) {
+                        Text(minCacheOption)
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        cacheOptions.forEach { option ->
+                            DropdownMenuItem(text = { Text(option) }, onClick = {
+                                minCacheOption = option
+                                expanded = false
+                            })
+                        }
+                    }
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Debug Mode")
+                    Text("Clear All Cache")
                     Text(
-                        text = "Enable debug logging",
+                        text = if (useRoot) "Root: Remove cache for all apps (requires root access)" else "Non-root: Remove cache for accessible apps only",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Switch(
-                    checked = debugMode,
-                    onCheckedChange = { debugMode = it }
-                )
+                Button(
+                    onClick = {
+                        isClearing = true
+                        cacheClearedMB = 0L
+                        appsCleared = 0
+                        errorMsg = ""
+                        liveLog = listOf("Starting cache clear...")
+                        progress = 0f
+                        isCanceled = false
+                        scope.launch {
+                            if (useRoot) {
+                                try {
+                                    // Check root access first
+                                    val suTest = Runtime.getRuntime().exec("su -c echo rooted")
+                                    val suTestOut = suTest.inputStream.bufferedReader().readText().trim()
+                                    val suTestErr = suTest.errorStream.bufferedReader().readText().trim()
+                                    val suTestCode = suTest.waitFor()
+                                    if (suTestCode != 0 || !suTestOut.contains("rooted")) {
+                                        errorMsg = "Root access not available.\nError: $suTestErr"
+                                    } else {
+                                        // List all cache folders
+                                        val listCmd = "find /data/data -type d -name cache"
+                                        val listProc = Runtime.getRuntime().exec(arrayOf("su", "-c", listCmd))
+                                        val cacheFolders = listProc.inputStream.bufferedReader().readLines()
+                                        var totalCacheBefore = 0L
+                                        var totalCacheAfter = 0L
+                                        var clearedAppsCount = 0
+                                        val logList = mutableListOf<String>()
+                                        val totalFolders = cacheFolders.size
+                                        var processedFolders = 0
+                                        for (folder in cacheFolders) {
+                                            if (isCanceled) break
+                                            // Get size before
+                                            val sizeCmd = "du -sb $folder"
+                                            val sizeProc = Runtime.getRuntime().exec(arrayOf("su", "-c", sizeCmd))
+                                            val sizeOut = sizeProc.inputStream.bufferedReader().readText().trim()
+                                            val sizeBefore = sizeOut.split("\t").firstOrNull()?.toLongOrNull() ?: 0L
+                                            val sizeBeforeMB = sizeBefore / (1024 * 1024)
+                                            if (sizeBeforeMB < minCacheMB) {
+                                                processedFolders++
+                                                progress = processedFolders / totalFolders.toFloat()
+                                                continue
+                                            }
+                                            totalCacheBefore += sizeBefore
+                                            // Clear cache
+                                            val rmCmd = "rm -rf $folder/*"
+                                            val rmProc = Runtime.getRuntime().exec(arrayOf("su", "-c", rmCmd))
+                                            val rmExit = rmProc.waitFor()
+                                            // Get size after
+                                            val sizeProc2 = Runtime.getRuntime().exec(arrayOf("su", "-c", sizeCmd))
+                                            val sizeOut2 = sizeProc2.inputStream.bufferedReader().readText().trim()
+                                            val sizeAfter = sizeOut2.split("\t").firstOrNull()?.toLongOrNull() ?: 0L
+                                            totalCacheAfter += sizeAfter
+                                            if (sizeBefore > 0) clearedAppsCount++
+                                            logList.add("${folder}: ${sizeBeforeMB}MB -> ${sizeAfter / (1024 * 1024)}MB")
+                                            liveLog = logList.toList() // update UI
+                                            processedFolders++
+                                            progress = processedFolders / totalFolders.toFloat()
+                                        }
+                                        cacheClearedMB = (totalCacheBefore - totalCacheAfter) / (1024 * 1024)
+                                        appsCleared = clearedAppsCount
+                                        liveLog = logList + listOf("Done! Total cleared: $cacheClearedMB MB from $appsCleared apps.")
+                                    }
+                                } catch (e: Exception) {
+                                    errorMsg = "Root method error: ${e.message}".take(200)
+                                }
+                            } else {
+                                // Non-root method
+                                val pm = context.packageManager
+                                val packages = pm.getInstalledPackages(0)
+                                val totalApps = packages.size
+                                var processedApps = 0
+                                var totalCache = 0L
+                                var clearedApps = 0
+                                val logList = mutableListOf<String>()
+                                for (pkg in packages) {
+                                    if (isCanceled) break
+                                    try {
+                                        val cacheDir = context.createPackageContext(pkg.packageName, 0).cacheDir
+                                        val cacheSize = cacheDir?.listFiles()?.sumOf { it.length() } ?: 0L
+                                        val cacheSizeMB = cacheSize / (1024 * 1024)
+                                        if (cacheSizeMB < minCacheMB) {
+                                            processedApps++
+                                            progress = processedApps / totalApps.toFloat()
+                                            continue
+                                        }
+                                        if (cacheSize > 0) {
+                                            cacheDir?.listFiles()?.forEach { it.delete() }
+                                            totalCache += cacheSize
+                                            clearedApps++
+                                            logList.add("${pkg.packageName}: ${cacheSizeMB}MB cleared")
+                                            liveLog = logList.toList()
+                                        }
+                                        processedApps++
+                                        progress = processedApps / totalApps.toFloat()
+                                    } catch (_: Exception) {
+                                        processedApps++
+                                        progress = processedApps / totalApps.toFloat()
+                                    }
+                                }
+                                cacheClearedMB = totalCache / (1024 * 1024)
+                                appsCleared = clearedApps
+                                liveLog = logList + listOf("Done! Total cleared: $cacheClearedMB MB from $appsCleared apps.")
+                            }
+                            isClearing = false
+                            showResultDialog = true
+                        }
+                    },
+                    enabled = !isClearing
+                ) {
+                    Text(if (isClearing) "Clearing..." else "Clear")
+                }
             }
         }
     }
+    if (isClearing) {
+        AlertDialog(
+            onDismissRequest = { isCanceled = true },
+            title = { Text("Clearing Cache" + if (useRoot) " (Root)" else " (Non-root)") },
+            text = {
+                Column(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                    LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    liveLog.forEach { log ->
+                        Text(log, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                Button(onClick = { isCanceled = true }) { Text("Cancel") }
+            }
+        )
+    }
+    if (showResultDialog) {
+        AlertDialog(
+            onDismissRequest = { showResultDialog = false },
+            title = { Text("Cache Cleared" + if (useRoot) " (Root)" else " (Non-root)") },
+            text = {
+                if (errorMsg.isNotEmpty()) {
+                    Text("Error: $errorMsg")
+                } else {
+                    Text("Successfully cleared $cacheClearedMB MB of cache from $appsCleared apps.")
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showResultDialog = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+}
+
+// Helper functions for root estimation (simulate, not exact)
+private fun getTotalCacheSizeRoot(): Long {
+    // In real root implementation, you would run a shell command to sum all /data/data/*/cache sizes
+    // Here, just return 0 for simulation
+    return 0L
+}
+private fun getAppCountRoot(): Int {
+    // In real root implementation, you would count all /data/data/*/cache folders
+    // Here, just return 0 for simulation
+    return 0
 }
 
 @Composable
