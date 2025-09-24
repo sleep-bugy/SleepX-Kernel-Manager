@@ -11,6 +11,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -20,7 +22,6 @@ import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import id.xms.xtrakernelmanager.data.model.AppUsage
 import id.xms.xtrakernelmanager.data.model.BatteryStats
 import kotlinx.coroutines.launch
@@ -54,7 +55,7 @@ fun BatteryUsageCard(
                 history = batteryStats.batteryLevelHistory,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .height(245.dp)
             )
             ScreenOnTimeRow(
                 seconds = screenOnTimeSeconds,
@@ -159,105 +160,272 @@ private fun BatteryGraphToggleable(
     }
 }
 
-/* ------------------ LINE CHART ------------------ */
+/* ------------------ LINE CHART (REFACTORED FOR LAYOUT) ------------------ */
 @Composable
 private fun LineChart(history: List<Float>, modifier: Modifier = Modifier) {
+    if (history.isEmpty()) return
+
     val lineColor = MaterialTheme.colorScheme.primary
-    val gridColor = lineColor.copy(alpha = 0.12f)
+    val pointColor = MaterialTheme.colorScheme.secondary
+    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+    val gradient = Brush.verticalGradient(
+        colors = listOf(lineColor.copy(alpha = 0.3f), Color.Transparent)
+    )
 
-    Canvas(modifier = modifier) {
-        val w = size.width; val h = size.height
-        val pad = 8.dp.toPx(); val chartH = h - 2 * pad
-        val validCount = history.size.coerceAtLeast(2)
-        val stepX = size.width / (validCount - 1).toFloat()
-        drawGrid(pad, gridColor, w, h)
-        drawLabels(pad, gridColor, h)
+    // Main container for the chart and its labels
+    Column(modifier = modifier) {
+        // A row to hold Y-Axis labels and the chart canvas side-by-side
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f), // Take up all available vertical space
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Y-Axis Labels
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(horizontal = 4.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End
+            ) {
+                Text("100%", style = MaterialTheme.typography.labelSmall)
+                Text("75%", style = MaterialTheme.typography.labelSmall)
+                Text("50%", style = MaterialTheme.typography.labelSmall)
+                Text("25%", style = MaterialTheme.typography.labelSmall)
+                Text("0%", style = MaterialTheme.typography.labelSmall)
+            }
 
-        val path = Path()
-        val grad = Brush.verticalGradient(
-            0f to lineColor.copy(alpha = 0.5f),
-            1f to Color.Transparent,
-            startY = pad, endY = h - pad
-        )
-        history.take(validCount).forEachIndexed { i, lvl ->
-            val x = i * stepX
-            val y = pad + (1 - lvl / 100f) * chartH
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-        drawPath(path, color = lineColor, style = Stroke(width = 4f))
-        val fill = Path().apply {
-            addPath(path); lineTo(w, h - pad); lineTo(0f, h - pad); close()
-        }
-        drawPath(fill, brush = grad)
-        if (history.size < 2) {
-            drawContext.canvas.nativeCanvas.drawText(
-                "1 data point",
-                8.dp.toPx(),
-                pad + 12.sp.toPx(),
-                android.graphics.Paint().apply {
-                    color = lineColor.toArgb()
-                    textSize = 10.sp.toPx()
-                    isAntiAlias = true
+            // The actual Canvas for drawing the chart
+            Canvas(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f) // Fill remaining horizontal space
+            ) {
+                // Padding is now only needed inside the canvas, not for the whole component
+                val padTop = 18.dp.toPx()
+                val padBottom = 18.dp.toPx()
+                val chartHeight = size.height - padTop - padBottom
+
+                // Draw subtle horizontal grid lines
+                val gridLineCount = 4
+                for (i in 0..gridLineCount) {
+                    val y = padTop + i * (chartHeight / gridLineCount)
+                    drawLine(
+                        color = gridColor,
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1.dp.toPx()
+                    )
                 }
-            )
-        }
-    }
-}
 
-/* ------------------ BAR CHART ------------------ */
-@Composable
-private fun BarChart(history: List<Float>, modifier: Modifier = Modifier) {
-    val barColor = MaterialTheme.colorScheme.primary
-    val gridColor = barColor.copy(alpha = 0.12f)
-
-    Canvas(modifier = modifier) {
-        val w = size.width; val h = size.height
-        val pad = 8.dp.toPx(); val chartH = h - 2 * pad
-        val validCount = history.size.coerceAtLeast(2)   // <-- sudah ada
-        val barW = size.width / validCount.toFloat()
-        val batangW = (barW * 0.8f).coerceAtLeast(4.dp.toPx())   // <-- minimal 4 dp
-
-        drawGrid(pad, gridColor, w, h)
-        drawLabels(pad, gridColor, h)
-
-        history.take(validCount).forEachIndexed { i, lvl ->
-            val left = i * barW
-            val top = pad + (1 - lvl / 100f) * chartH
-            drawRect(
-                color = barColor,
-                topLeft = Offset(left, top),
-                size = Size(batangW, chartH * (lvl / 100f))
-            )
-
-            if (history.size < 2) {
-                drawContext.canvas.nativeCanvas.drawText(
-                    "1 data point",
-                    8.dp.toPx(),
-                    pad + 12.sp.toPx(),
-                    android.graphics.Paint().apply {
-                        color = barColor.toArgb()
-                        textSize = 10.sp.toPx()
-                        isAntiAlias = true
+                // Create a smooth, curved path
+                val linePath = Path().apply {
+                    val stepX = size.width / (history.size - 1).coerceAtLeast(1)
+                    val points = history.mapIndexed { i, lvl ->
+                        val x = i * stepX
+                        val y = padTop + (1 - lvl / 100f) * chartHeight
+                        Offset(x, y)
                     }
-                )
+                    cubicSplineTo(points)
+                }
+
+                // Path for the gradient fill underneath the line
+                val fillPath = Path().apply {
+                    addPath(linePath)
+                    lineTo(size.width, size.height - padBottom)
+                    lineTo(0f, size.height - padBottom)
+                    close()
+                }
+
+                // Draw the fill and the line
+                drawPath(path = fillPath, brush = gradient)
+                drawPath(path = linePath, color = lineColor, style = Stroke(width = 2.dp.toPx()))
+
+                // Draw small data points
+                history.forEachIndexed { i, lvl ->
+                    val stepX = size.width / (history.size - 1).coerceAtLeast(1)
+                    val x = i * stepX
+                    val y = padTop + (1 - lvl / 100f) * chartHeight
+                    drawCircle(pointColor, radius = 3.dp.toPx(), center = Offset(x, y))
+                }
             }
         }
+
+        // X-Axis Labels (placed below the chart)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                // Add left padding to align with the start of the canvas
+                .padding(start = 24.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("-${history.size - 1}h", style = MaterialTheme.typography.labelSmall)
+            Text("Now", style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 
+
+/* ------------------ BAR CHART (REFACTORED FOR LAYOUT) ------------------ */
+@Composable
+private fun BarChart(history: List<Float>, modifier: Modifier = Modifier) {
+    if (history.isEmpty()) return
+
+    val barColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Y-Axis Labels
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(horizontal = 4.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End
+            ) {
+                Text("100%", style = MaterialTheme.typography.labelSmall)
+                Text("75%", style = MaterialTheme.typography.labelSmall)
+                Text("50%", style = MaterialTheme.typography.labelSmall)
+                Text("25%", style = MaterialTheme.typography.labelSmall)
+                Text("0%", style = MaterialTheme.typography.labelSmall)
+            }
+
+            // The actual Canvas for drawing the chart
+            Canvas(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f)
+            ) {
+                val padTop = 18.dp.toPx()
+                val padBottom = 18.dp.toPx()
+                val chartHeight = size.height - padTop - padBottom
+
+                // Draw subtle horizontal grid lines
+                val gridLineCount = 4
+                for (i in 0..gridLineCount) {
+                    val y = padTop + i * (chartHeight / gridLineCount)
+                    drawLine(
+                        color = gridColor,
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                }
+
+                // Draw bars
+                val totalBarAndSpacingWidth = size.width / history.size
+                val barWidth = totalBarAndSpacingWidth * 0.6f // 60% of available space
+                val barSpacing = totalBarAndSpacingWidth * 0.4f
+                history.forEachIndexed { i, lvl ->
+                    val left = i * totalBarAndSpacingWidth + (barSpacing / 2)
+                    val top = padTop + (1 - lvl / 100f) * chartHeight
+                    val barHeight = chartHeight * (lvl / 100f)
+                    drawRect(
+                        color = barColor,
+                        topLeft = Offset(left, top),
+                        size = Size(barWidth, barHeight)
+                    )
+                }
+            }
+        }
+
+        // X-Axis Labels
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .padding(start = 24.dp), // Align with canvas
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("-${history.size - 1}h", style = MaterialTheme.typography.labelSmall)
+            Text("Now", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+
+/* ------------------ NEW HELPER for smooth line ------------------ */
+/**
+ * Creates a smooth cubic spline path through a list of points.
+ */
+private fun Path.cubicSplineTo(points: List<Offset>) {
+    if (points.size < 2) return
+
+    // Move to the first point
+    moveTo(points.first().x, points.first().y)
+
+    // Calculate control points and draw cubic bezier curves
+    for (i in 0 until points.size - 1) {
+        val p0 = points.getOrElse(i - 1) { points[i] }
+        val p1 = points[i]
+        val p2 = points[i + 1]
+        val p3 = points.getOrElse(i + 2) { p2 }
+
+        // Tension factor, 0.5f is a good default
+        val tension = 0.5f
+
+        // Control point 1
+        val cp1x = p1.x + (p2.x - p0.x) * tension / 3f
+        val cp1y = p1.y + (p2.y - p0.y) * tension / 3f
+
+        // Control point 2
+        val cp2x = p2.x - (p3.x - p1.x) * tension / 3f
+        val cp2y = p2.y - (p3.y - p1.y) * tension / 3f
+
+        cubicTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
+    }
+}
 /* ------------------ HELPER DRAW ------------------ */
-private fun DrawScope.drawGrid(pad: Float, gridColor: Color, w: Float, h: Float) {
-    drawLine(gridColor, Offset(0f, pad), Offset(w, pad), strokeWidth = 1f)
-    drawLine(gridColor, Offset(0f, h - pad), Offset(w, h - pad), strokeWidth = 1f)
+private fun DrawScope.drawGrid(pad: Float, gridColor: Color, w: Float, h: Float, verticalLines: Boolean = false, count: Int = 0) {
+    // Horizontal grid lines (0%, 25%, 50%, 75%, 100%)
+    for (i in 0..4) {
+        val y = pad + i * (h - 2 * pad) / 4f
+        drawLine(gridColor, Offset(pad, y), Offset(w - pad, y), strokeWidth = 1f)
+    }
+    // Optional vertical grid lines
+    if (verticalLines && count > 1) {
+        val chartW = w - 2 * pad
+        val stepX = chartW / (count - 1).toFloat()
+        for (i in 0 until count) {
+            val x = pad + i * stepX
+            drawLine(gridColor, Offset(x, pad), Offset(x, h - pad), strokeWidth = 0.5f)
+        }
+    }
 }
 
-private fun DrawScope.drawLabels(pad: Float, gridColor: Color, h: Float) {
+private fun DrawScope.drawLabels(pad: Float, labelColor: Color, h: Float, textSizePx: Float) {
     val paint = android.graphics.Paint().apply {
-        color = gridColor.toArgb(); textSize = 10.sp.toPx(); isAntiAlias = true
+        color = labelColor.toArgb(); textSize = textSizePx; isAntiAlias = true
     }
+    val textHeightOffset = textSizePx / 3 // Approximate vertical centering
     drawContext.canvas.nativeCanvas.apply {
-        drawText("100%", 4f, pad - 2f, paint)
-        drawText("0%", 4f, h - pad + 12f, paint)
+        drawText("100%", pad - (textSizePx * 2.5f), pad + textHeightOffset, paint)
+        drawText("75%", pad - (textSizePx * 2.5f), pad + (h - 2 * pad) * 0.25f + textHeightOffset, paint)
+        drawText("50%", pad - (textSizePx * 2.5f), pad + (h - 2 * pad) * 0.5f + textHeightOffset, paint)
+        drawText("25%", pad - (textSizePx * 2.5f), pad + (h - 2 * pad) * 0.75f + textHeightOffset, paint)
+        drawText("0%", pad - (textSizePx * 2.5f), h - pad + textHeightOffset, paint)
+    }
+}
+
+private fun DrawScope.drawXAxisLabels(pad: Float, h: Float, w: Float, count: Int, labelColor: Color, textSizePx: Float) {
+    val paint = android.graphics.Paint().apply {
+        color = labelColor.toArgb(); textSize = textSizePx; isAntiAlias = true
+        textAlign = android.graphics.Paint.Align.CENTER
+    }
+    val chartW = w - 2 * pad
+    val stepX = if (count > 1) chartW / (count - 1).toFloat() else chartW
+    val yPos = h - pad + textSizePx * 1.5f
+    for (i in 0 until count) {
+        val x = pad + i * stepX
+        drawContext.canvas.nativeCanvas.drawText("${i + 1}", x, yPos, paint)
     }
 }
 
