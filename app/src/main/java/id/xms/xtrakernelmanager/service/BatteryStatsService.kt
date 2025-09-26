@@ -37,8 +37,6 @@ class BatteryStatsService : Service() {
     private var idleStartTime = 0L
     private var lastIdleDrainResult: String = "N/A"
 
-// Realtime usage
-// ...
 
     // Realtime usage
     private var realtimeUsedMah = 0.0
@@ -115,7 +113,9 @@ class BatteryStatsService : Service() {
             val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
             when (intent?.action) {
                 Intent.ACTION_SCREEN_ON -> {
-                    // ... (kode tetap sama)
+                    if (screenOnSince == 0L) {
+                        screenOnSince = System.currentTimeMillis()
+                    }
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     val batteryStatusIntent = context?.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -217,18 +217,13 @@ class BatteryStatsService : Service() {
 
         // 2. If charging, the idle session is interrupted.
         if (isCharging) {
-            // We consider the idle session over and reset the baseline.
             resetIdleDrainBaseline("charging started")
             return "Charging"
         }
         val elapsedMs = System.currentTimeMillis() - idleStartTime
         // Wait for a minimum duration before showing a result.
         if (elapsedMs < MIN_DRAIN_TIME_MS) return "Calculating..."
-
-        // --- MODIFICATION START ---
-
         // 3. Prioritize CHARGE_COUNTER calculation if the values are valid.
-        //    A valid charge counter will be a positive number.
         val useChargeCounter = idleStartCharge > 0 && currentCharge > 0
         if (useChargeCounter) {
             val dropUah = idleStartCharge - currentCharge
@@ -241,12 +236,10 @@ class BatteryStatsService : Service() {
         }
 
         // 4. Fallback to percentage-based calculation if CHARGE_COUNTER is not supported
-        //    or if no drop was detected with it.
         if (idleStartLevel > 0 && currentLevel > 0) {
             val dropPct = (idleStartLevel - currentLevel).toDouble()
             if (dropPct > 0) {
                 val rate = dropPct / (elapsedMs / 3600000.0)
-                // Estimate mAh drain based on percentage drop and design capacity
                 val rateMah = (rate / 100) * (designCapacityUah / 1000.0)
                 return "%.2f%%/h (≈%.1f mAh/h)".format(rate, rateMah)
             }
@@ -356,15 +349,12 @@ class BatteryStatsService : Service() {
     }
 
     private fun getDesignCapacityUah(): Long {
-        // 1. Prioritas utama: Coba baca dengan root (paling andal)
         RootUtils.execute("cat /sys/class/power_supply/battery/charge_full_design")?.toLongOrNull()?.let {
             if (it > 0) return it
         }
         RootUtils.execute("cat /sys/class/power_supply/battery/charge_full")?.toLongOrNull()?.let {
             if (it > 0) return it
         }
-
-        // 2. Fallback ke pembacaan file langsung (tanpa root)
         listOf(
             "/sys/class/power_supply/battery/charge_full_design",
             "/sys/class/power_supply/battery/charge_full"
@@ -374,14 +364,11 @@ class BatteryStatsService : Service() {
                 if (value > 0) return value
             } catch (_: Exception) {}
         }
-
-        // 3. Fallback terakhir: Gunakan API Android
         val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val capPct = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         val chargeCounter = bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
         if (capPct > 0 && chargeCounter > 0) return (chargeCounter * 100) / capPct
 
-        // 4. Jika semua gagal, gunakan nilai default
         return 4000000L
     }
 
