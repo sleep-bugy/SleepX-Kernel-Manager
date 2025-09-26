@@ -2,6 +2,7 @@ Changelogs For Xtra Kernel Manager Version 1.5
 
 Major Changes:
 - Add FPS Meter
+- Add OTA Update
 - Add Idle Count in Notification 
 - Add Battery Percentage & Temperature in Statusbar
 - Add Cache Cleaner For Non Root or Root
