@@ -1,3 +1,18 @@
+Changelogs For Xtra Kernel Manager Version 1.5
+
+Major Changes:
+- Add FPS Meter
+- Add Idle Count in Notification 
+- Add Battery Percentage & Temperature in Statusbar
+- Add Cache Cleaner For Non Root or Root
+- Add Hide Developer Feature
+- Add GPU Power Level
+- Add Battery detail on Info feature
+- Fix Odd card on RAM Control Popup
+- Now GlassMorphism combine with Material 3 in Android 12+
+
+
+
 Changelogs For Xtra Kernel Manager Version 1.4
 
 Major Changes:
