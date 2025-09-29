@@ -205,7 +205,7 @@ private fun BatteryHeaderSection(
         batteryInfo.status.contains("Full", true)   -> Icons.Default.BatteryFull
         else                                        -> Icons.Default.BatteryStd
     }
-    /* ============================== */
+
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -893,15 +893,17 @@ private fun BatteryStatsSection(batteryInfo: BatteryInfo) {
                 }
 
                 if (batteryInfo.current != 0f) {
-                    val rawCurrentMa = batteryInfo.current
-                    val isDeviceConsideredCharging = hardCharging // Use hardCharging here
-                    val correctedSignedMa = if (rawCurrentMa == 0f) {
+                    val currentInMa = batteryInfo.current / 1000f
+                    val isDeviceConsideredCharging = hardCharging
+
+                    val correctedSignedMa = if (currentInMa == 0f) {
                         0f
                     } else if (isDeviceConsideredCharging) {
-                        kotlin.math.abs(rawCurrentMa)
+                        kotlin.math.abs(currentInMa)
                     } else {
-                        -kotlin.math.abs(rawCurrentMa)
+                        -kotlin.math.abs(currentInMa)
                     }
+
                     val displayCurrentText = String.format(Locale.getDefault(), "%.0f", correctedSignedMa)
                     val iconForCurrent = if (isDeviceConsideredCharging) Icons.Default.BatteryChargingFull else Icons.Default.BatteryAlert
                     val colorForCurrent = when {
