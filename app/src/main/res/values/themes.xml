@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Base dark theme for the application using AppCompat -->
-    <style name="Theme.XtraKernelManager" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style name="Theme.XtraKernelManager" parent="Theme.Material3.DayNight">
         <!-- Primary colors -->
         <item name="colorPrimary">#90CAF9</item>
         <item name="colorPrimaryDark">#1B263B</item>

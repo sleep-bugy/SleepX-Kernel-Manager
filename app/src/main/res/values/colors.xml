@@ -75,6 +75,9 @@
     <color name="on_background_dark">#E3E3E3</color>
     <color name="on_surface_dark">#E1E1E1</color>
 
+    <!-- Monet Icons Colors -->
+    <color name="monet_primary">?attr/colorPrimary</color>
+
     <!-- Blur and Surface Colors -->
     <color name="surface_blur_light">#F7F2FA</color>
     <color name="surface_blur_medium">#EDE7F6</color>

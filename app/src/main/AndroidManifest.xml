@@ -55,6 +55,10 @@
         android:forceDarkAllowed="false"
         tools:targetApi="33">
 
+        <meta-data
+            android:name="android.theme.customization.dynamicColor"
+            android:value="true" />
+
         <!-- Force dark theme configuration -->
         <meta-data
             android:name="android.app.ui_mode"
