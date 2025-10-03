@@ -2,6 +2,7 @@ package id.xms.xtrakernelmanager.ui.screens
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -16,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import id.xms.xtrakernelmanager.ui.GameControlSettingsActivity
 import id.xms.xtrakernelmanager.ui.components.GlassIntensity
 import id.xms.xtrakernelmanager.ui.components.SuperGlassCard
 import id.xms.xtrakernelmanager.ui.viewmodel.DeveloperOptionsViewModel
@@ -32,11 +34,18 @@ fun MiscScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    val batteryStatsEnabled by miscViewModel.batteryStatsEnabled.collectAsState()
-    val batteryNotificationEnabled by miscViewModel.batteryNotificationEnabled.collectAsState()
-    val showBatteryTempInStatusBar by miscViewModel.showBatteryTempInStatusBar.collectAsState()
-    val fpsMonitorEnabled by miscViewModel.fpsMonitorEnabled.collectAsState()
-    val hideDeveloperOptionsEnabled by devOptionsViewModel.hideDeveloperOptionsEnabled
+    // Use remember to cache collectAsState to avoid recomposition
+    val batteryStatsEnabled by remember { miscViewModel.batteryStatsEnabled }.collectAsState()
+    val batteryNotificationEnabled by remember { miscViewModel.batteryNotificationEnabled }.collectAsState()
+    val showBatteryTempInStatusBar by remember { miscViewModel.showBatteryTempInStatusBar }.collectAsState()
+    val gameControlEnabled by remember { miscViewModel.fpsMonitorEnabled }.collectAsState()
+    val hideDeveloperOptionsEnabled by remember { devOptionsViewModel.hideDeveloperOptionsEnabled }
+
+    // State for controlling card expansion (like in Tuning)
+    var batteryCardExpanded by remember { mutableStateOf(false) }
+    var gameControlCardExpanded by remember { mutableStateOf(false) }
+    var systemTweaksCardExpanded by remember { mutableStateOf(false) }
+    var devOptionsCardExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -52,11 +61,13 @@ fun MiscScreen(
             fontWeight = FontWeight.Bold
         )
 
-        // Battery Stats & Notification Card
+        // Battery Stats & Notification Card with dropdown
         BatteryStatsCard(
             batteryStatsEnabled = batteryStatsEnabled,
             batteryNotificationEnabled = batteryNotificationEnabled,
             showBatteryTempInStatusBar = showBatteryTempInStatusBar,
+            expanded = batteryCardExpanded,
+            onExpandedChange = { batteryCardExpanded = it },
             onToggleBatteryStats = { enabled ->
                 miscViewModel.toggleBatteryStats(enabled)
             },
@@ -65,24 +76,34 @@ fun MiscScreen(
             }
         )
 
-        // FPS Monitor Toggle
-        FpsMonitorCard(fpsMonitorEnabled = fpsMonitorEnabled, onToggleFpsMonitor = { enabled ->
-            if (enabled && !Settings.canDrawOverlays(context)) {
-                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
-            } else {
-                miscViewModel.toggleFpsMonitor(enabled)
+        // Game Control Card with dropdown
+        GameControlCard(
+            gameControlEnabled = gameControlEnabled,
+            expanded = gameControlCardExpanded,
+            onExpandedChange = { gameControlCardExpanded = it },
+            onToggleGameControl = { enabled ->
+                if (enabled && !Settings.canDrawOverlays(context)) {
+                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                } else {
+                    miscViewModel.toggleGameControl(enabled)
+                }
             }
-        })
+        )
 
-        // Additional misc features
-        SystemTweaksCard()
+        // System Tweaks Card with dropdown
+        SystemTweaksCard(
+            expanded = systemTweaksCardExpanded,
+            onExpandedChange = { systemTweaksCardExpanded = it }
+        )
 
-        // Per-app hide developer options
+        // Developer Options Card with dropdown - lazy load only when expanded
         DeveloperOptionsCard(
             navController = navController,
             hideDeveloperOptionsEnabled = hideDeveloperOptionsEnabled,
+            expanded = devOptionsCardExpanded,
+            onExpandedChange = { devOptionsCardExpanded = it },
             onToggleHideDeveloperOptions = { devOptionsViewModel.setHideDeveloperOptions(it) }
         )
     }
@@ -93,6 +114,8 @@ fun BatteryStatsCard(
     batteryStatsEnabled: Boolean,
     batteryNotificationEnabled: Boolean,
     showBatteryTempInStatusBar: Boolean,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     onToggleBatteryStats: (Boolean) -> Unit,
     onToggleShowBatteryTempInStatusBar: (Boolean) -> Unit
 ) {
@@ -109,154 +132,177 @@ fun BatteryStatsCard(
                 fontWeight = FontWeight.Bold
             )
 
-            // Battery Stats Toggle
+            // Expandable header
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onExpandedChange(!expanded) },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Battery Stats Service",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "Monitor battery usage, charging stats, and system metrics",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Switch(
-                    checked = batteryStatsEnabled,
-                    onCheckedChange = onToggleBatteryStats
+                Text(
+                    text = if (expanded) "Hide Details" else "Show Details",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
 
-            // Battery Notification Info
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Persistent Notification",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "Show detailed battery info in notification panel",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Switch(
-                    checked = batteryNotificationEnabled,
-                    onCheckedChange = onToggleBatteryStats,
-                    enabled = false // This is controlled by the main battery stats toggle
-                )
-            }
-
-            // Show Battery Temp in Status Bar Toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Show Battery Temperature in Status Bar",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "Display battery temperature next to percentage in the status bar",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = showBatteryTempInStatusBar,
-                    onCheckedChange = onToggleShowBatteryTempInStatusBar,
-                    enabled = batteryStatsEnabled
-                )
-            }
-
-            if (batteryStatsEnabled) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+            if (expanded) {
+                // Battery Stats Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Battery Stats Service",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Monitor battery usage, charging stats, and system metrics",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Switch(
+                        checked = batteryStatsEnabled,
+                        onCheckedChange = onToggleBatteryStats
+                    )
+                }
+
+                // Battery Notification Info
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Persistent Notification",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Show detailed battery info in notification panel",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Switch(
+                        checked = batteryNotificationEnabled,
+                        onCheckedChange = onToggleBatteryStats,
+                        enabled = false // This is controlled by the main battery stats toggle
+                    )
+                }
+
+                // Show Battery Temp in Status Bar Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Show Battery Temperature in Status Bar",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Display battery temperature next to percentage in the status bar",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = showBatteryTempInStatusBar,
+                        onCheckedChange = onToggleShowBatteryTempInStatusBar,
+                        enabled = batteryStatsEnabled
+                    )
+                }
+
+                if (batteryStatsEnabled) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.BatteryStd,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BatteryStd,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Battery Service Active",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
                             Text(
-                                text = "Battery Service Active",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
+                                text = "Monitoring battery level, charging current, voltage, temperature, screen time, and deep sleep statistics.",
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
-                        Text(
-                            text = "Monitoring battery level, charging current, voltage, temperature, screen time, and deep sleep statistics.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
                     }
                 }
-            }
 
-            if (!batteryStatsEnabled) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                if (!batteryStatsEnabled) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "Features Available",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
                         Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("• Real-time battery level & charging status", style = MaterialTheme.typography.bodySmall)
-                            Text("• Charging current & voltage monitoring", style = MaterialTheme.typography.bodySmall)
-                            Text("• Battery temperature tracking", style = MaterialTheme.typography.bodySmall)
-                            Text("• Screen on/off time statistics", style = MaterialTheme.typography.bodySmall)
-                            Text("• Deep sleep & awake time monitoring", style = MaterialTheme.typography.bodySmall)
-                            Text("• System uptime tracking", style = MaterialTheme.typography.bodySmall)
-                            Text("• Battery drain rate calculation", style = MaterialTheme.typography.bodySmall)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Features Available",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text("• Real-time battery level & charging status", style = MaterialTheme.typography.bodySmall)
+                                Text("• Charging current & voltage monitoring", style = MaterialTheme.typography.bodySmall)
+                                Text("• Battery temperature tracking", style = MaterialTheme.typography.bodySmall)
+                                Text("• Screen on/off time statistics", style = MaterialTheme.typography.bodySmall)
+                                Text("• Deep sleep & awake time monitoring", style = MaterialTheme.typography.bodySmall)
+                                Text("• System uptime tracking", style = MaterialTheme.typography.bodySmall)
+                                Text("• Battery drain rate calculation", style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                 }
@@ -266,24 +312,62 @@ fun BatteryStatsCard(
 }
 
 @Composable
-fun FpsMonitorCard(
-    fpsMonitorEnabled: Boolean,
-    onToggleFpsMonitor: (Boolean) -> Unit
+fun GameControlCard(
+    gameControlEnabled: Boolean,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onToggleGameControl: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+
     SuperGlassCard(
         modifier = Modifier.fillMaxWidth(),
         glassIntensity = GlassIntensity.Light
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(16.dp)
         ) {
+            // Header with icon
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Games,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Game Control",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Divider()
+
+            // Game Control description
             Text(
-                text = "FPS Monitor",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                text = "Enhance your gaming experience with advanced performance monitoring and controls",
+                style = MaterialTheme.typography.bodyMedium
             )
 
-            // FPS Monitor Toggle
+            // Feature list
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                BulletPoint("Real-time FPS monitoring with graph visualization")
+                BulletPoint("CPU & GPU load and governor information")
+                BulletPoint("Performance profiles (Default, Battery, Performance)")
+                BulletPoint("Quick access to Do Not Disturb mode")
+                BulletPoint("Clear background apps with one tap")
+                BulletPoint("Configure per-app settings for automatic activation")
+            }
+
+            Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // Main Toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -291,24 +375,43 @@ fun FpsMonitorCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Enable FPS Monitor",
+                        text = "Enable Game Control",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "Show current FPS on the screen",
+                        text = "Master switch for the enhanced Game Control feature",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 Switch(
-                    checked = fpsMonitorEnabled,
-                    onCheckedChange = onToggleFpsMonitor
+                    checked = gameControlEnabled,
+                    onCheckedChange = onToggleGameControl
                 )
             }
 
-            if (fpsMonitorEnabled) {
+            // Configure Apps Button
+            Button(
+                onClick = {
+                    val intent = Intent(context, GameControlSettingsActivity::class.java)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Configure Game Apps")
+            }
+
+            // Status indicator when enabled
+            if (gameControlEnabled) {
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer
@@ -324,22 +427,70 @@ fun FpsMonitorCard(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.PieChart,
+                                imageVector = Icons.Default.Games,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "Overlay Permission Required",
+                                text = "Game Control Active",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                         Text(
-                            text = "The FPS monitor requires overlay permission to display the current FPS on the screen. Please grant the permission in the settings.",
+                            text = "Game Control overlay will automatically appear when you launch configured games. Configure specific apps to customize their gaming experience.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
+                    }
+                }
+            }
+
+            // Overlay Permission Warning (if enabled but no permission)
+            if (gameControlEnabled && !Settings.canDrawOverlays(context)) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                text = "Overlay Permission Required",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                        Text(
+                            text = "Game Control requires overlay permission to display performance monitoring and controls on top of games. Please grant the permission to use this feature.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+
+                        TextButton(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text("GRANT PERMISSION")
+                        }
                     }
                 }
             }
@@ -348,7 +499,28 @@ fun FpsMonitorCard(
 }
 
 @Composable
-fun SystemTweaksCard() {
+fun BulletPoint(text: String) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "•",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
+fun SystemTweaksCard(
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit
+) {
     val context = LocalContext.current
     var isClearing by remember { mutableStateOf(false) }
     var showResultDialog by remember { mutableStateOf(false) }
@@ -411,130 +583,133 @@ fun SystemTweaksCard() {
                     }
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Clear All Cache")
-                    Text(
-                        text = if (useRoot) "Root: Remove cache for all apps (requires root access)" else "Non-root: Remove cache for accessible apps only",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Button(
-                    onClick = {
-                        isClearing = true
-                        cacheClearedMB = 0L
-                        appsCleared = 0
-                        errorMsg = ""
-                        liveLog = listOf("Starting cache clear...")
-                        progress = 0f
-                        isCanceled = false
-                        scope.launch {
-                            if (useRoot) {
-                                try {
-                                    // Check root access first
-                                    val suTest = Runtime.getRuntime().exec("su -c echo rooted")
-                                    val suTestOut = suTest.inputStream.bufferedReader().readText().trim()
-                                    val suTestErr = suTest.errorStream.bufferedReader().readText().trim()
-                                    val suTestCode = suTest.waitFor()
-                                    if (suTestCode != 0 || !suTestOut.contains("rooted")) {
-                                        errorMsg = "Root access not available.\nError: $suTestErr"
-                                    } else {
-                                        // List all cache folders
-                                        val listCmd = "find /data/data -type d -name cache"
-                                        val listProc = Runtime.getRuntime().exec(arrayOf("su", "-c", listCmd))
-                                        val cacheFolders = listProc.inputStream.bufferedReader().readLines()
-                                        var totalCacheBefore = 0L
-                                        var totalCacheAfter = 0L
-                                        var clearedAppsCount = 0
-                                        val logList = mutableListOf<String>()
-                                        val totalFolders = cacheFolders.size
-                                        var processedFolders = 0
-                                        for (folder in cacheFolders) {
-                                            if (isCanceled) break
-                                            // Get size before
-                                            val sizeCmd = "du -sb $folder"
-                                            val sizeProc = Runtime.getRuntime().exec(arrayOf("su", "-c", sizeCmd))
-                                            val sizeOut = sizeProc.inputStream.bufferedReader().readText().trim()
-                                            val sizeBefore = sizeOut.split("\t").firstOrNull()?.toLongOrNull() ?: 0L
-                                            val sizeBeforeMB = sizeBefore / (1024 * 1024)
-                                            if (sizeBeforeMB < minCacheMB) {
+            // Content only visible when card is expanded
+            if (expanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Clear All Cache")
+                        Text(
+                            text = if (useRoot) "Root: Remove cache for all apps (requires root access)" else "Non-root: Remove cache for accessible apps only",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            isClearing = true
+                            cacheClearedMB = 0L
+                            appsCleared = 0
+                            errorMsg = ""
+                            liveLog = listOf("Starting cache clear...")
+                            progress = 0f
+                            isCanceled = false
+                            scope.launch {
+                                if (useRoot) {
+                                    try {
+                                        // Check root access first
+                                        val suTest = Runtime.getRuntime().exec("su -c echo rooted")
+                                        val suTestOut = suTest.inputStream.bufferedReader().readText().trim()
+                                        val suTestErr = suTest.errorStream.bufferedReader().readText().trim()
+                                        val suTestCode = suTest.waitFor()
+                                        if (suTestCode != 0 || !suTestOut.contains("rooted")) {
+                                            errorMsg = "Root access not available.\nError: $suTestErr"
+                                        } else {
+                                            // List all cache folders
+                                            val listCmd = "find /data/data -type d -name cache"
+                                            val listProc = Runtime.getRuntime().exec(arrayOf("su", "-c", listCmd))
+                                            val cacheFolders = listProc.inputStream.bufferedReader().readLines()
+                                            var totalCacheBefore = 0L
+                                            var totalCacheAfter = 0L
+                                            var clearedAppsCount = 0
+                                            val logList = mutableListOf<String>()
+                                            val totalFolders = cacheFolders.size
+                                            var processedFolders = 0
+                                            for (folder in cacheFolders) {
+                                                if (isCanceled) break
+                                                // Get size before
+                                                val sizeCmd = "du -sb $folder"
+                                                val sizeProc = Runtime.getRuntime().exec(arrayOf("su", "-c", sizeCmd))
+                                                val sizeOut = sizeProc.inputStream.bufferedReader().readText().trim()
+                                                val sizeBefore = sizeOut.split("\t").firstOrNull()?.toLongOrNull() ?: 0L
+                                                val sizeBeforeMB = sizeBefore / (1024 * 1024)
+                                                if (sizeBeforeMB < minCacheMB) {
+                                                    processedFolders++
+                                                    progress = processedFolders / totalFolders.toFloat()
+                                                    continue
+                                                }
+                                                totalCacheBefore += sizeBefore
+                                                // Clear cache
+                                                val rmCmd = "rm -rf $folder/*"
+                                                val rmProc = Runtime.getRuntime().exec(arrayOf("su", "-c", rmCmd))
+                                                val rmExit = rmProc.waitFor()
+                                                // Get size after
+                                                val sizeProc2 = Runtime.getRuntime().exec(arrayOf("su", "-c", sizeCmd))
+                                                val sizeOut2 = sizeProc2.inputStream.bufferedReader().readText().trim()
+                                                val sizeAfter = sizeOut2.split("\t").firstOrNull()?.toLongOrNull() ?: 0L
+                                                totalCacheAfter += sizeAfter
+                                                if (sizeBefore > 0) clearedAppsCount++
+                                                logList.add("${folder}: ${sizeBeforeMB}MB -> ${sizeAfter / (1024 * 1024)}MB")
+                                                liveLog = logList.toList() // update UI
                                                 processedFolders++
                                                 progress = processedFolders / totalFolders.toFloat()
+                                            }
+                                            cacheClearedMB = (totalCacheBefore - totalCacheAfter) / (1024 * 1024)
+                                            appsCleared = clearedAppsCount
+                                            liveLog = logList + listOf("Done! Total cleared: $cacheClearedMB MB from $appsCleared apps.")
+                                        }
+                                    } catch (e: Exception) {
+                                        errorMsg = "Root method error: ${e.message}".take(200)
+                                    }
+                                } else {
+                                    // Non-root method
+                                    val pm = context.packageManager
+                                    val packages = pm.getInstalledPackages(0)
+                                    val totalApps = packages.size
+                                    var processedApps = 0
+                                    var totalCache = 0L
+                                    var clearedApps = 0
+                                    val logList = mutableListOf<String>()
+                                    for (pkg in packages) {
+                                        if (isCanceled) break
+                                        try {
+                                            val cacheDir = context.createPackageContext(pkg.packageName, 0).cacheDir
+                                            val cacheSize = cacheDir?.listFiles()?.sumOf { it.length() } ?: 0L
+                                            val cacheSizeMB = cacheSize / (1024 * 1024)
+                                            if (cacheSizeMB < minCacheMB) {
+                                                processedApps++
+                                                progress = processedApps / totalApps.toFloat()
                                                 continue
                                             }
-                                            totalCacheBefore += sizeBefore
-                                            // Clear cache
-                                            val rmCmd = "rm -rf $folder/*"
-                                            val rmProc = Runtime.getRuntime().exec(arrayOf("su", "-c", rmCmd))
-                                            val rmExit = rmProc.waitFor()
-                                            // Get size after
-                                            val sizeProc2 = Runtime.getRuntime().exec(arrayOf("su", "-c", sizeCmd))
-                                            val sizeOut2 = sizeProc2.inputStream.bufferedReader().readText().trim()
-                                            val sizeAfter = sizeOut2.split("\t").firstOrNull()?.toLongOrNull() ?: 0L
-                                            totalCacheAfter += sizeAfter
-                                            if (sizeBefore > 0) clearedAppsCount++
-                                            logList.add("${folder}: ${sizeBeforeMB}MB -> ${sizeAfter / (1024 * 1024)}MB")
-                                            liveLog = logList.toList() // update UI
-                                            processedFolders++
-                                            progress = processedFolders / totalFolders.toFloat()
-                                        }
-                                        cacheClearedMB = (totalCacheBefore - totalCacheAfter) / (1024 * 1024)
-                                        appsCleared = clearedAppsCount
-                                        liveLog = logList + listOf("Done! Total cleared: $cacheClearedMB MB from $appsCleared apps.")
-                                    }
-                                } catch (e: Exception) {
-                                    errorMsg = "Root method error: ${e.message}".take(200)
-                                }
-                            } else {
-                                // Non-root method
-                                val pm = context.packageManager
-                                val packages = pm.getInstalledPackages(0)
-                                val totalApps = packages.size
-                                var processedApps = 0
-                                var totalCache = 0L
-                                var clearedApps = 0
-                                val logList = mutableListOf<String>()
-                                for (pkg in packages) {
-                                    if (isCanceled) break
-                                    try {
-                                        val cacheDir = context.createPackageContext(pkg.packageName, 0).cacheDir
-                                        val cacheSize = cacheDir?.listFiles()?.sumOf { it.length() } ?: 0L
-                                        val cacheSizeMB = cacheSize / (1024 * 1024)
-                                        if (cacheSizeMB < minCacheMB) {
+                                            if (cacheSize > 0) {
+                                                cacheDir?.listFiles()?.forEach { it.delete() }
+                                                totalCache += cacheSize
+                                                clearedApps++
+                                                logList.add("${pkg.packageName}: ${cacheSizeMB}MB cleared")
+                                                liveLog = logList.toList()
+                                            }
                                             processedApps++
                                             progress = processedApps / totalApps.toFloat()
-                                            continue
+                                        } catch (_: Exception) {
+                                            processedApps++
+                                            progress = processedApps / totalApps.toFloat()
                                         }
-                                        if (cacheSize > 0) {
-                                            cacheDir?.listFiles()?.forEach { it.delete() }
-                                            totalCache += cacheSize
-                                            clearedApps++
-                                            logList.add("${pkg.packageName}: ${cacheSizeMB}MB cleared")
-                                            liveLog = logList.toList()
-                                        }
-                                        processedApps++
-                                        progress = processedApps / totalApps.toFloat()
-                                    } catch (_: Exception) {
-                                        processedApps++
-                                        progress = processedApps / totalApps.toFloat()
                                     }
+                                    cacheClearedMB = totalCache / (1024 * 1024)
+                                    appsCleared = clearedApps
+                                    liveLog = logList + listOf("Done! Total cleared: $cacheClearedMB MB from $appsCleared apps.")
                                 }
-                                cacheClearedMB = totalCache / (1024 * 1024)
-                                appsCleared = clearedApps
-                                liveLog = logList + listOf("Done! Total cleared: $cacheClearedMB MB from $appsCleared apps.")
+                                isClearing = false
+                                showResultDialog = true
                             }
-                            isClearing = false
-                            showResultDialog = true
-                        }
-                    },
-                    enabled = !isClearing
-                ) {
-                    Text(if (isClearing) "Clearing..." else "Clear")
+                        },
+                        enabled = !isClearing
+                    ) {
+                        Text(if (isClearing) "Clearing..." else "Clear")
+                    }
                 }
             }
         }
@@ -594,6 +769,8 @@ private fun getAppCountRoot(): Int {
 fun DeveloperOptionsCard(
     navController: NavController,
     hideDeveloperOptionsEnabled: Boolean,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     onToggleHideDeveloperOptions: (Boolean) -> Unit
 ) {
     SuperGlassCard(
@@ -609,31 +786,55 @@ fun DeveloperOptionsCard(
                 fontWeight = FontWeight.Bold
             )
 
+            // Expandable header
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onExpandedChange(!expanded) },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Hide Developer Options")
-                    Text(
-                        text = "Hide developer options for specific apps",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = hideDeveloperOptionsEnabled,
-                    onCheckedChange = onToggleHideDeveloperOptions
+                Text(
+                    text = if (expanded) "Hide Details" else "Show Details",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
 
-            if (hideDeveloperOptionsEnabled) {
-                Button(
-                    onClick = { navController.navigate("app_selection") },
-                    modifier = Modifier.fillMaxWidth()
+            // Content only visible when card is expanded
+            if (expanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Select Apps")
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Hide Developer Options")
+                        Text(
+                            text = "Hide developer options for specific apps",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = hideDeveloperOptionsEnabled,
+                        onCheckedChange = onToggleHideDeveloperOptions
+                    )
+                }
+
+                if (hideDeveloperOptionsEnabled) {
+                    Button(
+                        onClick = { navController.navigate("app_selection") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Select Apps")
+                    }
                 }
             }
         }

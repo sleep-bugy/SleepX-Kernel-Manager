@@ -74,24 +74,24 @@ class MiscViewModel @Inject constructor(
         }
     }
 
-    fun toggleFpsMonitor(enabled: Boolean) {
+    fun toggleGameControl(enabled: Boolean) {
         viewModelScope.launch {
             _fpsMonitorEnabled.value = enabled
             preferenceManager.setFpsMonitorEnabled(enabled)
-            val serviceIntent = Intent(application, Class.forName("id.xms.xtrakernelmanager.service.FPSOverlayService"))
+
+            // Always keep the service running to support per-app FPS monitoring
+            // The service itself will decide what to show based on per-app settings
+            val serviceIntent = Intent(application, Class.forName("id.xms.xtrakernelmanager.service.GameControlService"))
             if (enabled) {
+                // Start service if not already running
                 try {
                     application.startForegroundService(serviceIntent)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
-            } else {
-                try {
-                    application.stopService(serviceIntent)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
             }
+            // Note: We no longer stop the service when global setting is disabled
+            // This allows per-app FPS monitoring to work independently
         }
     }
 }
