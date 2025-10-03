@@ -98,6 +98,21 @@
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
 
+        <!-- Game Control Service -->
+        <service
+            android:name=".service.GameControlService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+
+        <!-- Game Control Settings Activity -->
+        <activity
+            android:name=".ui.GameControlSettingsActivity"
+            android:exported="false"
+            android:label="Game Control Settings"
+            android:theme="@style/Theme.XtraKernelManager" />
+
         <!-- ThermalService -->
         <service
             android:name=".service.ThermalService"
