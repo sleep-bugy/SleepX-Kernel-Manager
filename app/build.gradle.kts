@@ -135,6 +135,9 @@ dependencies {
     // Firebase Realtime Database
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.google.firebase:firebase-common-ktx:20.4.0")
+
+    // MPAndroidChart for FPS graphing
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
 }
 
 
