@@ -127,6 +127,7 @@ fun TuningScreen(viewModel: TuningViewModel = hiltViewModel()) {
             ThermalCard(viewModel = viewModel, blur = true)
             SwappinessCard(vm = viewModel, blur = true)
             IoSchedulerCard(vm = viewModel, blur = true)
+            TcpCard(vm = viewModel, blur = true)
         }
     }
 
