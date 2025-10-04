@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.*
+import android.util.TypedValue
 import android.view.*
 import android.widget.*
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -18,6 +19,7 @@ import id.xms.xtrakernelmanager.data.model.AppGameSettings
 import id.xms.xtrakernelmanager.data.repository.GameControlRepository
 import id.xms.xtrakernelmanager.data.repository.GpuFpsRepository
 import id.xms.xtrakernelmanager.util.RootUtils
+import id.xms.xtrakernelmanager.util.OverlayDimensionUtils
 import kotlinx.coroutines.*
 import java.util.LinkedList
 import javax.inject.Inject
@@ -233,18 +235,36 @@ class GameControlService : Service() {
     }
 
     private fun setupOverlay() {
-        var themedContext: Context = android.view.ContextThemeWrapper(this, R.style.Theme_GameOverlay)
+        var themedContext: Context = ContextThemeWrapper(this, R.style.Theme_GameOverlay)
         themedContext = DynamicColors.wrapContextIfAvailable(themedContext)
 
         val baseInflater = getSystemService(LAYOUT_INFLATER_SERVICE) as LayoutInflater
         val themedInflater = baseInflater.cloneInContext(themedContext)
 
         try {
-            rootView = themedInflater.inflate(R.layout.game_control_overlay_m3, null)
+            // Create temporary parent for safe layout inflation
+            val tempParent = FrameLayout(this)
+            rootView = themedInflater.inflate(R.layout.game_control_overlay_m3, tempParent, false)
         } catch (e: Throwable) {
             android.util.Log.e("GameControlService", "Failed to inflate M3 overlay: ${e.message}. Falling back to legacy overlay.")
-            rootView = LayoutInflater.from(this).inflate(R.layout.game_control_overlay, null)
+            try {
+                val tempParent = FrameLayout(this)
+                rootView = LayoutInflater.from(this).inflate(R.layout.game_control_overlay, tempParent, false)
+            } catch (e2: Exception) {
+                android.util.Log.e("GameControlService", "Failed to inflate any overlay layout: ${e2.message}")
+                return
+            }
         }
+
+        if (rootView == null) {
+            android.util.Log.e("GameControlService", "Root view is null after inflation")
+            return
+        }
+
+        // Get responsive dimensions for current screen
+        val gameControlDims = OverlayDimensionUtils.getGameControlOverlayDimensions(this)
+
+        // Initialize views with null checks
         overlayRootContainer = rootView?.findViewById(R.id.overlayRootContainer)
         currentFpsText = rootView?.findViewById(R.id.currentFpsText)
         cpuLoadText = rootView?.findViewById(R.id.cpuLoadText)
@@ -253,6 +273,13 @@ class GameControlService : Service() {
         gpuGovernorText = rootView?.findViewById(R.id.gpuGovernorText)
         gameControlPanel = rootView?.findViewById(R.id.gameControlPanel)
         gameControlToggle = rootView?.findViewById(R.id.gameControlToggle)
+
+        // Apply responsive dimensions with error handling
+        try {
+            applyResponsiveDimensions(gameControlDims)
+        } catch (e: Exception) {
+            android.util.Log.e("GameControlService", "Error applying responsive dimensions: ${e.message}")
+        }
 
         // buttons
         defaultModeButton = rootView?.findViewById(R.id.defaultModeButton)
@@ -310,21 +337,19 @@ class GameControlService : Service() {
         // Setup drag listener for the entire overlay
         setupDragToMove()
 
-        // Add view to window manager
+        // Add view to window manager with responsive positioning
         layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 100
+            x = gameControlDims.paddingSmall
+            y = gameControlDims.paddingLarge * 2
         }
 
         wm.addView(rootView, layoutParams)
@@ -333,78 +358,62 @@ class GameControlService : Service() {
         gameControlPanel?.visibility = View.GONE
     }
 
-    private fun setupDragToMove() {
+    private fun applyResponsiveDimensions(dims: OverlayDimensionUtils.GameControlDimensions) {
+        // Apply max width constraint to prevent overlay from being too wide
+        overlayRootContainer?.layoutParams = overlayRootContainer?.layoutParams?.apply {
+            width = dims.maxWidth
+        }
+
+        // Apply responsive text sizes
+        currentFpsText?.setTextSize(TypedValue.COMPLEX_UNIT_SP, dims.textSizeMedium)
+        cpuLoadText?.setTextSize(TypedValue.COMPLEX_UNIT_SP, dims.textSizeSmall)
+        gpuLoadText?.setTextSize(TypedValue.COMPLEX_UNIT_SP, dims.textSizeSmall)
+        cpuGovernorText?.setTextSize(TypedValue.COMPLEX_UNIT_SP, dims.textSizeSmall)
+        gpuGovernorText?.setTextSize(TypedValue.COMPLEX_UNIT_SP, dims.textSizeSmall)
+
+        // Apply responsive dimensions to toggle button
+        gameControlToggle?.layoutParams = gameControlToggle?.layoutParams?.apply {
+            width = dims.toggleButtonSize
+            height = dims.toggleButtonSize
+        }
+
+        // Apply responsive padding to various containers
         val toggleButtonCard = rootView?.findViewById<View>(R.id.toggleButtonCard)
+        toggleButtonCard?.setPadding(dims.paddingSmall, dims.paddingSmall, dims.paddingSmall, dims.paddingSmall)
 
-        toggleButtonCard?.setOnTouchListener(object : View.OnTouchListener {
-            override fun onTouch(v: View?, event: MotionEvent?): Boolean {
-                when (event?.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = layoutParams?.x ?: 0
-                        initialY = layoutParams?.y ?: 0
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        return true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        val dx = event.rawX - initialTouchX
-                        val dy = event.rawY - initialTouchY
-                        layoutParams?.x = (initialX + dx).toInt()
-                        layoutParams?.y = (initialY + dy).toInt()
+        val gameControlPanel = rootView?.findViewById<View>(R.id.gameControlPanel)
+        gameControlPanel?.setPadding(dims.paddingMedium, dims.paddingMedium, dims.paddingMedium, dims.paddingMedium)
 
-                        // Apply the updated position
-                        if (rootView != null && layoutParams != null) {
-                            wm.updateViewLayout(rootView, layoutParams)
-                        }
-                        return true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        // Check if this is a click or a drag
-                        val dx = abs(event.rawX - initialTouchX)
-                        val dy = abs(event.rawY - initialTouchY)
+        // Apply responsive button heights
+        applyButtonDimensions(dims)
+    }
 
-                        // If moved less than 10px, consider it a click
-                        if (dx < 10 && dy < 10) {
-                            toggleButtonCard?.performClick()
-                        }
-                        return true
-                    }
-                }
-                return false
-            }
-        })
+    private fun applyButtonDimensions(dims: OverlayDimensionUtils.GameControlDimensions) {
+        // Apply responsive dimensions to performance mode buttons
+        defaultModeButton?.layoutParams = defaultModeButton?.layoutParams?.apply {
+            height = dims.buttonHeight
+        }
+        batteryModeButton?.layoutParams = batteryModeButton?.layoutParams?.apply {
+            height = dims.buttonHeight
+        }
+        performanceModeButton?.layoutParams = performanceModeButton?.layoutParams?.apply {
+            height = dims.buttonHeight
+        }
 
-        // Also allow dragging from the panel title area
-        val panelTitle = rootView?.findViewById<View>(R.id.panelTitle)
-        panelTitle?.setOnTouchListener(object : View.OnTouchListener {
-            override fun onTouch(v: View?, event: MotionEvent?): Boolean {
-                when (event?.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = layoutParams?.x ?: 0
-                        initialY = layoutParams?.y ?: 0
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        return true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        // Calculate how far the user's finger has moved
-                        val dx = event.rawX - initialTouchX
-                        val dy = event.rawY - initialTouchY
-
-                        // Move the view
-                        layoutParams?.x = (initialX + dx).toInt()
-                        layoutParams?.y = (initialY + dy).toInt()
-
-                        // Apply the updated position
-                        if (rootView != null && layoutParams != null) {
-                            wm.updateViewLayout(rootView, layoutParams)
-                        }
-                        return true
-                    }
-                }
-                return false
-            }
-        })
+        // Apply responsive dimensions to action buttons
+        dndButton?.layoutParams = dndButton?.layoutParams?.apply {
+            height = dims.buttonHeight
+        }
+        clearAppsButton?.layoutParams = clearAppsButton?.layoutParams?.apply {
+            height = dims.buttonHeight
+        }
+        settingsButton?.layoutParams = settingsButton?.layoutParams?.apply {
+            height = dims.buttonHeight
+        }
+        collapseButton?.layoutParams = collapseButton?.layoutParams?.apply {
+            width = dims.toggleButtonSize
+            height = dims.toggleButtonSize
+        }
     }
 
     private fun updateFps() {
@@ -784,4 +793,37 @@ class GameControlService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun setupDragToMove() {
+        val toggleButtonCard = rootView?.findViewById<View>(R.id.toggleButtonCard)
+
+        toggleButtonCard?.setOnTouchListener(object : View.OnTouchListener {
+            override fun onTouch(v: View?, event: MotionEvent?): Boolean {
+                when (event?.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        initialX = layoutParams?.x ?: 0
+                        initialY = layoutParams?.y ?: 0
+                        initialTouchX = event.rawX
+                        initialTouchY = event.rawY
+                        return true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = event.rawX - initialTouchX
+                        val dy = event.rawY - initialTouchY
+
+                        layoutParams?.x = initialX + dx.toInt()
+                        layoutParams?.y = initialY + dy.toInt()
+
+                        try {
+                            wm.updateViewLayout(rootView, layoutParams)
+                        } catch (e: Exception) {
+                            // Ignore update errors
+                        }
+                        return true
+                    }
+                }
+                return false
+            }
+        })
+    }
 }

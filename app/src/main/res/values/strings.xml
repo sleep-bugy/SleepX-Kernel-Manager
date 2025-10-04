@@ -49,6 +49,9 @@
     <string name="temperature_c">Temp: %.1f °C</string>
     <string name="uptime_regex">%02dh %02dm %02ds</string>
 
+    <!-- FPS Overlay strings -->
+    <string name="fps_format">FPS: %d</string>
+
     <!-- Settings Screen -->
     <string name="settings_title">Settings</string>
     <string name="settings_back_button_desc">Back</string>
@@ -95,8 +98,6 @@
     <string name="close">Close</string>
     <string name="system_info">System Info</string>
 
-    <!-- FPS Overlay Strings -->
-    <string name="fps_format" translatable="false">%d FPS</string>
 
     <!-- Language strings -->
     <string name="language_english">English</string>

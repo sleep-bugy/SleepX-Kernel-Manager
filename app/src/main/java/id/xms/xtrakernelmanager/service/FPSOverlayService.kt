@@ -1,17 +1,20 @@
 package id.xms.xtrakernelmanager.service
 
 import android.app.*
-import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.*
 import android.view.*
+import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
 import id.xms.xtrakernelmanager.R
 import id.xms.xtrakernelmanager.data.repository.GpuFpsRepository
+import id.xms.xtrakernelmanager.ui.components.FpsChartView
 import id.xms.xtrakernelmanager.util.RootUtils
+import id.xms.xtrakernelmanager.util.OverlayDimensionUtils
+import android.util.TypedValue
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -22,43 +25,45 @@ class FPSOverlayService : Service() {
     private lateinit var wm: WindowManager
     private var rootView: View? = null
     private var fpsText: TextView? = null
+    private var fpsChart: View? = null // Changed from FpsChartView to View
 
     private val handler = Handler(Looper.getMainLooper())
     private val loop = object : Runnable {
         override fun run() {
-            val drmRaw = RootUtils.runCommandAsRoot("cat /sys/class/drm/sde-crtc-0/measured_fps") ?: "null"
-            android.util.Log.d("DRM_CHAR", "drmRaw='$drmRaw'")
+            val fps = getCurrentFps()
 
-            val afterSpasi = drmRaw.substringAfter("fps:").substringBefore(" ").trim()
-            val afterDur   = drmRaw.substringAfter("fps:").substringBefore("duration").trim()
+            // Update text display
+            fpsText?.text = getString(R.string.fps_format, fps)
 
-            android.util.Log.d("DRM_CHAR", "afterSpasi='$afterSpasi'  hexa=${afterSpasi.toByteArray().contentToString()}")
-            android.util.Log.d("DRM_CHAR", "afterDur  ='$afterDur'    hexa=${afterDur.toByteArray().contentToString()}")
+            // Update chart
+            (fpsChart as? FpsChartView)?.addFpsData(fps)
 
-            val floatSpasi = afterSpasi.toFloatOrNull()
-            val floatDur   = afterDur.toFloatOrNull()
-            android.util.Log.d("DRM_CHAR", "floatSpasi=$floatSpasi  floatDur=$floatDur")
+            handler.postDelayed(this, 500)
+        }
+    }
 
-
+    private fun getCurrentFps(): Int {
+        // Try DRM method first
+        val drmRaw = RootUtils.runCommandAsRoot("cat /sys/class/drm/sde-crtc-0/measured_fps") ?: ""
+        if (drmRaw.contains("fps:")) {
             val fps = drmRaw
                 .substringAfter("fps:")
                 .substringBefore("duration")
                 .trim()
                 .toFloatOrNull()?.toInt() ?: 0
-            android.util.Log.d("DRM_FINAL", "fps=$fps")
-
-            // tampil
-            fpsText?.text = "FPS: $fps"
-            handler.postDelayed(this, 500)
+            if (fps > 0) return fps
         }
+
+        // Fallback to AOSP method
+        return getAospLogFps()
     }
 
     /* -------------- AOSP logcat fps -------------- */
     private fun getAospLogFps(): Int {
-        val log = RootUtils.runCommandAsRoot("logcat -d -s SurfaceFlinger | tail -40") ?: return -1
+        val log = RootUtils.runCommandAsRoot("logcat -d -s SurfaceFlinger | tail -40") ?: return 60
         return Regex("""fps\s+(\d+\.?\d*)""").findAll(log)
             .mapNotNull { it.groupValues[1].toFloatOrNull() }
-            .lastOrNull()?.toInt() ?: -1
+            .lastOrNull()?.toInt() ?: 60
     }
 
     private fun enableAospFpsLog() {
@@ -87,40 +92,67 @@ class FPSOverlayService : Service() {
     /* -------------- onCreate -------------- */
     override fun onCreate() {
         super.onCreate()
-        wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        rootView = LayoutInflater.from(this).inflate(R.layout.fps_overlay, null)
+        wm = getSystemService(WINDOW_SERVICE) as WindowManager
+
+        // Get responsive dimensions for current screen
+        val overlayDims = OverlayDimensionUtils.getFpsOverlayDimensions(this)
+
+        // Create a temporary parent for proper layout inflation
+        val tempParent = FrameLayout(this)
+        rootView = LayoutInflater.from(this).inflate(R.layout.fps_overlay_with_chart, tempParent, false)
+
         fpsText = rootView?.findViewById(R.id.fpsTextView)
+        fpsChart = rootView?.findViewById(R.id.fpsChartView)
+
+        // Apply responsive dimensions to views
+        applyResponsiveDimensions(overlayDims)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 100
+            gravity = Gravity.TOP or Gravity.END
+            x = overlayDims.padding
+            y = overlayDims.padding * 3
         }
         wm.addView(rootView, params)
 
-        enableAospFpsLog() // <-- hidupkan AOSP native fps log
+        enableAospFpsLog()
         startForegroundService()
         Choreographer.getInstance().postFrameCallback(choreoCallback)
         handler.post(loop)
     }
 
+    private fun applyResponsiveDimensions(dims: OverlayDimensionUtils.OverlayDimensions) {
+        try {
+            // Apply responsive text size
+            fpsText?.setTextSize(TypedValue.COMPLEX_UNIT_SP, dims.textSize)
+
+            // Apply responsive padding to root container
+            val rootContainer = rootView?.findViewById<View>(R.id.overlayContainer)
+            rootContainer?.setPadding(dims.padding, dims.padding, dims.padding, dims.padding)
+
+            // Apply responsive dimensions to chart
+            fpsChart?.layoutParams = fpsChart?.layoutParams?.apply {
+                width = dims.chartWidth
+                height = dims.chartHeight
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FPSOverlay", "Error applying responsive dimensions: ${e.message}")
+        }
+    }
+
     /* -------------- foreground -------------- */
     private fun startForegroundService() {
         val chanId = "fps_monitor_channel"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val chan = NotificationChannel(chanId, "FPS Monitor", NotificationManager.IMPORTANCE_LOW)
-            getSystemService(NotificationManager::class.java).createNotificationChannel(chan)
-        }
+        val chan = NotificationChannel(chanId, "FPS Monitor", NotificationManager.IMPORTANCE_LOW)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(chan)
+
         val notification = NotificationCompat.Builder(this, chanId)
             .setContentTitle("FPS Overlay")
             .setContentText("Monitoring render fps")
