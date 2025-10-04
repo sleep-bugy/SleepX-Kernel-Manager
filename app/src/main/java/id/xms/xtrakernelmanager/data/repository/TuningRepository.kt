@@ -1458,6 +1458,34 @@ class TuningRepository @Inject constructor(
         return runTuningCommand("echo '$scheduler' > $ioSchedulerPath")
     }
 
+    /* ----------------------------------------------------------
+       TCP Congestion Control
+       ---------------------------------------------------------- */
+    private val tcpCongestionPath = "/proc/sys/net/ipv4/tcp_congestion_control"
+    private val tcpAvailablePath = "/proc/sys/net/ipv4/tcp_available_congestion_control"
+
+    fun getAvailableTcpAlgorithms(): List<String> {
+        val result = readShellCommand("cat $tcpAvailablePath")
+        return if (result.isNotBlank()) {
+            result.split(" ").filter { it.isNotBlank() }
+        } else {
+            emptyList()
+        }
+    }
+
+    fun getCurrentTcpAlgorithm(): String {
+        val result = readShellCommand("cat $tcpCongestionPath")
+        return if (result.isNotBlank()) {
+            result.trim()
+        } else {
+            "N/A"
+        }
+    }
+
+    fun setTcpAlgorithm(algorithm: String): Boolean {
+        return runTuningCommand("echo '$algorithm' > $tcpCongestionPath")
+    }
+
 
 
     fun getSwapSize(): Flow<Long> = flow {

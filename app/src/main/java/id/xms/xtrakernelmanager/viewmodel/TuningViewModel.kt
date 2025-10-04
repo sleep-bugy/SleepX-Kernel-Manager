@@ -146,6 +146,13 @@ class TuningViewModel @Inject constructor(
     private val _currentIoScheduler = MutableStateFlow("Loading...")
     val currentIoScheduler: StateFlow<String> = _currentIoScheduler.asStateFlow()
 
+    /* ---------------- TCP Congestion Control ---------------- */
+    private val _availableTcpAlgorithms = MutableStateFlow<List<String>>(emptyList())
+    val availableTcpAlgorithms: StateFlow<List<String>> = _availableTcpAlgorithms.asStateFlow()
+
+    private val _currentTcpAlgorithm = MutableStateFlow("Loading...")
+    val currentTcpAlgorithm: StateFlow<String> = _currentTcpAlgorithm.asStateFlow()
+
     /* ---------------- Thermal ---------------- */
     private val _isThermalLoading = MutableStateFlow(true)
     val isThermalLoading: StateFlow<Boolean> = _isThermalLoading.asStateFlow()
@@ -536,7 +543,17 @@ class TuningViewModel @Inject constructor(
         }
     }
 
+    /* ---------------- TCP Congestion Control ---------------- */
+    private fun fetchTcpCongestionControlData() = viewModelScope.launch(Dispatchers.IO) {
+        _availableTcpAlgorithms.value = repo.getAvailableTcpAlgorithms()
+        _currentTcpAlgorithm.value = repo.getCurrentTcpAlgorithm()
+    }
 
+    fun setTcpAlgorithm(algo: String) = viewModelScope.launch(Dispatchers.IO) {
+        if (repo.setTcpAlgorithm(algo)) {
+            _currentTcpAlgorithm.value = repo.getCurrentTcpAlgorithm()
+        }
+    }
 
     /* ---------------- Init ---------------- */
     private fun fetchAllInitialData() {
@@ -549,6 +566,7 @@ class TuningViewModel @Inject constructor(
             launch(Dispatchers.IO) { fetchVulkanApiVersion() }
             fetchRamControlData()
             launch(Dispatchers.IO) { fetchIoSchedulerData() }
+            launch(Dispatchers.IO) { fetchTcpCongestionControlData() }
         }
     }
 }
