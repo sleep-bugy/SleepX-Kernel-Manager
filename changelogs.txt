@@ -1,3 +1,8 @@
+Changelogs For Xtra Kernel Manager Version 1.6
+- Enhance FPS Meter
+- Add TCP Congestion
+
+
 Changelogs For Xtra Kernel Manager Version 1.5
 
 Major Changes:
