@@ -134,66 +134,22 @@ private fun ThermalHeaderSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            // Current Profile Status Box
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                            )
-                        )
-                    )
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = "Active: $currentProfileName",
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
-                )
-            }
+            AssistChip(
+                onClick = {},
+                label = { Text(text = "Active: $currentProfileName") }
+            )
         }
 
-        // Animated Thermal Icon with pulse effect
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .drawBehind {
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFFFF5722).copy(alpha = pulseAlpha * 0.6f),
-                                    Color.Transparent
-                                ),
-                                radius = size.minDimension * 0.8f
-                            ),
-                            radius = size.minDimension * 0.5f
-                        )
-                    }
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
-                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Thermostat,
-                    contentDescription = "Thermal",
-                    modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
+            Icon(
+                imageVector = Icons.Default.Thermostat,
+                contentDescription = "Thermal",
+                modifier = Modifier.size(28.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
 
             Icon(
                 imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,

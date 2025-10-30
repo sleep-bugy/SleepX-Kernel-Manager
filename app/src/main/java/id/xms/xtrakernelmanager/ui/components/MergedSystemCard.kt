@@ -19,6 +19,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import id.xms.xtrakernelmanager.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -112,7 +114,7 @@ private fun BatteryCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            BatteryHeaderSection(batteryInfo = batteryInfo, pulseAlpha = pulseAlpha)
+            BatteryHeaderSectionMinimal(batteryInfo = batteryInfo)
             BatteryProgressSection(batteryInfo = batteryInfo)
             BatteryStatsSection(batteryInfo = batteryInfo)
         }
@@ -146,7 +148,7 @@ private fun MemoryCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            MemoryHeaderSection(memoryInfo = memoryInfo, usedPercentage = usedPercentage, pulseAlpha = pulseAlpha)
+            MemoryHeaderSectionMinimal(memoryInfo = memoryInfo, usedPercentage = usedPercentage)
             MemoryProgressSection(memoryInfo = memoryInfo, usedPercentage = usedPercentage)
             MemoryStatsSection(memoryInfo = memoryInfo)
         }
@@ -180,10 +182,95 @@ private fun StorageCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            StorageHeaderSection(storageInfo = storageInfo, usedPercentage = usedPercentage, pulseAlpha = pulseAlpha)
+            StorageHeaderSectionMinimal(storageInfo = storageInfo, usedPercentage = usedPercentage)
             StorageProgressSection(storageInfo = storageInfo)
             StorageStatsSection(storageInfo = storageInfo)
         }
+    }
+}
+
+/* ---------- minimal headers (lightweight) ---------- */
+@Composable
+private fun BatteryHeaderSectionMinimal(
+    batteryInfo: BatteryInfo,
+    modifier: Modifier = Modifier
+) {
+    val statusText = when {
+        batteryInfo.status.contains("Full", true) -> "Full"
+        batteryInfo.status.contains("Charging", true) -> "Charging"
+        else -> "Not Charging"
+    }
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "Battery", style = MaterialTheme.typography.titleLarge)
+            AssistChip(onClick = {}, label = { Text(text = "${batteryInfo.level}% • $statusText") })
+        }
+        Icon(
+            imageVector = Icons.Default.BatteryChargingFull,
+            contentDescription = "Battery",
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun MemoryHeaderSectionMinimal(
+    memoryInfo: MemoryInfo,
+    usedPercentage: Int,
+    modifier: Modifier = Modifier
+) {
+    val totalGb = (memoryInfo.total / (1024 * 1024 * 1024))
+    val zramGb = (memoryInfo.zramTotal / (1024 * 1024 * 1024))
+    val swapGb = (memoryInfo.swapTotal / (1024 * 1024 * 1024))
+    val memoryText = buildString {
+        append("${usedPercentage}% Used · ${totalGb}GB")
+        if (zramGb > 0) append(" + ${zramGb}GB Zram")
+        if (swapGb > 0) append(" + ${swapGb}GB Swap")
+    }
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "Memory", style = MaterialTheme.typography.titleLarge)
+            AssistChip(onClick = {}, label = { Text(text = memoryText) })
+        }
+        Icon(
+            imageVector = Icons.Default.Memory,
+            contentDescription = "Memory",
+            tint = MaterialTheme.colorScheme.tertiary
+        )
+    }
+}
+
+@Composable
+private fun StorageHeaderSectionMinimal(
+    storageInfo: StorageInfo,
+    usedPercentage: Int,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "Storage", style = MaterialTheme.typography.titleLarge)
+            AssistChip(
+                onClick = {},
+                label = { Text(text = "${usedPercentage}% Used · ${formatStorageSize(storageInfo.totalSpace)} Total") }
+            )
+        }
+        Icon(
+            imageVector = Icons.Default.Storage,
+            contentDescription = "Storage",
+            tint = MaterialTheme.colorScheme.secondary
+        )
     }
 }
 
@@ -450,84 +537,28 @@ private fun StorageHeaderSection(
 /* ---------- progress sections ---------- */
 @Composable
 private fun BatteryProgressSection(batteryInfo: BatteryInfo) {
-    GlassmorphismSurface(
-        modifier = Modifier.fillMaxWidth(),
-        blurRadius = 0f,
-        alpha = 0.4f
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                .padding(20.dp)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.BatteryFull,
-                            contentDescription = "Battery",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "Charge Level",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Text(
-                        text = "${batteryInfo.level}%",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(10.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(batteryInfo.level / 100f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        when {
-                                            batteryInfo.level > 70 -> Color(0xFF4CAF50)
-                                            batteryInfo.level > 30 -> Color(0xFFFF9800)
-                                            else -> Color(0xFFF44336)
-                                        },
-                                        when {
-                                            batteryInfo.level > 70 -> Color(0xFF66BB6A)
-                                            batteryInfo.level > 30 -> Color(0xFFFFB74D)
-                                            else -> Color(0xFFEF5350)
-                                        }
-                                    )
-                                )
-                            )
-                    )
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.BatteryFull, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(id = R.string.label_charge_level), style = MaterialTheme.typography.titleSmall)
             }
+            Text("${batteryInfo.level}%", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         }
+        LinearProgressIndicator(
+            progress = { (batteryInfo.level / 100f).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth(),
+            color = when {
+                batteryInfo.level > 70 -> Color(0xFF6C9BFF)
+                batteryInfo.level > 30 -> Color(0xFFE6B566)
+                else -> MaterialTheme.colorScheme.error
+            }
+        )
     }
 }
 
@@ -744,24 +775,10 @@ private fun BatteryStatsSection(batteryInfo: BatteryInfo) {
         batteryInfo.status.contains("Full", true)   -> "Full"
         else                                        -> "Not Charging"
     }
-    GlassmorphismSurface(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        blurRadius = 0f,
-        alpha = 0.4f
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(12.dp)
-                )
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -920,8 +937,6 @@ private fun BatteryStatsSection(batteryInfo: BatteryInfo) {
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-            }
-        }
     }
 }
 
@@ -1043,102 +1058,46 @@ private fun StorageProgressSection(storageInfo: StorageInfo) {
         ((storageInfo.usedSpace.toDouble() / storageInfo.totalSpace.toDouble()) * 100).toInt()
     } else 0
 
-    GlassmorphismSurface(
-        modifier = Modifier.fillMaxWidth(),
-        blurRadius = 0f,
-        alpha = 0.4f
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                .padding(20.dp)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Storage,
-                            contentDescription = "Storage",
-                            tint = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "Internal Storage",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    Text(
-                        text = "${formatStorageSize(storageInfo.usedSpace)} / ${formatStorageSize(storageInfo.totalSpace)}",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                }
-
-                // Storage Progress Bar
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(10.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(usedPercentage / 100f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        when {
-                                            usedPercentage < 70 -> Color(0xFF4CAF50)
-                                            usedPercentage < 85 -> Color(0xFFFF9800)
-                                            else -> Color(0xFFF44336)
-                                        },
-                                        when {
-                                            usedPercentage < 70 -> Color(0xFF66BB6A)
-                                            usedPercentage < 85 -> Color(0xFFFFB74D)
-                                            else -> Color(0xFFEF5350)
-                                        }
-                                    )
-                                )
-                            )
-                    )
-                }
-
-                // Storage Details
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Used: ${formatStorageSize(storageInfo.usedSpace)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "Free: ${formatStorageSize(storageInfo.totalSpace - storageInfo.usedSpace)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(id = R.string.label_internal_storage), style = MaterialTheme.typography.titleSmall)
             }
+            Text(
+                text = "${formatStorageSize(storageInfo.usedSpace)} / ${formatStorageSize(storageInfo.totalSpace)}",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
+        }
+        LinearProgressIndicator(
+            progress = { (usedPercentage / 100f).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth(),
+            color = when {
+                usedPercentage < 70 -> Color(0xFF6C9BFF)
+                usedPercentage < 85 -> Color(0xFFE6B566)
+                else -> MaterialTheme.colorScheme.error
+            }
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = stringResource(id = R.string.label_used) + ": ${formatStorageSize(storageInfo.usedSpace)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(id = R.string.label_free) + ": ${formatStorageSize(storageInfo.totalSpace - storageInfo.usedSpace)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

@@ -30,6 +30,7 @@ import id.xms.xtrakernelmanager.util.BatteryOptimizationChecker
 import id.xms.xtrakernelmanager.util.LanguageManager
 import id.xms.xtrakernelmanager.util.RootUtils
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -69,9 +70,11 @@ class MainActivity : ComponentActivity() {
             showNonRootDialog = true
         }
 
-        // Observe language changes
+        // Observe language changes and recreate activity when changed
         lifecycleScope.launch {
-            languageManager.currentLanguage.collect()
+            languageManager.currentLanguage
+                .drop(1) // skip initial to avoid immediate recreate
+                .collect { recreate() }
         }
 
         setContent {
@@ -113,7 +116,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             title = { Text("Non-Root Device Detected") },
-                            text = { Text("You're using Xtra Kernel Manager without root access.\n" +
+                            text = { Text("You're using SleepX Manager without root access.\n" +
                                     "If you're rooted, allow it first with Magisk/KernelSU. If you're not, you can use Battery Notification and Clear Cache in Misc Features.") }
                         )
                     }
@@ -123,12 +126,14 @@ class MainActivity : ComponentActivity() {
                         bottomBar = { BottomNavBar(navController, items) },
                         modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars)
                     ) { innerPadding ->
-                        // Add ExpressiveBackground here to wrap the navigation content
-                        ExpressiveBackground {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
                             NavHost(
                                 navController = navController,
-                                startDestination = "home",
-                                modifier = Modifier.padding(innerPadding)
+                                startDestination = "home"
                             ) {
                                 composable("home") { HomeScreen(navController = navController) }
                                 composable("tuning") { TuningScreen() }

@@ -1,0 +1,7 @@
+storeFile=C:\\absolute\\path\\to\\your-release.keystore
+storePassword=REPLACE_WITH_STORE_PASSWORD
+keyAlias=REPLACE_WITH_KEY_ALIAS
+keyPassword=REPLACE_WITH_KEY_PASSWORD
+
+# Copy this file to signing.properties (same directory as settings.gradle.kts)
+# and fill the values above. The build will automatically pick it up.

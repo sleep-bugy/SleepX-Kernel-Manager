@@ -1,16 +1,10 @@
 package id.xms.xtrakernelmanager.ui.components
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -118,68 +112,25 @@ fun SuperGlassCard(
     glassIntensity: GlassIntensity = GlassIntensity.Medium,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.7f
-    val backdropAlpha = when (glassIntensity) {
-        GlassIntensity.Medium -> 0.80f
-        GlassIntensity.Heavy -> 0.120f
-        GlassIntensity.Light -> 0.40f
-    }
-
-    // Ultra-clean card modifier with minimal effects
-    val cardModifier = modifier
-        .clip(RoundedCornerShape(28.dp))
-        .background(
-            // Single, very subtle background without any gradients or complex effects
-            if (isDark) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = backdropAlpha)
-            } else {
-                MaterialTheme.colorScheme.surface.copy(alpha = backdropAlpha + 0.05f)
-            }
-        )
-        .border(
-            width = 0.5.dp,
-            color = if (isDark) {
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
-            } else {
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-            },
-            shape = RoundedCornerShape(28.dp)
-        )
-
+    val containerColor = MaterialTheme.colorScheme.surfaceContainer
     if (onClick != null) {
         Card(
             onClick = onClick,
-            modifier = cardModifier,
-            colors = CardDefaults.cardColors(
-                containerColor = Color.Transparent
-            ),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 0.dp,  // Remove all elevation shadow
-                pressedElevation = 2.dp,
-                hoveredElevation = 1.dp
-            ),
-            shape = RoundedCornerShape(28.dp)
+            modifier = modifier,
+            colors = CardDefaults.cardColors(containerColor = containerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            shape = MaterialTheme.shapes.large
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                content = content
-            )
+            Column(modifier = Modifier.padding(16.dp), content = content)
         }
     } else {
         Card(
-            modifier = cardModifier,
-            colors = CardDefaults.cardColors(
-                containerColor = Color.Transparent
-            ),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 0.dp  // Remove all elevation shadow
-            ),
-            shape = RoundedCornerShape(28.dp)
+            modifier = modifier,
+            colors = CardDefaults.cardColors(containerColor = containerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            shape = MaterialTheme.shapes.large
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                content = content
-            )
+            Column(modifier = Modifier.padding(16.dp), content = content)
         }
     }
 }
@@ -208,40 +159,12 @@ fun ExpressiveTopAppBar(
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     CenterAlignedTopAppBar(
-        title = {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        },
-        modifier = modifier
-            .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-            .blur(18.dp, BlurredEdgeTreatment.Unbounded)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-                    )
-                )
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.3f),
-                        Color.White.copy(alpha = 0.1f),
-                        Color.White.copy(alpha = 0.3f)
-                    )
-                ),
-                shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)
-            ),
+        title = { Text(text = title, style = MaterialTheme.typography.titleLarge) },
+        modifier = modifier,
         navigationIcon = navigationIcon,
         actions = actions,
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-            containerColor = Color.Transparent
+            containerColor = MaterialTheme.colorScheme.surface
         )
     )
 }

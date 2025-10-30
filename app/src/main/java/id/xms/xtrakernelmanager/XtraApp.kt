@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -15,12 +16,16 @@ import dagger.hilt.android.HiltAndroidApp
 import id.xms.xtrakernelmanager.worker.BatteryWorker
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 
 @HiltAndroidApp
 class XtraApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var languageManager: id.xms.xtrakernelmanager.util.LanguageManager
 
     override fun onCreate() {
         super.onCreate()
@@ -31,7 +36,15 @@ class XtraApp : Application(), Configuration.Provider {
         /* 2. Inject 430 dpi ke SELURUH activity / dialog */
         registerActivityLifecycleCallbacks(DensityInjector(430))
 
-        /* 3. Schedule Battery Worker */
+        /* 3. Terapkan bahasa tersimpan sedini mungkin */
+        try {
+            kotlinx.coroutines.runBlocking {
+                val lang = languageManager.currentLanguage.first()
+                AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(lang.code))
+            }
+        } catch (_: Exception) { /* ignore */ }
+
+        /* 4. Schedule Battery Worker */
         setupRecurringWork()
         Log.d("XtraApp", "Battery worker scheduled & 430-dpi injector ready")
     }

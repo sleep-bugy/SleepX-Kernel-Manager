@@ -1,18 +1,24 @@
-*.iml
-.gradle
+# Gradle
+.gradle/
+**/build/
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+/.idea/
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
-gradle.properties
-/app/dist/
-/app/release/
+*.iml
+
+# Android
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore & signing
+*.keystore
+*.jks
+signing.properties
+
+# Firebase
+app/google-services.json
+
+# Outputs
+app/build/outputs/
+

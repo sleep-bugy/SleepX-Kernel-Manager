@@ -84,6 +84,39 @@ fun SettingsScreen(
                 }
             }
         }
+
+        // Donate Card
+        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+        val donateLink = stringResource(id = R.string.donate_link)
+        val donateText = stringResource(id = R.string.donate)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { uriHandler.openUri(donateLink) }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = donateText,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Support development",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                AssistChip(
+                    onClick = { uriHandler.openUri(donateLink) },
+                    label = { Text(donateText) }
+                )
+            }
+        }
     }
 
     // Theme Selection Dialog

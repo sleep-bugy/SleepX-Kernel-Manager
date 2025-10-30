@@ -1,11 +1,11 @@
 <resources>
-    <string name="app_name">Xtra Kernel Manager</string>
-    <string name="welcome_message">Selamat datang di Xtra Kernel Manager!</string>
-    <string name="desc_about">Terima kasih telah memilih Xtra Kernel Manager. Kami harap Anda menikmati pengalamannya!</string>
+    <string name="app_name">SleepX Manager</string>
+    <string name="welcome_message">Selamat datang di SleepX Manager!</string>
+    <string name="desc_about">Terima kasih telah memilih SleepX Manager. Kami harap Anda menikmati pengalamannya!</string>
     <string name="about">Tentang Aplikasi</string>
     <string name="telegram">Telegram</string>
     <string name="github">Github</string>
-    <string name="credits">Pengembang Xtra Kernel Manager</string>
+    <string name="credits">Pengembang SleepX Manager</string>
     <string name="credits_author">1. Gustyx-Power : Pendiri &amp; Pengembang
 2. Pavellc : Dukungan UI
 3. Ziyu : Dukungan Penyetelan</string>
@@ -14,14 +14,51 @@
     <string name="kernel_type">Tipe Kernel: %1$s</string>
     <string name="kernel_information">Informasi Kernel</string>
     <string name="kernel_version">Version Kernel: %1$s</string>
-    <string name="xtra_kernel_manager">Xtra Kernel Manager</string>
+    <string name="xtra_kernel_manager">SleepX Manager</string>
+    <string name="donate">Donasi</string>
+    <string name="donate_link">https://graph.org/Developer-Support-with-Coffee-05-19</string>
+    <!-- Common labels for UI (Indonesian) -->
+    <string name="label_battery_usage">Penggunaan Baterai</string>
+    <string name="label_line">Garis</string>
+    <string name="label_bar">Batang</string>
+    <string name="label_now">Sekarang</string>
+    <string name="label_screen_on_time">Waktu Layar Menyala</string>
+    <string name="action_refresh">Muat Ulang</string>
+    <string name="label_app_consumption">Konsumsi Aplikasi</string>
+    <string name="action_grant_permission">Beri Izin</string>
+    <string name="label_charge_level">Tingkat Daya</string>
+    <string name="label_internal_storage">Penyimpanan Internal</string>
+    <string name="label_used">Terpakai</string>
+    <string name="label_free">Tersisa</string>
+    <string name="label_ram_control">Kontrol RAM</string>
+    <string name="zram_active">ZRAM: %1$dMB Aktif</string>
+    <string name="zram_disabled">ZRAM: Nonaktif</string>
+    <string name="label_cpu_control">Kontrol CPU</string>
+    <string name="label_thermal_control">Kontrol Termal</string>
+    <string name="label_active">Aktif: %1$s</string>
+    <string name="label_memory">Memori</string>
+    <string name="label_battery">Baterai</string>
+    <string name="label_storage">Penyimpanan</string>
+    <string name="label_gpu_control">Kontrol GPU</string>
+    <string name="label_governor">Gubernur</string>
+    <string name="label_frequency">Frekuensi</string>
+    <string name="label_opengles">OpenGL ES</string>
+    <string name="label_ram_usage">Penggunaan RAM</string>
+    <string name="label_zram_usage">Penggunaan ZRAM</string>
+    <string name="label_swap_usage">Penggunaan Swap</string>
+    <string name="title_select_io">Pilih Penjadwal I/O</string>
+    <string name="title_select_tcp">Pilih Algoritma TCP</string>
+    <string name="action_cancel">Batal</string>
+    <string name="label_system_info">Informasi Sistem</string>
+    <string name="io_scheduler_label">Penjadwal I/O</string>
+    <string name="tcp_congestion_label">Kontrol Kongesti TCP</string>
     <string name="home">Home</string>
     <string name="tuning">Tuning</string>
     <string name="misc">Misc</string>
     <string name="info">Info</string>
     <string name="sched">Penjadwal I/O: %1$s</string>
-    <string name="github_link">https://github.com/Gustyx-Power/Xtra-Kernel-Manager</string>
-    <string name="telegram_link">https://t.me/XtraManagerSoftware</string>
+    <string name="github_link">https://github.com/adstxn</string>
+    <string name="telegram_link">https://t.me/manusiatukangtidur</string>
     <string name="reboot_system">Mulai Ulang Sistem</string>
     <string name="reboot_systemui">Mulai Ulang System UI</string>
     <string name="reboot_bootloader">Mulai Ulang Bootloader</string>
@@ -44,7 +81,7 @@
     <string name="cpu_governor">Governrr: %s</string>
     <string name="cpu_cores_format">%d Inti</string>
     <string name="temperature_c">Suhu: %.1f °C</string>
-    <string name="uptime_regex">%02dh %02dm %02ds</string>
+    <string name="uptime_regex" formatted="false">%02dh %02dm %02ds</string>
 
     <!-- Settings Screen -->
     <string name="settings_title">Pengaturan</string>

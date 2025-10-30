@@ -1,11 +1,11 @@
 <resources>
-    <string name="app_name">Xtra Kernel Manager</string>
-    <string name="welcome_message">Welcome to Xtra Kernel Manager!</string>
-    <string name="desc_about">Thank you for choosing Xtra Kernel Manager. We hope you enjoy the experience!</string>
-    <string name="about">About Apps</string>
+    <string name="app_name">SleepX Manager</string>
+    <string name="welcome_message">Welcome to SleepX Manager!</string>
+    <string name="desc_about">Thank you for choosing SleepX Manager. We hope you enjoy the experience!</string>
+    <string name="about">About App</string>
     <string name="telegram">Telegram</string>
     <string name="github">Github</string>
-    <string name="credits">Developer Xtra Kernel Manager</string>
+    <string name="credits">SleepX Manager Developers</string>
     <string name="credits_author">1. Gustyx-Power : Founder &amp; Developer
 2. Pavellc : Ui Supports
 3. Ziyu : Tuning Supports</string>
@@ -14,14 +14,51 @@
     <string name="kernel_type">Kernel Type: %1$s</string>
     <string name="kernel_information">Kernel Information</string>
     <string name="kernel_version">Kernel Version: %1$s</string>
-    <string name="xtra_kernel_manager">Xtra Kernel Manager</string>
+    <string name="xtra_kernel_manager">SleepX Manager</string>
+    <string name="donate">Donate</string>
+    <string name="donate_link">https://graph.org/Developer-Support-with-Coffee-05-19</string>
+    <!-- Common labels for UI -->
+    <string name="label_battery_usage">Battery Usage</string>
+    <string name="label_line">Line</string>
+    <string name="label_bar">Bar</string>
+    <string name="label_now">Now</string>
+    <string name="label_screen_on_time">Screen On Time</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="label_app_consumption">App Consumption</string>
+    <string name="action_grant_permission">Grant Permission</string>
+    <string name="label_charge_level">Charge Level</string>
+    <string name="label_internal_storage">Internal Storage</string>
+    <string name="label_used">Used</string>
+    <string name="label_free">Free</string>
+    <string name="label_ram_control">RAM Control</string>
+    <string name="zram_active">ZRAM: %1$dMB Active</string>
+    <string name="zram_disabled">ZRAM: Disabled</string>
+    <string name="label_cpu_control">CPU Control</string>
+    <string name="label_thermal_control">Thermal Control</string>
+    <string name="label_active">Active: %1$s</string>
+    <string name="label_memory">Memory</string>
+    <string name="label_battery">Battery</string>
+    <string name="label_storage">Storage</string>
+    <string name="label_gpu_control">GPU Control</string>
+    <string name="label_governor">Governor</string>
+    <string name="label_frequency">Frequency</string>
+    <string name="label_opengles">OpenGL ES</string>
+    <string name="label_ram_usage">RAM Usage</string>
+    <string name="label_zram_usage">ZRAM Usage</string>
+    <string name="label_swap_usage">Swap Usage</string>
+    <string name="title_select_io">Select I/O Scheduler</string>
+    <string name="title_select_tcp">Select TCP Algorithm</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="label_system_info">System Information</string>
+    <string name="io_scheduler_label">I/O Scheduler</string>
+    <string name="tcp_congestion_label">TCP Congestion Control</string>
     <string name="home">Home</string>
     <string name="tuning">Tuning</string>
     <string name="misc">Misc</string>
     <string name="info">Info</string>
     <string name="sched">I/O Scheduler: %1$s</string>
-    <string name="github_link">https://github.com/Gustyx-Power/Xtra-Kernel-Manager</string>
-    <string name="telegram_link">https://t.me/XtraManagerSoftware</string>
+    <string name="github_link">https://github.com/adstxn</string>
+    <string name="telegram_link">https://t.me/manusiatukangtidur</string>
     <string name="reboot_system">Reboot System</string>
     <string name="reboot_systemui">Reboot System Ui</string>
     <string name="reboot_bootloader">Reboot Bootloader</string>
@@ -47,7 +84,7 @@
     <string name="cpu_governor">Governor: %s</string>
     <string name="cpu_cores_format">%d Cores</string>
     <string name="temperature_c">Temp: %.1f °C</string>
-    <string name="uptime_regex">%02dh %02dm %02ds</string>
+    <string name="uptime_regex" formatted="false">%02dh %02dm %02ds</string>
 
     <!-- FPS Overlay strings -->
     <string name="fps_format">FPS: %d</string>

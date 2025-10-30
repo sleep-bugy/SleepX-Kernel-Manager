@@ -24,12 +24,14 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
+import id.xms.xtrakernelmanager.R
 import kotlin.math.roundToInt
 
 @Composable
@@ -564,75 +566,28 @@ fun RamControlHeaderSection(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "RAM Control",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                ),
+                text = stringResource(id = R.string.label_ram_control),
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            // RAM Status Box
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
-                                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
-                            )
-                        )
-                    )
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = if (zramEnabled) "ZRAM: ${zramDisksize / (1024 * 1024)}MB Active" else "ZRAM: Disabled",
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
-                )
-            }
+            val sizeMb = (zramDisksize / (1024 * 1024)).toInt()
+            AssistChip(
+                onClick = {},
+                label = { Text(text = if (zramEnabled) stringResource(id = R.string.zram_active, sizeMb) else stringResource(id = R.string.zram_disabled)) }
+            )
         }
 
-        // Animated RAM Icon with pulse effect
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .drawBehind {
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFF9C27B0).copy(alpha = pulseAlpha * 0.6f),
-                                    Color.Transparent
-                                ),
-                                radius = size.minDimension * 0.8f
-                            ),
-                            radius = size.minDimension * 0.5f
-                        )
-                    }
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f)
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Memory,
-                    contentDescription = "RAM Control",
-                    modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.secondary
-                )
-            }
-
+            Icon(
+                imageVector = Icons.Default.Memory,
+                contentDescription = "RAM Control",
+                modifier = Modifier.size(28.dp),
+                tint = MaterialTheme.colorScheme.secondary
+            )
             Icon(
                 imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                 contentDescription = if (isExpanded) "Collapse" else "Expand",

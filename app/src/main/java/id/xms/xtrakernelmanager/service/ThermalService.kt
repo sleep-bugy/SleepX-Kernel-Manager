@@ -51,7 +51,7 @@ class ThermalService : Service() {
         try {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "XKM Thermal Service",
+                "SleepX Thermal Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Maintains thermal settings"
@@ -69,7 +69,7 @@ class ThermalService : Service() {
     private fun startForegroundSafely() {
         try {
             startForeground(NOTIFICATION_ID, createNotification(
-                if (isRootAvailable) "XKM Thermal Service Running"
+                if (isRootAvailable) "SleepX Thermal Service Running"
                 else "Service inactive - No root access"
             ))
         } catch (e: Exception) {
@@ -154,7 +154,7 @@ class ThermalService : Service() {
         }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("XKM Thermal Service")
+            .setContentTitle("SleepX Thermal Service")
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_notification)
             .apply {

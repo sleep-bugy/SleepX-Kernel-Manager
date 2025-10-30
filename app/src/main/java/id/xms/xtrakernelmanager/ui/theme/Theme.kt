@@ -9,54 +9,55 @@ import id.xms.xtrakernelmanager.data.model.ThemeType
 
 // Dark theme color palette - optimized for OLED displays (GlassMorphism)
 private val GlassMorphismColorScheme = darkColorScheme(
-    primary = Color(0xFF90CAF9),
-    onPrimary = Color(0xFF0D1B2A),
-    primaryContainer = Color(0xFF1B263B),
-    onPrimaryContainer = Color(0xFFBBDEFB),
+    // FKM-like layout with distinct SleepX Cyan palette
+    primary = Color(0xFF00BCD4),        // cyan
+    onPrimary = Color(0xFF0E1116),
+    primaryContainer = Color(0xFF004D57),
+    onPrimaryContainer = Color(0xFFCCF7FF),
 
-    secondary = Color(0xFF81C784),
-    onSecondary = Color(0xFF0A1F0A),
-    secondaryContainer = Color(0xFF1B5E20),
-    onSecondaryContainer = Color(0xFFC8E6C9),
+    secondary = Color(0xFF80CBC4),     // teal
+    onSecondary = Color(0xFF0E1116),
+    secondaryContainer = Color(0xFF255D57),
+    onSecondaryContainer = Color(0xFFE1F7F4),
 
-    tertiary = Color(0xFFFFAB91),
-    onTertiary = Color(0xFF2C1810),
-    tertiaryContainer = Color(0xFF5D4037),
-    onTertiaryContainer = Color(0xFFFFCCBC),
+    tertiary = Color(0xFFFFC107),      // amber accent
+    onTertiary = Color(0xFF0E1116),
+    tertiaryContainer = Color(0xFF5A4400),
+    onTertiaryContainer = Color(0xFFFFF0C2),
 
     error = Color(0xFFEF5350),
-    onError = Color(0xFF1A0000),
+    onError = Color(0xFFFFFFFF),
     errorContainer = Color(0xFFB71C1C),
     onErrorContainer = Color(0xFFFFCDD2),
 
-    background = Color(0xFF0A0E13),
-    onBackground = Color(0xFFE3E3E3),
+    background = Color(0xFF0E1116),
+    onBackground = Color(0xFFE6E8EC),
 
-    surface = Color(0xFF121212),
-    onSurface = Color(0xFFE1E1E1),
-    surfaceVariant = Color(0xFF1E1E1E),
-    onSurfaceVariant = Color(0xFFBDBDBD),
+    surface = Color(0xFF121620),
+    onSurface = Color(0xFFE6E8EC),
+    surfaceVariant = Color(0xFF1A2030),
+    onSurfaceVariant = Color(0xFFAAB2C0),
 
-    outline = Color(0xFF616161),
-    outlineVariant = Color(0xFF424242),
+    outline = Color(0xFF3A4354),
+    outlineVariant = Color(0xFF2B3342),
 
     scrim = Color(0xFF000000),
-    inverseSurface = Color(0xFFE1E1E1),
-    inverseOnSurface = Color(0xFF2C2C2C),
-    inversePrimary = Color(0xFF1976D2),
+    inverseSurface = Color(0xFFE6E8EC),
+    inverseOnSurface = Color(0xFF121620),
+    inversePrimary = Color(0xFF6C9BFF),
 
-    surfaceDim = Color(0xFF0F0F0F),
-    surfaceBright = Color(0xFF2A2A2A),
-    surfaceContainerLowest = Color(0xFF090909),
-    surfaceContainerLow = Color(0xFF191919),
-    surfaceContainer = Color(0xFF1F1F1F),
-    surfaceContainerHigh = Color(0xFF262626),
-    surfaceContainerHighest = Color(0xFF2E2E2E)
+    surfaceDim = Color(0xFF0F131B),
+    surfaceBright = Color(0xFF202637),
+    surfaceContainerLowest = Color(0xFF0B0E13),
+    surfaceContainerLow = Color(0xFF141A26),
+    surfaceContainer = Color(0xFF171D2A),
+    surfaceContainerHigh = Color(0xFF1B2232),
+    surfaceContainerHighest = Color(0xFF1F2740)
 )
 
 // Pure AMOLED theme - true black backgrounds for maximum battery savings
 private val AmoledColorScheme = darkColorScheme(
-    primary = Color(0xFF90CAF9),
+    primary = Color(0xFF00BCD4),
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFF1976D2),
     onPrimaryContainer = Color(0xFFBBDEFB),
@@ -76,13 +77,13 @@ private val AmoledColorScheme = darkColorScheme(
     errorContainer = Color(0xFFD32F2F),
     onErrorContainer = Color(0xFFFFCDD2),
 
-    background = Color(0xFF000000), // Pure black
-    onBackground = Color(0xFFFFFFFF),
+    background = Color(0xFF000000),
+    onBackground = Color(0xFFE6E8EC),
 
-    surface = Color(0xFF000000), // Pure black
-    onSurface = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFF1A1A1A),
-    onSurfaceVariant = Color(0xFFE0E0E0),
+    surface = Color(0xFF000000),
+    onSurface = Color(0xFFE6E8EC),
+    surfaceVariant = Color(0xFF102027),
+    onSurfaceVariant = Color(0xFFB0BEC5),
 
     outline = Color(0xFF424242),
     outlineVariant = Color(0xFF2C2C2C),
@@ -125,6 +126,7 @@ fun XtraTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = SleepXShapes,
         content = content
     )
 }

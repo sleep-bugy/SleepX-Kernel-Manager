@@ -88,6 +88,8 @@ fun AboutCard(
             ) {
                 // Social Links Row
                 val uriHandler = LocalUriHandler.current
+                val donateLink = stringResource(id = R.string.donate_link)
+                val donateText = stringResource(id = R.string.donate)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -121,6 +123,11 @@ fun AboutCard(
                             contentDescription = stringResource(id = R.string.github),
                             modifier = Modifier.size(20.dp)
                         )
+                    }
+
+                    // Donate Button
+                    FilledTonalButton(onClick = { uriHandler.openUri(donateLink) }) {
+                        Text(text = donateText)
                     }
                 }
 

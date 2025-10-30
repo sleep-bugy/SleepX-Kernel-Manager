@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
+import id.xms.xtrakernelmanager.R
 import androidx.compose.ui.unit.dp
 import id.xms.xtrakernelmanager.data.model.AppUsage
 import id.xms.xtrakernelmanager.data.model.BatteryStats
@@ -74,7 +76,7 @@ private fun HeaderRow(stats: BatteryStats) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Battery Usage", style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.label_battery_usage), style = MaterialTheme.typography.titleLarge)
         if (stats.batteryLevelHistory.isNotEmpty()) {
             Text(
                 text = "${stats.batteryLevelHistory.last().toInt()}%",
@@ -120,7 +122,7 @@ private fun BatteryGraphToggleable(
             FilterChip(
                 selected = isLine,
                 onClick = { isLine = true },
-                label = { Text("Line") },
+                label = { Text(stringResource(R.string.label_line)) },
                 leadingIcon = {
                     Icon(
                         Icons.Default.ShowChart,
@@ -133,7 +135,7 @@ private fun BatteryGraphToggleable(
             FilterChip(
                 selected = !isLine,
                 onClick = { isLine = false },
-                label = { Text("Bar") },
+                label = { Text(stringResource(R.string.label_bar)) },
                 leadingIcon = {
                     Icon(
                         Icons.Default.BarChart,
@@ -261,7 +263,7 @@ private fun LineChart(history: List<Float>, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("-${history.size - 1}h", style = MaterialTheme.typography.labelSmall)
-            Text("Now", style = MaterialTheme.typography.labelSmall)
+            Text(stringResource(R.string.label_now), style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -345,7 +347,7 @@ private fun BarChart(history: List<Float>, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("-${history.size - 1}h", style = MaterialTheme.typography.labelSmall)
-            Text("Now", style = MaterialTheme.typography.labelSmall)
+            Text(stringResource(R.string.label_now), style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -441,7 +443,7 @@ private fun ScreenOnTimeRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("Screen On Time", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.label_screen_on_time), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(2.dp))
             Text(
                 text = formatDuration(seconds),
@@ -465,7 +467,7 @@ private fun ScreenOnTimeRow(
                 modifier = Modifier.size(18.dp)
             )
             Spacer(Modifier.width(6.dp))
-            Text("Refresh")
+            Text(stringResource(R.string.action_refresh))
         }
     }
 }
@@ -475,7 +477,7 @@ private fun ScreenOnTimeRow(
 private fun AppConsumptionList(apps: List<AppUsage>) {
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("App Consumption", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.label_app_consumption), style = MaterialTheme.typography.titleMedium)
         if (apps.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -491,7 +493,7 @@ private fun AppConsumptionList(apps: List<AppUsage>) {
                     )
                     TextButton(onClick = {
                         context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                    }) { Text("Grant Permission") }
+                    }) { Text(stringResource(R.string.action_grant_permission)) }
                 }
             }
         } else {

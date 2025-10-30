@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -41,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -875,62 +877,36 @@ fun CompactControlItem(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    SuperGlassCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled, onClick = onClick),
-        glassIntensity = GlassIntensity.Light
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Icon
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = if (enabled) themeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
-            )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = themeColor
-                    )
-                } else {
-                    Text(
-                        text = value,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (enabled) themeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                }
-            }
-
-            // Chevron Icon
-            if (enabled) {
+    Column(Modifier.fillMaxWidth()) {
+        ListItem(
+            leadingContent = {
                 Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = "Open Settings",
-                    tint = themeColor.copy(alpha = 0.7f),
-                    modifier = Modifier.rotate(-90f)
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = if (enabled) themeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
-            }
-        }
+            },
+            headlineContent = { Text(title) },
+            supportingContent = {
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = themeColor)
+                } else {
+                    Text(value, color = if (enabled) themeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                }
+            },
+            trailingContent = {
+                Icon(
+                    imageVector = Icons.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(enabled = enabled) { onClick() }
+                .padding(horizontal = 4.dp)
+        )
+        HorizontalDivider()
     }
 }
 

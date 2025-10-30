@@ -20,23 +20,36 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+import java.util.Properties
+
 android {
     namespace = "id.xms.xtrakernelmanager"
     compileSdk = 36
     defaultConfig {
-        applicationId = "id.xms.xtrakernelmanager"
+        applicationId = "id.fxk.sleepxkernelmanajer"
         minSdk = 29
         targetSdk = 36
         versionCode = 1
         versionName = "1.6-Release"
     }
 
+    // Load signing from signing.properties if exists (fallback to project properties)
+    val signingProps = Properties().apply {
+        val f = rootProject.file("signing.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    val hasReleaseSigning = signingProps.getProperty("storeFile") != null ||
+            project.findProperty("myKeystorePath") != null
     signingConfigs {
         create("release") {
-            storeFile = project.findProperty("myKeystorePath")?.let { file(it) }
-            storePassword = project.findProperty("myKeystorePassword") as String?
-            keyAlias = project.findProperty("myKeyAlias") as String?
-            keyPassword = project.findProperty("myKeyPassword") as String?
+            val path = (signingProps.getProperty("storeFile") ?: project.findProperty("myKeystorePath") as String?)
+            val storePwd = signingProps.getProperty("storePassword") ?: project.findProperty("myKeystorePassword") as String?
+            val alias = signingProps.getProperty("keyAlias") ?: project.findProperty("myKeyAlias") as String?
+            val keyPwd = signingProps.getProperty("keyPassword") ?: project.findProperty("myKeyPassword") as String?
+            if (path != null) storeFile = file(path)
+            storePassword = storePwd
+            keyAlias = alias
+            keyPassword = keyPwd
         }
     }
 
@@ -47,7 +60,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                // fallback to debug signing so release build still produces an APK
+                signingConfigs.getByName("debug")
+            }
         }
     }
     compileOptions {

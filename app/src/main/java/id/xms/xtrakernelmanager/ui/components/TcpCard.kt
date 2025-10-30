@@ -1,16 +1,20 @@
 package id.xms.xtrakernelmanager.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import id.xms.xtrakernelmanager.viewmodel.TuningViewModel
+import id.xms.xtrakernelmanager.R
 
 @Composable
 fun TcpCard(
@@ -24,21 +28,18 @@ fun TcpCard(
 
     val isLoading = availableAlgorithms.isEmpty() && currentAlgorithm == "Loading..."
 
-    SuperGlassCard(
-        modifier = modifier.fillMaxWidth(),
-        glassIntensity = if (blur) GlassIntensity.Light else GlassIntensity.Light
-    ) {
-        Column {
-            CompactControlItem(
-                title = "TCP Congestion Control",
-                icon = Icons.Default.NetworkCheck,
-                value = if (isLoading) "Loading..." else currentAlgorithm,
-                isLoading = isLoading,
-                themeColor = MaterialTheme.colorScheme.tertiary,
-                enabled = !isLoading && availableAlgorithms.isNotEmpty(),
-                onClick = { showDialog = true }
-            )
-        }
+    Column(modifier = modifier.fillMaxWidth()) {
+        ListItem(
+            leadingContent = { Icon(Icons.Default.NetworkCheck, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary) },
+            headlineContent = { Text(stringResource(id = R.string.tcp_congestion_label)) },
+            supportingContent = {
+                if (isLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                else Text(currentAlgorithm, color = MaterialTheme.colorScheme.tertiary)
+            },
+            trailingContent = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+            modifier = Modifier.clickable(enabled = !isLoading && availableAlgorithms.isNotEmpty()) { showDialog = true }
+        )
+        HorizontalDivider()
     }
 
     if (showDialog) {
@@ -64,11 +65,9 @@ private fun TcpDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
+            TextButton(onClick = onDismiss) { Text(stringResource(id = R.string.action_cancel)) }
         },
-        title = { Text("Select TCP Algorithm", fontWeight = FontWeight.Bold) },
+        title = { Text(stringResource(id = R.string.title_select_tcp), fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 availableAlgorithms.forEach { algorithm ->

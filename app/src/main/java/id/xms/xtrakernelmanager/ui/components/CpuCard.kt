@@ -151,64 +151,24 @@ private fun CpuHeaderSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
-                            )
-                        )
-                    )
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = if ((soc.isNotBlank() && soc != "Unknown SoC" && soc != "N/A") ||
-                        (info.soc.isNotBlank() && info.soc != "Unknown SoC" && info.soc != "N/A"))
-                        stringResource(R.string.cpu_soc_label) else stringResource(R.string.cpu_cpu_label),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
-                )
-            }
-        }
-
-        // Animated CPU icon with pulse effect
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .drawBehind {
-                    // Pulsing glow effect
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF14AC1D).copy(alpha = pulseAlpha * 0.6f),
-                                Color.Transparent
-                            ),
-                            radius = size.minDimension * 0.6f
-                        ),
-                        radius = size.minDimension * 0.3f
+            AssistChip(
+                onClick = {},
+                label = {
+                    Text(
+                        text = if ((soc.isNotBlank() && soc != "Unknown SoC" && soc != "N/A") ||
+                            (info.soc.isNotBlank() && info.soc != "Unknown SoC" && info.soc != "N/A"))
+                            stringResource(R.string.cpu_soc_label) else stringResource(R.string.cpu_cpu_label)
                     )
                 }
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Memory,
-                contentDescription = "CPU",
-                modifier = Modifier.size(32.dp),
-                tint = MaterialTheme.colorScheme.primary
             )
         }
+
+        Icon(
+            imageVector = Icons.Default.Memory,
+            contentDescription = "CPU",
+            modifier = Modifier.size(32.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
     }
 }
 
